@@ -110,3 +110,37 @@ PostureIQ follows least-privilege:
 | `Authorization_RequestDenied` | Missing admin consent | Run `az ad app permission admin-consent` |
 | `InvalidAuthenticationToken` | Expired or invalid secret | Regenerate with `az ad app credential reset` |
 | `InsufficientPrivileges` | User doesn't have required role | User needs Security Reader role minimum |
+
+---
+
+## Cleanup / Teardown
+
+Use the cleanup script to delete all development resources when they're no longer needed:
+
+```bash
+# Interactive — prompts before each deletion
+./scripts/cleanup-dev.sh
+
+# Non-interactive — skip all prompts (for CI/automation)
+./scripts/cleanup-dev.sh --yes
+
+# Delete only the Entra ID App Registration (keep Azure resources)
+./scripts/cleanup-dev.sh --app-only
+
+# Delete only the resource group (keep App Registration)
+./scripts/cleanup-dev.sh --rg-only
+```
+
+The script handles:
+
+| Resource | Action |
+|----------|--------|
+| Resource group (`rg-postureiq-dev`) | Deletes the group and all resources inside (async) |
+| Entra ID App Registration | Deletes the `PostureIQ - ME5 Security Assessment` app |
+| Soft-deleted Key Vaults | Purges any soft-deleted vaults (required to reuse names) |
+| Local `.env` file | Optionally removes it |
+
+> **Tip:** Resource group deletion runs asynchronously. Check status with:
+> ```bash
+> az group exists --name rg-postureiq-dev
+> ```

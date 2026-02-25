@@ -2,84 +2,70 @@
 
 ## High-Level Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        PostureIQ Agent                              │
-│                                                                     │
-│  ┌──────────────┐    ┌────────────────┐    ┌─────────────────────┐ │
-│  │ FastAPI       │    │ Copilot SDK    │    │ Agent Runtime       │ │
-│  │ (Health/API)  │    │ (thin client)  │    │ (Copilot CLI)       │ │
-│  │               │    │                │    │ - Plans tool calls  │ │
-│  │ /health       │    │ Registers 6    │    │ - Multi-model route │ │
-│  │ /ready        │    │ tools + system │    │ - Context mgmt      │ │
-│  │ /assess       │    │ prompt         │    │ - Safety boundaries │ │
-│  └──────────────┘    └───────┬────────┘    └──────────┬──────────┘ │
-│                              │ JSON-RPC (stdio)       │             │
-│                              └────────────────────────┘             │
-│                                       │                             │
-│  ┌────────────────────────────────────┼────────────────────────┐   │
-│  │              Middleware Layer       │                        │   │
-│  │  ┌─────────────┐ ┌────────────┐ ┌──┴──────────┐ ┌────────┐│   │
-│  │  │Content      │ │PII         │ │Distributed  │ │Audit   ││   │
-│  │  │Safety (RAI) │ │Redaction   │ │Tracing      │ │Logger  ││   │
-│  │  └─────────────┘ └────────────┘ └─────────────┘ └────────┘│   │
-│  └────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│  ┌────────────────────────────────────────────────────────────┐    │
-│  │                     6 Assessment Tools                      │    │
-│  │  ┌────────────┐ ┌──────────────┐ ┌───────────────────────┐ │    │
-│  │  │query_      │ │assess_       │ │check_purview_         │ │    │
-│  │  │secure_score│ │defender_     │ │policies               │ │    │
-│  │  │            │ │coverage      │ │                       │ │    │
-│  │  └────────────┘ └──────────────┘ └───────────────────────┘ │    │
-│  │  ┌────────────┐ ┌──────────────┐ ┌───────────────────────┐ │    │
-│  │  │get_entra_  │ │generate_     │ │create_adoption_       │ │    │
-│  │  │config      │ │remediation_  │ │scorecard              │ │    │
-│  │  │            │ │plan          │ │                       │ │    │
-│  │  └────────────┘ └──────────────┘ └───────────────────────┘ │    │
-│  └────────────────────────────────────────────────────────────┘    │
-└─────────┬───────────────┬──────────────┬──────────────┬────────────┘
-          │               │              │              │
-          ▼               ▼              ▼              ▼
-┌──────────────┐ ┌──────────────┐ ┌────────────┐ ┌──────────────┐
-│ Microsoft    │ │ Azure OpenAI │ │ Azure AI   │ │ Azure App    │
-│ Graph        │ │ (GPT-4o)     │ │ Content    │ │ Insights     │
-│ Security API │ │              │ │ Safety     │ │              │
-│              │ │ Reasoning &  │ │ RAI filter │ │ Traces &     │
-│ Secure Score │ │ remediation  │ │ Prompt     │ │ metrics      │
-│ Defender     │ │ plan gen     │ │ injection  │ │              │
-│ Purview      │ │              │ │ detection  │ │              │
-│ Entra ID     │ │              │ │            │ │              │
-└──────────────┘ └──────────────┘ └────────────┘ └──────────────┘
+```mermaid
+graph TB
+    subgraph Agent["PostureIQ Agent"]
+        direction TB
+        subgraph Core["Core Components"]
+            direction LR
+            FastAPI["FastAPI<br/>/health /ready /assess"]
+            SDK["Copilot SDK<br/>Registers 6 tools<br/>+ system prompt"]
+            Runtime["Agent Runtime<br/>Plans tool calls<br/>Multi-model route<br/>Context mgmt<br/>Safety boundaries"]
+            SDK -- "JSON-RPC (stdio)" --> Runtime
+        end
+
+        subgraph Middleware["Middleware Layer"]
+            direction LR
+            ContentSafety["Content Safety<br/>(RAI)"]
+            PII["PII Redaction"]
+            Tracing["Distributed<br/>Tracing"]
+            AuditLog["Audit Logger"]
+        end
+
+        subgraph Tools["6 Assessment Tools"]
+            direction LR
+            SecureScore["query_<br/>secure_score"]
+            Defender["assess_<br/>defender_coverage"]
+            Purview["check_purview_<br/>policies"]
+            Entra["get_entra_<br/>config"]
+            Remediation["generate_<br/>remediation_plan"]
+            Scorecard["create_adoption_<br/>scorecard"]
+        end
+
+        Core --> Middleware --> Tools
+    end
+
+    Tools --> Graph["Microsoft Graph<br/>Security API<br/>Secure Score · Defender<br/>Purview · Entra ID"]
+    Tools --> OpenAI["Azure OpenAI (GPT-4o)<br/>Reasoning &<br/>remediation plan gen"]
+    Middleware --> ContentSafetyAPI["Azure AI<br/>Content Safety<br/>RAI filter<br/>Prompt injection detection"]
+    Middleware --> AppInsights["Azure App Insights<br/>Traces & metrics"]
 ```
 
 ## Deployment Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│              Azure Container Apps                    │
-│                                                     │
-│  ┌─────────────────────────────────────────────┐   │
-│  │ PostureIQ Container                          │   │
-│  │ - Python 3.11 + FastAPI + Copilot SDK       │   │
-│  │ - GitHub CLI (agent runtime)                 │   │
-│  │ - User-Assigned Managed Identity             │   │
-│  │ - Scale: 0–5 replicas                        │   │
-│  └─────────────────────────────────────────────┘   │
-│                                                     │
-│  Health Probes: /health (liveness), /ready (readiness) │
-└─────────────────────────────────────────────────────┘
-         │              │              │
-         ▼              ▼              ▼
-  ┌────────────┐ ┌────────────┐ ┌────────────┐
-  │ Key Vault  │ │ App        │ │ Content    │
-  │ (secrets)  │ │ Insights   │ │ Safety     │
-  └────────────┘ └────────────┘ └────────────┘
+```mermaid
+graph TB
+    subgraph ACA["Azure Container Apps"]
+        subgraph Container["PostureIQ Container"]
+            P1["Python 3.11 + FastAPI + Copilot SDK"]
+            P2["GitHub CLI (agent runtime)"]
+            P3["User-Assigned Managed Identity"]
+            P4["Scale: 0–5 replicas"]
+        end
+        Probes["Health Probes<br/>/health (liveness)<br/>/ready (readiness)"]
+    end
+
+    ACA --> KV["Key Vault<br/>(secrets)"]
+    ACA --> AI["App Insights"]
+    ACA --> CS["Content Safety"]
 ```
 
 ## Auth Flow
 
-```
-User → Entra ID (OAuth2) → PostureIQ Agent → Managed Identity → Azure Services
-                                            → Delegated Permissions → Graph API
+```mermaid
+graph LR
+    User --> EntraID["Entra ID<br/>(OAuth2)"]
+    EntraID --> Agent["PostureIQ Agent"]
+    Agent -- "Managed Identity" --> Azure["Azure Services"]
+    Agent -- "Delegated Permissions" --> GraphAPI["Graph API"]
 ```

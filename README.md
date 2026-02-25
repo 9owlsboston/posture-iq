@@ -1,6 +1,6 @@
 # PostureIQ
 
-**ME5 Security Posture Assessment Agent** — Built with the GitHub Copilot SDK
+**ME5(M365 E5) Security Posture Assessment Agent** — Built with the GitHub Copilot SDK
 
 PostureIQ is a conversational AI agent that assesses an organization's Microsoft 365 E5 security posture, identifies deployment gaps, and generates prioritized remediation plans to accelerate the "Get to Green" (Project 479) motion.
 

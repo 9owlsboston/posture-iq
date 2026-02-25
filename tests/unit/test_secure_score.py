@@ -25,10 +25,10 @@ class TestQuerySecureScore:
         result = await query_secure_score()
         categories = result["categories"]
         assert len(categories) > 0
-        for cat in categories:
-            assert "name" in cat
-            assert "score" in cat
-            assert "max_score" in cat
+        for name, details in categories.items():
+            assert isinstance(name, str)
+            assert "score" in details
+            assert "max_score" in details
 
     @pytest.mark.asyncio
     async def test_has_gap_to_green(self):

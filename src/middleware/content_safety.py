@@ -34,7 +34,16 @@ async def check_content_safety(text: str) -> dict[str, Any]:
 
     if not endpoint:
         logger.warning("content_safety.skipped", reason="no endpoint configured")
-        return {"is_safe": True, "categories": {}, "reason": "safety check skipped — not configured"}
+        return {
+            "is_safe": True,
+            "categories": {
+                "hate": 0,
+                "self_harm": 0,
+                "sexual": 0,
+                "violence": 0,
+            },
+            "reason": "safety check skipped — not configured",
+        }
 
     # TODO: Replace with actual Azure AI Content Safety call
     #

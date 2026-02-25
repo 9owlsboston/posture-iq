@@ -25,7 +25,7 @@ param projectName string = 'postureiq'
 param containerImage string = ''
 
 // ── Variables ─────────────────────────────────────────────
-var uniqueSuffix = uniqueString(resourceGroup().id)
+var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
 var resourcePrefix = '${projectName}-${environment}'
 
 // ── Modules ───────────────────────────────────────────────
