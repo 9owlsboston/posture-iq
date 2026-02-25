@@ -1,0 +1,75 @@
+[project]
+name = "posture-iq"
+version = "0.1.0"
+description = "PostureIQ — ME5 Security Posture Assessment Agent for the Project 479 Get-to-Green motion"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Ying-Jung Chen" },
+]
+
+dependencies = [
+    # GitHub Copilot SDK
+    "copilot-sdk>=0.1.0",
+
+    # Azure Identity & Auth
+    "azure-identity>=1.15.0",
+
+    # Microsoft Graph SDK
+    "msgraph-sdk>=1.2.0",
+
+    # Azure OpenAI
+    "openai>=1.12.0",
+
+    # Azure AI Content Safety (RAI)
+    "azure-ai-contentsafety>=1.0.0",
+
+    # Azure Monitor / OpenTelemetry (Observability)
+    "azure-monitor-opentelemetry>=1.3.0",
+    "opentelemetry-api>=1.22.0",
+    "opentelemetry-sdk>=1.22.0",
+
+    # API framework (health probes)
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+
+    # Utilities
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "structlog>=24.1.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.2.0",
+    "mypy>=1.8.0",
+    "httpx>=0.27.0",       # async test client for FastAPI
+    "respx>=0.21.0",       # mock HTTP for Graph API calls
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "SIM"]
+ignore = ["S101"]  # allow assert in tests
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
