@@ -83,6 +83,14 @@ async def _run_tool(name: str, args: dict[str, Any] | None = None) -> dict[str, 
             assessment_context=args.get("assessment_context", "{}"),
         )
 
+    if name == "get_project479_playbook":
+        from src.tools.foundry_playbook import get_project479_playbook
+
+        return await get_project479_playbook(
+            gaps=args.get("gaps"),
+            workload_areas=args.get("workload_areas"),
+        )
+
     return {"error": f"Unknown tool: {name}"}
 
 
@@ -95,6 +103,7 @@ _TOOL_INTENTS: list[tuple[list[str], str]] = [
     (["purview", "dlp", "compliance", "retention", "sensitivity label"], "check_purview_policies"),
     (["entra", "conditional access", "pim", "identity protection", "mfa"], "get_entra_config"),
     (["remediation", "remediate", "fix", "plan", "get-to-green", "get to green"], "generate_remediation_plan"),
+    (["playbook", "project 479", "foundry", "get to green playbook", "onboarding checklist", "offer catalog"], "get_project479_playbook"),
 ]
 
 
@@ -242,6 +251,36 @@ def _format_scorecard(data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _format_playbook(data: dict[str, Any]) -> str:
+    lines = ["## 📖 Project 479 — Get-to-Green Playbook\n"]
+    lines.append(f"**Version**: {data.get('playbook_version', 'N/A')}")
+    lines.append(f"**Source**: {data.get('source', 'built_in')}")
+    lines.append(f"**Matched Areas**: {data.get('matched_count', 0)} / {data.get('total_areas', 0)}\n")
+
+    playbooks = data.get("playbooks", {})
+    for area, pb in playbooks.items():
+        title = pb.get("title", area)
+        lines.append(f"### {title}\n")
+        steps = pb.get("remediation_steps", [])
+        if steps:
+            for step in steps:
+                lines.append(f"- {step}")
+        effort = pb.get("estimated_effort")
+        impact = pb.get("impact_on_score", 0)
+        if effort or impact:
+            lines.append(f"\n*Effort: {effort or 'N/A'} | Score Impact: +{impact} pts*\n")
+        offer = pb.get("offer")
+        if offer:
+            lines.append(f"**Recommended Offer**: {offer.get('name', offer.get('id', 'N/A'))}\n")
+
+    offers = data.get("recommended_offers", [])
+    if offers:
+        lines.append(f"\n**Total Score Impact**: +{data.get('total_estimated_score_impact', 0)} pts")
+        lines.append(f"**Recommended Offers**: {', '.join(offers)}")
+
+    return "\n".join(lines)
+
+
 _FORMATTERS = {
     "query_secure_score": _format_secure_score,
     "assess_defender_coverage": _format_defender,
@@ -249,6 +288,7 @@ _FORMATTERS = {
     "get_entra_config": _format_entra,
     "generate_remediation_plan": _format_remediation,
     "create_adoption_scorecard": _format_scorecard,
+    "get_project479_playbook": _format_playbook,
 }
 
 

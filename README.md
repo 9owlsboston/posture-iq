@@ -32,7 +32,6 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture diagr
 ### Prerequisites
 
 - Python 3.11+
-- GitHub CLI (`gh`) — required for Copilot Agent Runtime
 - Azure subscription with OpenAI, Content Safety, App Insights
 - Microsoft 365 E5 tenant (or CDX demo tenant)
 
@@ -42,18 +41,59 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture diagr
 # Clone and install
 git clone https://github.com/velen-msft/posture-iq.git
 cd posture-iq
+python3.11 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your Azure and Graph API credentials
+# Edit .env — at minimum set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
 
 # Set up Graph API permissions (requires Azure CLI)
 chmod +x scripts/setup-permissions.sh
 ./scripts/setup-permissions.sh
+```
 
-# Run locally (dev mode)
+### Run Locally
+
+PostureIQ has **two entry points** — choose the one that fits your workflow:
+
+| Command | Interface | Requires |
+|---------|-----------|----------|
+| `python -m uvicorn src.api.app:app` | Web Chat UI at `http://localhost:8000` | `.env` with Azure/Graph creds |
+| `python -m src.agent.main` | CLI via Copilot SDK session loop | `gh` CLI + Copilot CLI running |
+
+#### Option A — Web Chat UI (recommended for demos & local testing)
+
+Starts a FastAPI server with a dark-themed chat page. Tools are dispatched via
+keyword intent classification — no Copilot CLI needed.
+
+```bash
+source .venv/bin/activate
+set -a && source .env && set +a
+python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000
+# Open http://localhost:8000
+```
+
+#### Option B — Copilot SDK Agent Session
+
+Starts an interactive CLI session powered by the Copilot Runtime. The SDK
+registers all 7 tools and the runtime (via `gh copilot`) does the LLM planning.
+
+```bash
+source .venv/bin/activate
+set -a && source .env && set +a
 python -m src.agent.main
+# Requires: gh CLI installed + Copilot CLI extension
+```
+
+### Run Tests
+
+No Azure credentials required — all external calls are mocked:
+
+```bash
+source .venv/bin/activate
+pytest
 ```
 
 ### Deploy to Azure
