@@ -161,7 +161,10 @@ def _format_secure_score(data: dict[str, Any]) -> str:
     if isinstance(comp, dict):
         avg = comp.get("industry_avg", "?")
         delta = comp.get("delta", "?")
-        lines.append(f"\n**Industry Comparison**: avg {avg}, delta {'+' if isinstance(delta, (int, float)) and delta > 0 else ''}{delta}")
+        sign = "+" if isinstance(delta, (int, float)) and delta > 0 else ""
+        lines.append(
+            f"\n**Industry Comparison**: avg {avg}, delta {sign}{delta}"
+        )
     elif isinstance(comp, str) and comp:
         lines.append(f"\n**Industry Comparison**: {comp}")
     return "\n".join(lines)
