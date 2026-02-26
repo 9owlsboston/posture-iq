@@ -78,7 +78,7 @@ python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000
 #### Option B — Copilot SDK Agent Session
 
 Starts an interactive CLI session powered by the Copilot Runtime. The SDK
-registers all 7 tools and the runtime (via `gh copilot`) does the LLM planning.
+registers all 8 tools and the runtime (via `gh copilot`) does the LLM planning.
 
 ```bash
 source .venv/bin/activate
@@ -148,7 +148,7 @@ ruff format src/ tests/
 posture-iq/
 ├── src/
 │   ├── agent/          # Agent host, config, system prompt
-│   ├── tools/          # 7 assessment tools (Graph API + Foundry IQ wrappers)
+│   ├── tools/          # 8 assessment tools (Graph API + Foundry IQ wrappers)
 │   ├── middleware/      # Tracing, content safety, PII redaction, audit, auth
 │   └── api/            # FastAPI health probes and HTTP endpoints
 ├── infra/              # Bicep IaC templates (ACR, Container Apps, OpenAI, etc.)

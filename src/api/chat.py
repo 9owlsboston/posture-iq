@@ -236,21 +236,23 @@ def _format_remediation(data: dict[str, Any]) -> str:
 
 
 def _format_scorecard(data: dict[str, Any]) -> str:
-    md = data.get("markdown")
+    # The tool returns a full markdown report in "scorecard_markdown"
+    md = data.get("scorecard_markdown") or data.get("markdown")
     if md:
         return md
     lines = ["## 📈 ME5 Adoption Scorecard\n"]
-    overall = data.get("overall_adoption")
+    overall = data.get("overall_adoption_pct") or data.get("overall_adoption")
     if overall is not None:
         lines.append(f"**Overall Adoption**: {overall:.0f}%\n")
-    workloads = data.get("workloads", {})
+    workloads = data.get("workload_status") or data.get("workloads", {})
     if workloads:
         lines.append("| Workload | Status | Adoption |")
         lines.append("| --- | --- | --- |")
         for wl, info in workloads.items():
             status = info.get("status", "unknown")
             icon = "🟢" if status == "green" else ("🟡" if status == "yellow" else "🔴")
-            lines.append(f"| {wl} | {icon} {status} | {info.get('adoption', '?')}% |")
+            pct = info.get("coverage_pct") or info.get("adoption", "?")
+            lines.append(f"| {wl} | {icon} {status} | {pct}% |")
     return "\n".join(lines)
 
 

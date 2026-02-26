@@ -317,7 +317,7 @@ az containerapp update \
 
 ---
 
-## The 7 Assessment Tools
+## The 8 Assessment Tools
 
 | Tool | Graph API Endpoint | What It Assesses |
 |---|---|---|
@@ -327,7 +327,8 @@ az containerapp update \
 | Purview Policies | `/informationProtection/policy/labels` | DLP, sensitivity labels, compliance |
 | Adoption Scorecard | `/reports/getM365AppUserDetail` | M365 app adoption rates |
 | Remediation Plan | *(aggregates all tools + GPT-4o)* | Prioritized fix recommendations with scripts |
-| Graph Client | *(shared factory)* | Authentication layer for all tools |
+| Fabric Telemetry | *(Fabric workspace API)* | ME5 workload telemetry from Microsoft Fabric |
+| Foundry Playbook (`get_project479_playbook`) | *(Foundry IQ knowledge base)* | Gap-to-remediation playbook mapping for Project 479 |
 
 ---
 

@@ -323,7 +323,7 @@ session = _sessions.get(session_key, {"messages": []})
 | Detail | Value |
 |--------|-------|
 | File | `src/agent/main.py` |
-| Functions | `_handle_secure_score()`, `_handle_defender_coverage()`, `_handle_purview_policies()`, `_handle_entra_config()`, `_handle_remediation_plan()`, `_handle_adoption_scorecard()` |
+| Functions | `_handle_secure_score()`, `_handle_defender_coverage()`, `_handle_purview_policies()`, `_handle_entra_config()`, `_handle_remediation_plan()`, `_handle_adoption_scorecard()`, `_handle_fabric_telemetry()`, `_handle_foundry_playbook()` |
 | Change | Extract `user_context` from invocation arguments (Copilot SDK passes it as serialized JSON); pass to tool functions |
 | Note | This depends on how the Copilot SDK exposes the calling user's context. May need a custom middleware or session-level injection. |
 

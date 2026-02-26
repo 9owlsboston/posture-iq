@@ -9,7 +9,7 @@ graph TB
         subgraph Core["Core Components"]
             direction LR
             FastAPI["FastAPI<br/>/health /ready /assess"]
-            SDK["Copilot SDK<br/>Registers 7 tools<br/>+ system prompt"]
+            SDK["Copilot SDK<br/>Registers 8 tools<br/>+ system prompt"]
             Runtime["Agent Runtime<br/>Plans tool calls<br/>Multi-model route<br/>Context mgmt<br/>Safety boundaries"]
             SDK -- "JSON-RPC (stdio)" --> Runtime
         end
@@ -22,7 +22,7 @@ graph TB
             AuditLog["Audit Logger"]
         end
 
-        subgraph Tools["7 Assessment Tools"]
+        subgraph Tools["8 Assessment Tools"]
             direction LR
             SecureScore["query_<br/>secure_score"]
             Defender["assess_<br/>defender_coverage"]

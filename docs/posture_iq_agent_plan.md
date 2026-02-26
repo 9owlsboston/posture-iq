@@ -104,13 +104,13 @@
 
 - [x] Implement `src/agent/main.py` — Copilot SDK client initialization:
   - Import SDK, create `CopilotClient`
-  - Register all 6 tools (see 1.2)
+  - Register all 8 tools (see 1.2)
   - Set system prompt (see 1.3)
   - Create session and handle multi-turn conversation loop
 - [x] Implement session lifecycle management (create, maintain, close)
 - [x] Wire up streaming responses for real-time UX
 - [x] **Tests** (`tests/unit/test_agent_host.py` — 75 tests):
-  - [x] Adapter handler tests (all 6 tools): valid args, missing args, empty args, error propagation
+  - [x] Adapter handler tests (all 8 tools): valid args, missing args, empty args, error propagation
   - [x] TOOLS registry validation: count, names, descriptions, handler callability, JSON Schema params
   - [x] PostureIQAgent lifecycle: start/stop client, create/resume/close session, configuration
   - [x] send_message: success, timeout, session errors, no-session guard
@@ -120,7 +120,7 @@
   - [x] System prompt integration: content injected into session config, replace mode
   - [x] TypedDict access patterns validated (dict access, not attribute access)
 
-### 1.2 Tool Implementations (6 tools — the agent's "hands")
+### 1.2 Tool Implementations (8 tools — the agent's "hands")
 
 Each tool wraps Microsoft Graph Security API calls and returns structured data for the runtime to reason over.
 
@@ -208,7 +208,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
 ### 1.4 Unit Tests
 
 - [x] Test agent host setup with mocked SDK (75 tests in `tests/unit/test_agent_host.py`)
-- [x] Test each tool with mocked Graph API responses (all 6 tools — 398 tool tests total)
+- [x] Test each tool with mocked Graph API responses (all 8 tools — 398 tool tests total)
 - [x] Test system prompt produces expected agent behavior patterns
 - [x] Test PII redaction catches tenant IDs, emails, UPNs (11 tests in `tests/unit/test_pii_redaction.py`)
 - [x] Test content safety integration rejects harmful outputs (8 tests in `tests/unit/test_content_safety.py`)
@@ -449,7 +449,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
 ### 5.2 Presentation Deck (1–2 slides)
 
 - [ ] **Slide 1**: Architecture diagram showing:
-  - Copilot SDK → Agent Runtime → 6 Tools → Graph Security API
+  - Copilot SDK → Agent Runtime → 8 Tools → Graph Security API
   - Azure services: OpenAI, Content Safety, Container Apps, App Insights, Key Vault, Entra ID
   - Foundry IQ / Fabric integration arrows
 - [ ] **Slide 2**: Impact & scoring alignment:
