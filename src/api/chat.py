@@ -103,7 +103,10 @@ _TOOL_INTENTS: list[tuple[list[str], str]] = [
     (["purview", "dlp", "compliance", "retention", "sensitivity label"], "check_purview_policies"),
     (["entra", "conditional access", "pim", "identity protection", "mfa"], "get_entra_config"),
     (["remediation", "remediate", "fix", "plan", "get-to-green", "get to green"], "generate_remediation_plan"),
-    (["playbook", "project 479", "foundry", "get to green playbook", "onboarding checklist", "offer catalog"], "get_project479_playbook"),
+    (
+        ["playbook", "project 479", "foundry", "get to green playbook", "onboarding checklist", "offer catalog"],
+        "get_project479_playbook",
+    ),
 ]
 
 
