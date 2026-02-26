@@ -65,7 +65,24 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "SIM"]
-ignore = ["S101"]  # allow assert in tests
+ignore = [
+    "S101",   # allow assert in tests
+    "B008",   # allow Depends() in FastAPI defaults
+    "SIM108", # allow if/else blocks over ternary for readability
+    "SIM117", # allow nested with statements for clarity
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S105",   # hardcoded passwords in test fixtures
+    "S106",   # hardcoded password arguments in tests
+    "S603",   # subprocess calls in test code
+    "S607",   # partial executable path in subprocess
+    "A002",   # shadowing builtins (id, type) in test helpers
+    "F841",   # unused variables in tests (side-effect assertions)
+    "SIM300", # yoda conditions in assertions
+]
+"src/api/app.py" = ["E402"]  # re import after constant definition
 
 [tool.mypy]
 python_version = "3.11"

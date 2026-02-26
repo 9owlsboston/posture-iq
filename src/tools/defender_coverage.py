@@ -15,7 +15,7 @@ Required scope: SecurityEvents.Read.All
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -51,11 +51,12 @@ ALL_WORKLOADS = (
     "Defender for Cloud Apps",
 )
 
-GREEN_THRESHOLD = 70.0   # ≥ 70% → green
+GREEN_THRESHOLD = 70.0  # ≥ 70% → green
 YELLOW_THRESHOLD = 40.0  # ≥ 40% → yellow, else red
 
 
 # ── Graph client factory ───────────────────────────────────────────────
+
 
 def _create_graph_client():
     """Delegate to the shared Graph client factory."""
@@ -63,6 +64,7 @@ def _create_graph_client():
 
 
 # ── Parsing / classification helpers ───────────────────────────────────
+
 
 def _classify_workload(service: str | None) -> str | None:
     """Map a ``service`` string from the API to our canonical workload name.
@@ -213,6 +215,7 @@ def _collect_critical_gaps(profiles: list[Any]) -> list[str]:
 
 # ── Mock fallback ──────────────────────────────────────────────────────
 
+
 def _generate_mock_response() -> dict[str, Any]:
     """Return realistic-looking mock data for development/testing."""
     return {
@@ -287,12 +290,13 @@ def _generate_mock_response() -> dict[str, Any]:
             "Enable lateral movement path detection [Defender for Identity]",
             "Enable Attack Surface Reduction rules [Defender for Endpoint]",
         ],
-        "assessed_at": datetime.now(timezone.utc).isoformat(),
+        "assessed_at": datetime.now(UTC).isoformat(),
         "data_source": "mock",
     }
 
 
 # ── Main tool function ─────────────────────────────────────────────────
+
 
 @trace_tool_call("assess_defender_coverage")
 async def assess_defender_coverage() -> dict[str, Any]:
@@ -332,7 +336,10 @@ async def assess_defender_coverage() -> dict[str, Any]:
         query = SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetQueryParameters(
             top=200,  # Fetch all profiles in one page (typical tenants have < 100)
         )
-        config = SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetRequestConfiguration(
+        request_config_cls = (
+            SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetRequestConfiguration
+        )
+        config = request_config_cls(
             query_parameters=query,
         )
 
@@ -361,7 +368,7 @@ async def assess_defender_coverage() -> dict[str, Any]:
             "workloads": workloads,
             "total_gaps": total_gaps,
             "critical_gaps": critical_gaps,
-            "assessed_at": datetime.now(timezone.utc).isoformat(),
+            "assessed_at": datetime.now(UTC).isoformat(),
             "data_source": "graph_api",
         }
 

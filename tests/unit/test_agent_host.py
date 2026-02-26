@@ -15,24 +15,23 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, AsyncMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
-from copilot import Tool, ToolInvocation, ToolResult
+from copilot import Tool, ToolInvocation
 from copilot.generated.session_events import SessionEventType
 
 from src.agent.main import (
     TOOLS,
     PostureIQAgent,
-    _handle_secure_score,
-    _handle_defender_coverage,
-    _handle_purview_policies,
-    _handle_entra_config,
-    _handle_remediation_plan,
     _handle_adoption_scorecard,
+    _handle_defender_coverage,
+    _handle_entra_config,
+    _handle_purview_policies,
+    _handle_remediation_plan,
+    _handle_secure_score,
 )
 from src.agent.system_prompt import SYSTEM_PROMPT
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -922,9 +921,7 @@ class TestSystemPromptIntegration:
 
     def test_system_prompt_mentions_all_tools(self):
         for tool in TOOLS:
-            assert tool.name in SYSTEM_PROMPT, (
-                f"System prompt should mention tool '{tool.name}'"
-            )
+            assert tool.name in SYSTEM_PROMPT, f"System prompt should mention tool '{tool.name}'"
 
     def test_system_prompt_includes_guardrails(self):
         assert "read-only" in SYSTEM_PROMPT.lower() or "Read-only" in SYSTEM_PROMPT

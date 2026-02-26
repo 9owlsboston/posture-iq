@@ -11,12 +11,11 @@ Required scope: SecurityEvents.Read.All
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
 
-from src.agent.config import settings
 from src.middleware.pii_redaction import redact_pii
 from src.middleware.tracing import trace_tool_call
 from src.tools.graph_client import create_graph_client
@@ -34,6 +33,7 @@ KNOWN_CATEGORIES = frozenset({"Identity", "Data", "Device", "Apps", "Infrastruct
 
 # ── Graph client factory ───────────────────────────────────────────────
 
+
 def _create_graph_client():
     """Create an authenticated Microsoft Graph client.
 
@@ -43,6 +43,7 @@ def _create_graph_client():
 
 
 # ── Parsing helpers ────────────────────────────────────────────────────
+
 
 def _parse_category_breakdown(
     control_scores: list[Any],
@@ -168,17 +169,17 @@ def _parse_trend(
     for snap in score_snapshots[:TREND_DAYS]:
         created = getattr(snap, "created_date_time", None)
         date_str = (
-            created.strftime("%Y-%m-%d")
-            if isinstance(created, datetime)
-            else str(created) if created else "unknown"
+            created.strftime("%Y-%m-%d") if isinstance(created, datetime) else str(created) if created else "unknown"
         )
         current = getattr(snap, "current_score", 0.0) or 0.0
         max_s = getattr(snap, "max_score", 0.0) or 0.0
-        trend.append({
-            "date": date_str,
-            "score": round(current, 1),
-            "max_score": round(max_s, 1),
-        })
+        trend.append(
+            {
+                "date": date_str,
+                "score": round(current, 1),
+                "max_score": round(max_s, 1),
+            }
+        )
 
     return trend
 
@@ -202,12 +203,13 @@ def _compute_status(
 
 # ── Mock data (development fallback) ──────────────────────────────────
 
+
 def _generate_mock_response() -> dict[str, Any]:
     """Generate realistic mock Secure Score data for development.
 
     Used when Graph API credentials are not configured.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     score = 47.3
     max_score = 100.0
     pct = round((score / max_score) * 100, 1)
@@ -246,6 +248,7 @@ def _generate_mock_response() -> dict[str, Any]:
 
 
 # ── Main tool entry point ─────────────────────────────────────────────
+
 
 @trace_tool_call("query_secure_score")
 async def query_secure_score(tenant_id: str = "") -> dict[str, Any]:
@@ -293,16 +296,12 @@ async def query_secure_score(tenant_id: str = "") -> dict[str, Any]:
             SecureScoresRequestBuilder,
         )
 
-        query_params = (
-            SecureScoresRequestBuilder.SecureScoresRequestBuilderGetQueryParameters(
-                top=GRAPH_TOP_N,
-                orderby=["createdDateTime desc"],
-            )
+        query_params = SecureScoresRequestBuilder.SecureScoresRequestBuilderGetQueryParameters(
+            top=GRAPH_TOP_N,
+            orderby=["createdDateTime desc"],
         )
-        request_config = (
-            SecureScoresRequestBuilder.SecureScoresRequestBuilderGetRequestConfiguration(
-                query_parameters=query_params,
-            )
+        request_config = SecureScoresRequestBuilder.SecureScoresRequestBuilderGetRequestConfiguration(
+            query_parameters=query_params,
         )
 
         response = await client.security.secure_scores.get(
@@ -338,7 +337,7 @@ async def query_secure_score(tenant_id: str = "") -> dict[str, Any]:
             "categories": categories,
             "trend_30d": trend,
             "industry_comparison": industry,
-            "assessed_at": datetime.now(timezone.utc).isoformat(),
+            "assessed_at": datetime.now(UTC).isoformat(),
             "status": _compute_status(score_pct),
             "green_threshold": GREEN_THRESHOLD,
             "gap_to_green": round(max(0, GREEN_THRESHOLD - score_pct), 1),

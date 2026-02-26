@@ -15,15 +15,14 @@ Covers:
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers — build fake Graph SDK objects
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _make_ca_policy(
     *,
@@ -97,29 +96,36 @@ GLOBAL_ADMIN_ROLE_ID = "62e90394-69f5-4237-9190-012177145e10"
 # 1. _compute_status
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestEntraComputeStatus:
     def test_green_at_70(self):
         from src.tools.entra_config import _compute_status
+
         assert _compute_status(70.0) == "green"
 
     def test_green_above(self):
         from src.tools.entra_config import _compute_status
+
         assert _compute_status(100.0) == "green"
 
     def test_yellow_at_40(self):
         from src.tools.entra_config import _compute_status
+
         assert _compute_status(40.0) == "yellow"
 
     def test_yellow_between(self):
         from src.tools.entra_config import _compute_status
+
         assert _compute_status(55.0) == "yellow"
 
     def test_red_below_40(self):
         from src.tools.entra_config import _compute_status
+
         assert _compute_status(39.9) == "red"
 
     def test_red_at_zero(self):
         from src.tools.entra_config import _compute_status
+
         assert _compute_status(0.0) == "red"
 
 
@@ -127,9 +133,11 @@ class TestEntraComputeStatus:
 # 2. _parse_conditional_access
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestParseConditionalAccess:
     def test_empty_policies(self):
         from src.tools.entra_config import _parse_conditional_access
+
         result = _parse_conditional_access([])
         assert result["status"] == "red"
         assert result["details"]["total_policies"] == 0
@@ -137,11 +145,13 @@ class TestParseConditionalAccess:
 
     def test_none_policies(self):
         from src.tools.entra_config import _parse_conditional_access
+
         result = _parse_conditional_access(None)
         assert result["status"] == "red"
 
     def test_mfa_for_all_users(self):
         from src.tools.entra_config import _parse_conditional_access
+
         policy = _make_ca_policy(
             display_name="MFA All",
             state="enabled",
@@ -153,6 +163,7 @@ class TestParseConditionalAccess:
 
     def test_legacy_auth_blocked(self):
         from src.tools.entra_config import _parse_conditional_access
+
         policy = _make_ca_policy(
             display_name="Block Legacy",
             state="enabled",
@@ -164,6 +175,7 @@ class TestParseConditionalAccess:
 
     def test_report_only_counted(self):
         from src.tools.entra_config import _parse_conditional_access
+
         policy = _make_ca_policy(
             display_name="Report Only",
             state="enabledForReportingButNotEnforced",
@@ -174,6 +186,7 @@ class TestParseConditionalAccess:
 
     def test_multiple_policies(self):
         from src.tools.entra_config import _parse_conditional_access
+
         policies = [
             _make_ca_policy(display_name="P1", state="enabled"),
             _make_ca_policy(display_name="P2", state="enabled"),
@@ -199,6 +212,7 @@ class TestParseConditionalAccess:
 
     def test_no_mfa_no_legacy_block(self):
         from src.tools.entra_config import _parse_conditional_access
+
         policy = _make_ca_policy(display_name="Basic", state="enabled")
         result = _parse_conditional_access([policy])
         assert result["details"]["mfa_enforced_all_users"] is False
@@ -208,6 +222,7 @@ class TestParseConditionalAccess:
 
     def test_mfa_not_all_users(self):
         from src.tools.entra_config import _parse_conditional_access
+
         policy = _make_ca_policy(
             display_name="MFA Admins",
             state="enabled",
@@ -222,20 +237,24 @@ class TestParseConditionalAccess:
 # 3. _parse_role_assignments
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestParseRoleAssignments:
     def test_empty_assignments(self):
         from src.tools.entra_config import _parse_role_assignments
+
         result = _parse_role_assignments([])
         assert result["status"] == "red"
         assert result["details"]["total_assignments"] == 0
 
     def test_none_assignments(self):
         from src.tools.entra_config import _parse_role_assignments
+
         result = _parse_role_assignments(None)
         assert result["status"] == "red"
 
     def test_few_global_admins_green(self):
         from src.tools.entra_config import _parse_role_assignments
+
         assignments = [
             _make_role_assignment(role_definition_id=GLOBAL_ADMIN_ROLE_ID),
             _make_role_assignment(role_definition_id=GLOBAL_ADMIN_ROLE_ID, principal_id="u2"),
@@ -246,9 +265,9 @@ class TestParseRoleAssignments:
 
     def test_too_many_global_admins(self):
         from src.tools.entra_config import _parse_role_assignments
+
         assignments = [
-            _make_role_assignment(role_definition_id=GLOBAL_ADMIN_ROLE_ID, principal_id=f"u{i}")
-            for i in range(5)
+            _make_role_assignment(role_definition_id=GLOBAL_ADMIN_ROLE_ID, principal_id=f"u{i}") for i in range(5)
         ]
         result = _parse_role_assignments(assignments)
         assert result["details"]["permanent_global_admins"] == 5
@@ -257,15 +276,15 @@ class TestParseRoleAssignments:
 
     def test_many_assignments_warns(self):
         from src.tools.entra_config import _parse_role_assignments
-        assignments = [
-            _make_role_assignment(principal_id=f"u{i}") for i in range(15)
-        ]
+
+        assignments = [_make_role_assignment(principal_id=f"u{i}") for i in range(15)]
         result = _parse_role_assignments(assignments)
         assert result["details"]["total_assignments"] == 15
         assert any("eligible" in g.lower() or "jit" in g.lower() for g in result["gaps"])
 
     def test_non_global_admin_roles(self):
         from src.tools.entra_config import _parse_role_assignments
+
         assignments = [
             _make_role_assignment(role_definition_id="some-other-role"),
         ]
@@ -277,9 +296,11 @@ class TestParseRoleAssignments:
 # 4. _parse_risky_users
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestParseRiskyUsers:
     def test_no_risky_users(self):
         from src.tools.entra_config import _parse_risky_users
+
         result = _parse_risky_users([])
         assert result["status"] == "green"
         assert result["details"]["risky_users_count"] == 0
@@ -287,12 +308,14 @@ class TestParseRiskyUsers:
 
     def test_none_input(self):
         from src.tools.entra_config import _parse_risky_users
+
         result = _parse_risky_users(None)
         assert result["status"] == "green"
         assert result["details"]["risky_users_count"] == 0
 
     def test_few_risky_users_yellow(self):
         from src.tools.entra_config import _parse_risky_users
+
         users = [_make_risky_user(id=f"u{i}") for i in range(5)]
         result = _parse_risky_users(users)
         assert result["status"] == "yellow"
@@ -301,6 +324,7 @@ class TestParseRiskyUsers:
 
     def test_many_risky_users_red(self):
         from src.tools.entra_config import _parse_risky_users
+
         users = [_make_risky_user(id=f"u{i}") for i in range(15)]
         result = _parse_risky_users(users)
         assert result["status"] == "red"
@@ -311,9 +335,11 @@ class TestParseRiskyUsers:
 # 5. _parse_access_reviews
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestParseAccessReviews:
     def test_no_reviews(self):
         from src.tools.entra_config import _parse_access_reviews
+
         result = _parse_access_reviews([])
         assert result["status"] == "red"
         assert result["details"]["reviews_configured"] == 0
@@ -321,17 +347,20 @@ class TestParseAccessReviews:
 
     def test_none_input(self):
         from src.tools.entra_config import _parse_access_reviews
+
         result = _parse_access_reviews(None)
         assert result["status"] == "red"
 
     def test_one_review_yellow(self):
         from src.tools.entra_config import _parse_access_reviews
+
         result = _parse_access_reviews([_make_access_review()])
         assert result["status"] == "yellow"
         assert result["details"]["reviews_configured"] == 1
 
     def test_three_reviews_green(self):
         from src.tools.entra_config import _parse_access_reviews
+
         reviews = [_make_access_review(display_name=f"R{i}") for i in range(3)]
         result = _parse_access_reviews(reviews)
         assert result["status"] == "green"
@@ -343,18 +372,21 @@ class TestParseAccessReviews:
 # 6. Mock fallback — get_entra_config with no Graph client
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestEntraMockFallback:
     @pytest.mark.asyncio
     @patch("src.tools.entra_config._create_graph_client", return_value=None)
     async def test_returns_mock_data_source(self, _mock):
         from src.tools.entra_config import get_entra_config
+
         result = await get_entra_config()
         assert result["data_source"] == "mock"
 
     @pytest.mark.asyncio
     @patch("src.tools.entra_config._create_graph_client", return_value=None)
     async def test_mock_has_all_components(self, _mock):
-        from src.tools.entra_config import get_entra_config, ALL_COMPONENTS
+        from src.tools.entra_config import ALL_COMPONENTS, get_entra_config
+
         result = await get_entra_config()
         assert set(result["components"].keys()) == set(ALL_COMPONENTS)
 
@@ -362,6 +394,7 @@ class TestEntraMockFallback:
     @patch("src.tools.entra_config._create_graph_client", return_value=None)
     async def test_mock_has_overall_coverage(self, _mock):
         from src.tools.entra_config import get_entra_config
+
         result = await get_entra_config()
         assert 0.0 <= result["overall_coverage_pct"] <= 100.0
 
@@ -369,6 +402,7 @@ class TestEntraMockFallback:
     @patch("src.tools.entra_config._create_graph_client", return_value=None)
     async def test_mock_has_total_gaps(self, _mock):
         from src.tools.entra_config import get_entra_config
+
         result = await get_entra_config()
         assert result["total_gaps"] > 0
 
@@ -376,6 +410,7 @@ class TestEntraMockFallback:
     @patch("src.tools.entra_config._create_graph_client", return_value=None)
     async def test_mock_has_critical_gaps(self, _mock):
         from src.tools.entra_config import get_entra_config
+
         result = await get_entra_config()
         assert isinstance(result["critical_gaps"], list)
         assert len(result["critical_gaps"]) > 0
@@ -384,6 +419,7 @@ class TestEntraMockFallback:
     @patch("src.tools.entra_config._create_graph_client", return_value=None)
     async def test_mock_has_assessed_at(self, _mock):
         from src.tools.entra_config import get_entra_config
+
         result = await get_entra_config()
         assert "assessed_at" in result
 
@@ -391,6 +427,7 @@ class TestEntraMockFallback:
     @patch("src.tools.entra_config._create_graph_client", return_value=None)
     async def test_mock_component_structure(self, _mock):
         from src.tools.entra_config import get_entra_config
+
         result = await get_entra_config()
         for component in result["components"].values():
             assert "status" in component
@@ -401,6 +438,7 @@ class TestEntraMockFallback:
 # ═══════════════════════════════════════════════════════════════════════
 # 7. Graph API path — full integration
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _build_entra_mock_client(
     *,
@@ -509,9 +547,7 @@ class TestEntraGraphPath:
                 _make_role_assignment(role_definition_id=GLOBAL_ADMIN_ROLE_ID),
             ],
             risky_users=[],
-            access_reviews=[
-                _make_access_review(display_name=f"R{i}") for i in range(3)
-            ],
+            access_reviews=[_make_access_review(display_name=f"R{i}") for i in range(3)],
         )
         mock_factory.return_value = mock_client
 
@@ -543,15 +579,11 @@ class TestEntraGraphPath:
 
         mock_client = MagicMock()
         # Make all endpoints fail — each is caught individually
-        mock_client.identity.conditional_access.policies.get = AsyncMock(
-            side_effect=RuntimeError("total failure")
-        )
+        mock_client.identity.conditional_access.policies.get = AsyncMock(side_effect=RuntimeError("total failure"))
         mock_client.role_management.directory.role_assignments.get = AsyncMock(
             side_effect=RuntimeError("total failure")
         )
-        mock_client.identity_protection.risky_users.get = AsyncMock(
-            side_effect=RuntimeError("total failure")
-        )
+        mock_client.identity_protection.risky_users.get = AsyncMock(side_effect=RuntimeError("total failure"))
         mock_client.identity_governance.access_reviews.definitions.get = AsyncMock(
             side_effect=RuntimeError("total failure")
         )
@@ -561,8 +593,7 @@ class TestEntraGraphPath:
         # Per-endpoint try/except means client is still used → graph_api
         assert result["data_source"] == "graph_api"
         # All assessment components should be "unknown"
-        for name in ("Conditional Access", "Privileged Identity Management",
-                     "Identity Protection", "Access Reviews"):
+        for name in ("Conditional Access", "Privileged Identity Management", "Identity Protection", "Access Reviews"):
             assert result["components"][name]["status"] == "unknown"
 
     @pytest.mark.asyncio
@@ -573,8 +604,7 @@ class TestEntraGraphPath:
         mock_client = _build_entra_mock_client(
             ca_policies=[_make_ca_policy()],
             role_assignments=[
-                _make_role_assignment(role_definition_id=GLOBAL_ADMIN_ROLE_ID, principal_id=f"u{i}")
-                for i in range(5)
+                _make_role_assignment(role_definition_id=GLOBAL_ADMIN_ROLE_ID, principal_id=f"u{i}") for i in range(5)
             ],
             risky_users=[_make_risky_user()],
             access_reviews=[],
@@ -592,8 +622,7 @@ class TestEntraGraphPath:
         mock_client = _build_entra_mock_client(
             ca_policies=[_make_ca_policy()],
             role_assignments=[
-                _make_role_assignment(role_definition_id=GLOBAL_ADMIN_ROLE_ID, principal_id=f"u{i}")
-                for i in range(5)
+                _make_role_assignment(role_definition_id=GLOBAL_ADMIN_ROLE_ID, principal_id=f"u{i}") for i in range(5)
             ],
             risky_users=[_make_risky_user()],
             access_reviews=[],
@@ -618,6 +647,7 @@ class TestEntraGraphPath:
 # ═══════════════════════════════════════════════════════════════════════
 # 8. Partial endpoint failures
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestEntraPartialFailures:
     """Each endpoint has independent error handling, so partial failures
@@ -703,8 +733,7 @@ class TestEntraPartialFailures:
         result = await get_entra_config()
         assert result["data_source"] == "graph_api"
         # All should be unknown except SSO (always yellow)
-        for comp in ("Conditional Access", "Privileged Identity Management",
-                      "Identity Protection", "Access Reviews"):
+        for comp in ("Conditional Access", "Privileged Identity Management", "Identity Protection", "Access Reviews"):
             assert result["components"][comp]["status"] == "unknown"
 
     @pytest.mark.asyncio
@@ -729,6 +758,7 @@ class TestEntraPartialFailures:
 # 9. SSO component
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestEntraSSO:
     @pytest.mark.asyncio
     @patch("src.tools.entra_config._create_graph_client")
@@ -747,6 +777,7 @@ class TestEntraSSO:
 # ═══════════════════════════════════════════════════════════════════════
 # 10. Tracing
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestEntraTracing:
     @pytest.mark.asyncio
@@ -787,6 +818,7 @@ class TestEntraTracing:
 # ═══════════════════════════════════════════════════════════════════════
 # 11. Edge cases
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestEntraEdgeCases:
     @pytest.mark.asyncio

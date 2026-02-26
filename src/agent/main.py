@@ -100,11 +100,7 @@ async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
     workload_areas_raw = args.get("workload_areas", [])
     # Ensure lists (the SDK may pass JSON strings)
     gaps = json.loads(gaps_raw) if isinstance(gaps_raw, str) else gaps_raw
-    workload_areas = (
-        json.loads(workload_areas_raw)
-        if isinstance(workload_areas_raw, str)
-        else workload_areas_raw
-    )
+    workload_areas = json.loads(workload_areas_raw) if isinstance(workload_areas_raw, str) else workload_areas_raw
     result = await get_project479_playbook(
         gaps=gaps or None,
         workload_areas=workload_areas or None,
@@ -131,8 +127,7 @@ TOOLS: list[Tool] = [
                 "tenant_id": {
                     "type": "string",
                     "description": (
-                        "The tenant identifier to assess "
-                        "(optional — uses current auth context if omitted)"
+                        "The tenant identifier to assess (optional — uses current auth context if omitted)"
                     ),
                 },
             },
@@ -199,8 +194,7 @@ TOOLS: list[Tool] = [
                 "assessment_context": {
                     "type": "string",
                     "description": (
-                        "JSON summary of findings from secure_score, defender, "
-                        "purview, and entra assessments"
+                        "JSON summary of findings from secure_score, defender, purview, and entra assessments"
                     ),
                 },
             },
@@ -513,9 +507,7 @@ async def run_cli(agent: PostureIQAgent) -> None:
 
     while True:
         try:
-            user_input = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: input("You: ").strip()
-            )
+            user_input = await asyncio.get_event_loop().run_in_executor(None, lambda: input("You: ").strip())
         except (EOFError, KeyboardInterrupt):
             print("\n👋 PostureIQ session ended.")
             break

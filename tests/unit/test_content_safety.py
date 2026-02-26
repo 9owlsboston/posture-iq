@@ -1,6 +1,7 @@
 """Unit tests for content safety middleware."""
 
 import pytest
+
 from src.middleware.content_safety import check_content_safety, check_prompt_injection
 
 

@@ -10,17 +10,16 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers — build fake Graph SDK objects using SimpleNamespace
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _make_control_score(
     name: str = "MFAForAdmin",
@@ -52,7 +51,7 @@ def _make_secure_score_snapshot(
     return SimpleNamespace(
         current_score=current_score,
         max_score=max_score,
-        created_date_time=created or datetime.now(timezone.utc),
+        created_date_time=created or datetime.now(UTC),
         control_scores=control_scores or [],
         average_comparative_scores=comparatives or [],
         azure_tenant_id="test-tenant-id",
@@ -66,6 +65,7 @@ def _make_graph_response(snapshots: list) -> SimpleNamespace:
 # ═══════════════════════════════════════════════════════════════════════
 # _parse_category_breakdown
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestParseCategoryBreakdown:
     """Tests for _parse_category_breakdown helper."""
@@ -137,6 +137,7 @@ class TestParseCategoryBreakdown:
 # ═══════════════════════════════════════════════════════════════════════
 # _parse_industry_comparison
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestParseIndustryComparison:
     """Tests for _parse_industry_comparison helper."""
@@ -221,13 +222,14 @@ class TestParseIndustryComparison:
 # _parse_trend
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestParseTrend:
     """Tests for _parse_trend helper."""
 
     def test_extracts_date_and_score(self):
         from src.tools.secure_score import _parse_trend
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         snapshots = [
             _make_secure_score_snapshot(72.0, 100.0, now),
             _make_secure_score_snapshot(71.0, 100.0, now - timedelta(days=1)),
@@ -241,13 +243,10 @@ class TestParseTrend:
         assert trend[0]["date"] == now.strftime("%Y-%m-%d")
 
     def test_caps_at_30_entries(self):
-        from src.tools.secure_score import _parse_trend, TREND_DAYS
+        from src.tools.secure_score import TREND_DAYS, _parse_trend
 
-        now = datetime.now(timezone.utc)
-        snapshots = [
-            _make_secure_score_snapshot(70.0, 100.0, now - timedelta(days=i))
-            for i in range(50)
-        ]
+        now = datetime.now(UTC)
+        snapshots = [_make_secure_score_snapshot(70.0, 100.0, now - timedelta(days=i)) for i in range(50)]
         trend = _parse_trend(snapshots)
         assert len(trend) == TREND_DAYS
 
@@ -273,7 +272,7 @@ class TestParseTrend:
         snap = SimpleNamespace(
             current_score=None,
             max_score=None,
-            created_date_time=datetime.now(timezone.utc),
+            created_date_time=datetime.now(UTC),
         )
         trend = _parse_trend([snap])
         assert trend[0]["score"] == 0.0
@@ -292,11 +291,12 @@ class TestParseTrend:
 # _compute_status
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestComputeStatus:
     """Tests for _compute_status helper."""
 
     def test_green_at_threshold(self):
-        from src.tools.secure_score import _compute_status, GREEN_THRESHOLD
+        from src.tools.secure_score import GREEN_THRESHOLD, _compute_status
 
         assert _compute_status(GREEN_THRESHOLD) == "green"
 
@@ -306,17 +306,17 @@ class TestComputeStatus:
         assert _compute_status(95.0) == "green"
 
     def test_yellow_just_below_threshold(self):
-        from src.tools.secure_score import _compute_status, GREEN_THRESHOLD
+        from src.tools.secure_score import GREEN_THRESHOLD, _compute_status
 
         assert _compute_status(GREEN_THRESHOLD - 1) == "yellow"
 
     def test_yellow_at_boundary(self):
-        from src.tools.secure_score import _compute_status, GREEN_THRESHOLD
+        from src.tools.secure_score import GREEN_THRESHOLD, _compute_status
 
         assert _compute_status(GREEN_THRESHOLD - 10) == "yellow"
 
     def test_red_below_yellow_boundary(self):
-        from src.tools.secure_score import _compute_status, GREEN_THRESHOLD
+        from src.tools.secure_score import GREEN_THRESHOLD, _compute_status
 
         assert _compute_status(GREEN_THRESHOLD - 11) == "red"
 
@@ -337,6 +337,7 @@ class TestComputeStatus:
 # _generate_mock_response
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestGenerateMockResponse:
     """Tests for _generate_mock_response helper."""
 
@@ -345,10 +346,17 @@ class TestGenerateMockResponse:
 
         result = _generate_mock_response()
         required = {
-            "current_score", "max_score", "score_percentage",
-            "categories", "trend_30d", "industry_comparison",
-            "assessed_at", "status", "green_threshold",
-            "gap_to_green", "data_source",
+            "current_score",
+            "max_score",
+            "score_percentage",
+            "categories",
+            "trend_30d",
+            "industry_comparison",
+            "assessed_at",
+            "status",
+            "green_threshold",
+            "gap_to_green",
+            "data_source",
         }
         assert required.issubset(result.keys())
 
@@ -358,13 +366,13 @@ class TestGenerateMockResponse:
         assert _generate_mock_response()["data_source"] == "mock"
 
     def test_mock_has_five_categories(self):
-        from src.tools.secure_score import _generate_mock_response, KNOWN_CATEGORIES
+        from src.tools.secure_score import KNOWN_CATEGORIES, _generate_mock_response
 
         cats = _generate_mock_response()["categories"]
         assert set(cats.keys()) == KNOWN_CATEGORIES
 
     def test_mock_trend_has_30_entries(self):
-        from src.tools.secure_score import _generate_mock_response, TREND_DAYS
+        from src.tools.secure_score import TREND_DAYS, _generate_mock_response
 
         trend = _generate_mock_response()["trend_30d"]
         assert len(trend) == TREND_DAYS
@@ -400,6 +408,7 @@ class TestGenerateMockResponse:
 # ═══════════════════════════════════════════════════════════════════════
 # _create_graph_client
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestCreateGraphClient:
     """Tests for _create_graph_client factory."""
@@ -464,26 +473,27 @@ class TestCreateGraphClient:
             mock_settings.azure_client_id = "client-123"
             mock_settings.azure_client_secret = "secret-123"
 
-            with patch(
-                "azure.identity.ClientSecretCredential",
-                side_effect=ValueError("bad cred"),
+            with (
+                patch(
+                    "azure.identity.ClientSecretCredential",
+                    side_effect=ValueError("bad cred"),
+                ),
+                pytest.raises(ValueError, match="bad cred"),
             ):
-                with pytest.raises(ValueError, match="bad cred"):
-                    _create_graph_client()
+                _create_graph_client()
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # query_secure_score — mock fallback path
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestQuerySecureScoreMockPath:
     """Tests for query_secure_score when Graph credentials are absent (mock path)."""
 
     @pytest.mark.asyncio
     async def test_returns_mock_when_no_credentials(self):
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=None
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=None):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -491,25 +501,28 @@ class TestQuerySecureScoreMockPath:
 
     @pytest.mark.asyncio
     async def test_mock_result_has_all_required_fields(self):
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=None
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=None):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
             required = {
-                "current_score", "max_score", "score_percentage",
-                "categories", "trend_30d", "industry_comparison",
-                "assessed_at", "status", "green_threshold",
-                "gap_to_green", "data_source",
+                "current_score",
+                "max_score",
+                "score_percentage",
+                "categories",
+                "trend_30d",
+                "industry_comparison",
+                "assessed_at",
+                "status",
+                "green_threshold",
+                "gap_to_green",
+                "data_source",
             }
             assert required.issubset(result.keys())
 
     @pytest.mark.asyncio
     async def test_mock_score_within_range(self):
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=None
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=None):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -517,9 +530,7 @@ class TestQuerySecureScoreMockPath:
 
     @pytest.mark.asyncio
     async def test_mock_has_category_breakdown(self):
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=None
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=None):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -533,9 +544,7 @@ class TestQuerySecureScoreMockPath:
 
     @pytest.mark.asyncio
     async def test_mock_has_gap_to_green(self):
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=None
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=None):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -544,9 +553,7 @@ class TestQuerySecureScoreMockPath:
 
     @pytest.mark.asyncio
     async def test_accepts_tenant_id_param(self):
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=None
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=None):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score(tenant_id="test-tenant")
@@ -556,6 +563,7 @@ class TestQuerySecureScoreMockPath:
 # ═══════════════════════════════════════════════════════════════════════
 # query_secure_score — Graph API path (mocked SDK)
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestQuerySecureScoreGraphPath:
     """Tests for query_secure_score with a mocked Graph API client."""
@@ -569,7 +577,7 @@ class TestQuerySecureScoreGraphPath:
 
     @pytest.mark.asyncio
     async def test_graph_api_returns_structured_result(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         snapshots = [
             _make_secure_score_snapshot(
                 current_score=72.5,
@@ -586,9 +594,7 @@ class TestQuerySecureScoreGraphPath:
         ]
         client = self._make_mock_client(snapshots)
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -605,9 +611,7 @@ class TestQuerySecureScoreGraphPath:
         snapshots = [_make_secure_score_snapshot(75.0, 100.0)]
         client = self._make_mock_client(snapshots)
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -619,9 +623,7 @@ class TestQuerySecureScoreGraphPath:
         snapshots = [_make_secure_score_snapshot(75.0, 100.0)]
         client = self._make_mock_client(snapshots)
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -634,9 +636,7 @@ class TestQuerySecureScoreGraphPath:
         snapshots = [_make_secure_score_snapshot(30.0, 100.0)]
         client = self._make_mock_client(snapshots)
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -646,7 +646,7 @@ class TestQuerySecureScoreGraphPath:
 
     @pytest.mark.asyncio
     async def test_graph_api_trend_from_multiple_snapshots(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         snapshots = [
             _make_secure_score_snapshot(72.0, 100.0, now),
             _make_secure_score_snapshot(70.0, 100.0, now - timedelta(days=1)),
@@ -654,9 +654,7 @@ class TestQuerySecureScoreGraphPath:
         ]
         client = self._make_mock_client(snapshots)
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -668,13 +666,9 @@ class TestQuerySecureScoreGraphPath:
     @pytest.mark.asyncio
     async def test_graph_api_empty_response_falls_back(self):
         client = MagicMock()
-        client.security.secure_scores.get = AsyncMock(
-            return_value=SimpleNamespace(value=[])
-        )
+        client.security.secure_scores.get = AsyncMock(return_value=SimpleNamespace(value=[]))
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -684,13 +678,9 @@ class TestQuerySecureScoreGraphPath:
     @pytest.mark.asyncio
     async def test_graph_api_none_response_falls_back(self):
         client = MagicMock()
-        client.security.secure_scores.get = AsyncMock(
-            return_value=SimpleNamespace(value=None)
-        )
+        client.security.secure_scores.get = AsyncMock(return_value=SimpleNamespace(value=None))
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -700,13 +690,9 @@ class TestQuerySecureScoreGraphPath:
     @pytest.mark.asyncio
     async def test_graph_api_error_raises(self):
         client = MagicMock()
-        client.security.secure_scores.get = AsyncMock(
-            side_effect=RuntimeError("Graph API unavailable")
-        )
+        client.security.secure_scores.get = AsyncMock(side_effect=RuntimeError("Graph API unavailable"))
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             with pytest.raises(RuntimeError, match="Graph API unavailable"):
@@ -718,9 +704,7 @@ class TestQuerySecureScoreGraphPath:
         snapshots = [_make_secure_score_snapshot(0.0, 0.0)]
         client = self._make_mock_client(snapshots)
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -735,9 +719,7 @@ class TestQuerySecureScoreGraphPath:
         response = _make_graph_response([_make_secure_score_snapshot(50.0, 100.0)])
         client.security.secure_scores.get = AsyncMock(return_value=response)
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             await query_secure_score()
@@ -767,9 +749,7 @@ class TestQuerySecureScoreGraphPath:
         ]
         client = self._make_mock_client(snapshots)
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -787,9 +767,7 @@ class TestQuerySecureScoreGraphPath:
         snapshots = [_make_secure_score_snapshot(50.0, 100.0)]
         client = self._make_mock_client(snapshots)
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -802,6 +780,7 @@ class TestQuerySecureScoreGraphPath:
 # Trace span integration
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestSecureScoreTracing:
     """Tests that trace spans are created correctly."""
 
@@ -813,12 +792,8 @@ class TestSecureScoreTracing:
         ):
             mock_tracer = MagicMock()
             mock_span = MagicMock()
-            mock_tracer.start_as_current_span.return_value.__enter__ = MagicMock(
-                return_value=mock_span
-            )
-            mock_tracer.start_as_current_span.return_value.__exit__ = MagicMock(
-                return_value=False
-            )
+            mock_tracer.start_as_current_span.return_value.__enter__ = MagicMock(return_value=mock_span)
+            mock_tracer.start_as_current_span.return_value.__exit__ = MagicMock(return_value=False)
             mock_get_tracer.return_value = mock_tracer
 
             from src.tools.secure_score import query_secure_score
@@ -842,12 +817,8 @@ class TestSecureScoreTracing:
         ):
             mock_tracer = MagicMock()
             mock_span = MagicMock()
-            mock_tracer.start_as_current_span.return_value.__enter__ = MagicMock(
-                return_value=mock_span
-            )
-            mock_tracer.start_as_current_span.return_value.__exit__ = MagicMock(
-                return_value=False
-            )
+            mock_tracer.start_as_current_span.return_value.__enter__ = MagicMock(return_value=mock_span)
+            mock_tracer.start_as_current_span.return_value.__exit__ = MagicMock(return_value=False)
             mock_get_tracer.return_value = mock_tracer
 
             from src.tools.secure_score import query_secure_score
@@ -856,15 +827,14 @@ class TestSecureScoreTracing:
                 await query_secure_score()
 
             # Span should have recorded the error
-            mock_span.set_attribute.assert_any_call(
-                "postureiq.tool.status", "error"
-            )
+            mock_span.set_attribute.assert_any_call("postureiq.tool.status", "error")
             mock_span.record_exception.assert_called_once()
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Edge cases & integration
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestSecureScoreEdgeCases:
     """Edge cases and integration-level checks."""
@@ -875,13 +845,9 @@ class TestSecureScoreEdgeCases:
         snap = _make_secure_score_snapshot(50.0, 100.0)
         snap.control_scores = None
         client = MagicMock()
-        client.security.secure_scores.get = AsyncMock(
-            return_value=_make_graph_response([snap])
-        )
+        client.security.secure_scores.get = AsyncMock(return_value=_make_graph_response([snap]))
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -894,13 +860,9 @@ class TestSecureScoreEdgeCases:
         snap = _make_secure_score_snapshot(50.0, 100.0)
         snap.average_comparative_scores = None
         client = MagicMock()
-        client.security.secure_scores.get = AsyncMock(
-            return_value=_make_graph_response([snap])
-        )
+        client.security.secure_scores.get = AsyncMock(return_value=_make_graph_response([snap]))
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -912,13 +874,9 @@ class TestSecureScoreEdgeCases:
         """All numeric outputs should be cleanly rounded."""
         snap = _make_secure_score_snapshot(72.3456789, 99.99999)
         client = MagicMock()
-        client.security.secure_scores.get = AsyncMock(
-            return_value=_make_graph_response([snap])
-        )
+        client.security.secure_scores.get = AsyncMock(return_value=_make_graph_response([snap]))
 
-        with patch(
-            "src.tools.secure_score._create_graph_client", return_value=client
-        ):
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
 
             result = await query_secure_score()
@@ -940,6 +898,15 @@ class TestSecureScoreEdgeCases:
     def test_known_categories(self):
         from src.tools.secure_score import KNOWN_CATEGORIES
 
-        assert KNOWN_CATEGORIES == frozenset({
-            "Identity", "Data", "Device", "Apps", "Infrastructure",
-        })
+        assert (
+            frozenset(
+                {
+                    "Identity",
+                    "Data",
+                    "Device",
+                    "Apps",
+                    "Infrastructure",
+                }
+            )
+            == KNOWN_CATEGORIES
+        )

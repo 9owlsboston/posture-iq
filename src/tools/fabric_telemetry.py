@@ -19,10 +19,9 @@ stored in an in-memory buffer (useful for testing and local dev).
 from __future__ import annotations
 
 import hashlib
-import json
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -38,17 +37,19 @@ logger = structlog.get_logger(__name__)
 SNAPSHOT_SCHEMA_VERSION = "1.0"
 
 # Required fields in every snapshot row
-REQUIRED_SCHEMA_FIELDS: frozenset[str] = frozenset({
-    "snapshot_id",
-    "schema_version",
-    "tenant_id_hash",
-    "timestamp",
-    "secure_score_current",
-    "secure_score_max",
-    "workload_scores",
-    "gap_count",
-    "estimated_days_to_green",
-})
+REQUIRED_SCHEMA_FIELDS: frozenset[str] = frozenset(
+    {
+        "snapshot_id",
+        "schema_version",
+        "tenant_id_hash",
+        "timestamp",
+        "secure_score_current",
+        "secure_score_max",
+        "workload_scores",
+        "gap_count",
+        "estimated_days_to_green",
+    }
+)
 
 
 # ── Snapshot Dataclass ─────────────────────────────────────────────────
@@ -65,9 +66,7 @@ class PostureSnapshot:
     snapshot_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     schema_version: str = SNAPSHOT_SCHEMA_VERSION
     tenant_id_hash: str = ""
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     secure_score_current: float = 0.0
     secure_score_max: float = 100.0
     secure_score_percentage: float = 0.0
@@ -445,10 +444,7 @@ def compute_common_gaps(
         for gap in s.top_gaps:
             counter[gap] += 1
 
-    return [
-        {"gap": gap, "count": count}
-        for gap, count in counter.most_common(top_n)
-    ]
+    return [{"gap": gap, "count": count} for gap, count in counter.most_common(top_n)]
 
 
 def compute_avg_days_to_green(snapshots: list[PostureSnapshot]) -> float:

@@ -14,15 +14,14 @@ Covers:
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers — build fake Graph SDK objects using SimpleNamespace
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _make_state_update(state: str = "Default", **kwargs) -> SimpleNamespace:
     return SimpleNamespace(
@@ -30,7 +29,7 @@ def _make_state_update(state: str = "Default", **kwargs) -> SimpleNamespace:
         assigned_to=kwargs.get("assigned_to", ""),
         comment=kwargs.get("comment", ""),
         updated_by=kwargs.get("updated_by", ""),
-        updated_date_time=kwargs.get("updated_date_time", None),
+        updated_date_time=kwargs.get("updated_date_time"),
     )
 
 
@@ -73,43 +72,53 @@ def _gap_profile(**kwargs) -> SimpleNamespace:
 # 1. _classify_workload
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestClassifyWorkload:
     """Tests for _classify_workload helper."""
 
     def test_short_code_mde(self):
         from src.tools.defender_coverage import _classify_workload
+
         assert _classify_workload("MDE") == "Defender for Endpoint"
 
     def test_short_code_mdo(self):
         from src.tools.defender_coverage import _classify_workload
+
         assert _classify_workload("MDO") == "Defender for Office 365"
 
     def test_short_code_mdi(self):
         from src.tools.defender_coverage import _classify_workload
+
         assert _classify_workload("MDI") == "Defender for Identity"
 
     def test_short_code_mda(self):
         from src.tools.defender_coverage import _classify_workload
+
         assert _classify_workload("MDA") == "Defender for Cloud Apps"
 
     def test_full_name_endpoint(self):
         from src.tools.defender_coverage import _classify_workload
+
         assert _classify_workload("Microsoft Defender for Endpoint") == "Defender for Endpoint"
 
     def test_full_name_cloud_app_security_legacy(self):
         from src.tools.defender_coverage import _classify_workload
+
         assert _classify_workload("Microsoft Cloud App Security") == "Defender for Cloud Apps"
 
     def test_unknown_service_returns_none(self):
         from src.tools.defender_coverage import _classify_workload
+
         assert _classify_workload("SomeOtherService") is None
 
     def test_none_returns_none(self):
         from src.tools.defender_coverage import _classify_workload
+
         assert _classify_workload(None) is None
 
     def test_empty_string_returns_none(self):
         from src.tools.defender_coverage import _classify_workload
+
         assert _classify_workload("") is None
 
 
@@ -117,35 +126,43 @@ class TestClassifyWorkload:
 # 2. _compute_status
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestComputeStatus:
     """Tests for _compute_status helper."""
 
     def test_green_at_threshold(self):
         from src.tools.defender_coverage import _compute_status
+
         assert _compute_status(70.0) == "green"
 
     def test_green_above_threshold(self):
         from src.tools.defender_coverage import _compute_status
+
         assert _compute_status(95.0) == "green"
 
     def test_yellow_at_lower_threshold(self):
         from src.tools.defender_coverage import _compute_status
+
         assert _compute_status(40.0) == "yellow"
 
     def test_yellow_between_thresholds(self):
         from src.tools.defender_coverage import _compute_status
+
         assert _compute_status(55.0) == "yellow"
 
     def test_red_below_yellow(self):
         from src.tools.defender_coverage import _compute_status
+
         assert _compute_status(39.9) == "red"
 
     def test_red_at_zero(self):
         from src.tools.defender_coverage import _compute_status
+
         assert _compute_status(0.0) == "red"
 
     def test_green_at_100(self):
         from src.tools.defender_coverage import _compute_status
+
         assert _compute_status(100.0) == "green"
 
 
@@ -153,59 +170,73 @@ class TestComputeStatus:
 # 3. _is_gap
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestIsGap:
     """Tests for _is_gap helper."""
 
     def test_no_state_updates_is_gap(self):
         from src.tools.defender_coverage import _is_gap
+
         p = _make_profile(control_state_updates=None)
         assert _is_gap(p) is True
 
     def test_empty_state_updates_is_gap(self):
         from src.tools.defender_coverage import _is_gap
+
         p = _make_profile(control_state_updates=[])
         assert _is_gap(p) is True
 
     def test_default_state_is_gap(self):
         from src.tools.defender_coverage import _is_gap
+
         p = _make_profile(control_state_updates=[_make_state_update("Default")])
         assert _is_gap(p) is True
 
     def test_resolved_state_is_not_gap(self):
         from src.tools.defender_coverage import _is_gap
+
         p = _make_profile(control_state_updates=[_make_state_update("Resolved")])
         assert _is_gap(p) is False
 
     def test_thirdparty_state_is_not_gap(self):
         from src.tools.defender_coverage import _is_gap
+
         p = _make_profile(control_state_updates=[_make_state_update("ThirdParty")])
         assert _is_gap(p) is False
 
     def test_third_party_underscore_is_not_gap(self):
         from src.tools.defender_coverage import _is_gap
+
         p = _make_profile(control_state_updates=[_make_state_update("Third_Party")])
         assert _is_gap(p) is False
 
     def test_deprecated_is_never_gap(self):
         from src.tools.defender_coverage import _is_gap
+
         p = _make_profile(deprecated=True, control_state_updates=None)
         assert _is_gap(p) is False
 
     def test_latest_state_matters(self):
         """Multiple updates — the last one wins."""
         from src.tools.defender_coverage import _is_gap
-        p = _make_profile(control_state_updates=[
-            _make_state_update("Default"),
-            _make_state_update("Resolved"),
-        ])
+
+        p = _make_profile(
+            control_state_updates=[
+                _make_state_update("Default"),
+                _make_state_update("Resolved"),
+            ]
+        )
         assert _is_gap(p) is False
 
     def test_latest_state_reverted_to_default(self):
         from src.tools.defender_coverage import _is_gap
-        p = _make_profile(control_state_updates=[
-            _make_state_update("Resolved"),
-            _make_state_update("Default"),
-        ])
+
+        p = _make_profile(
+            control_state_updates=[
+                _make_state_update("Resolved"),
+                _make_state_update("Default"),
+            ]
+        )
         assert _is_gap(p) is True
 
 
@@ -213,11 +244,13 @@ class TestIsGap:
 # 4. _gap_description
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestGapDescription:
     """Tests for _gap_description helper."""
 
     def test_basic(self):
         from src.tools.defender_coverage import _gap_description
+
         p = _make_profile(title="Enable MFA", tier="Tier1", remediation="Do it now")
         desc = _gap_description(p)
         assert "Enable MFA" in desc
@@ -226,6 +259,7 @@ class TestGapDescription:
 
     def test_no_tier(self):
         from src.tools.defender_coverage import _gap_description
+
         p = _make_profile(title="Some control", tier=None, remediation="Fix it")
         desc = _gap_description(p)
         assert "Some control" in desc
@@ -233,12 +267,14 @@ class TestGapDescription:
 
     def test_no_remediation(self):
         from src.tools.defender_coverage import _gap_description
+
         p = _make_profile(title="Some control", remediation=None)
         desc = _gap_description(p)
         assert "Some control" in desc
 
     def test_long_remediation_truncated(self):
         from src.tools.defender_coverage import _gap_description
+
         long_text = "A" * 200
         p = _make_profile(title="Ctrl", remediation=long_text)
         desc = _gap_description(p)
@@ -247,6 +283,7 @@ class TestGapDescription:
 
     def test_fallback_to_id(self):
         from src.tools.defender_coverage import _gap_description
+
         p = SimpleNamespace(id="ctrl-42", tier=None, remediation=None)
         desc = _gap_description(p)
         assert "ctrl-42" in desc
@@ -256,31 +293,37 @@ class TestGapDescription:
 # 5. _is_critical_gap
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestIsCriticalGap:
     """Tests for _is_critical_gap helper."""
 
     def test_tier1_is_critical(self):
         from src.tools.defender_coverage import _is_critical_gap
+
         p = _make_profile(tier="Tier1", max_score=2.0)
         assert _is_critical_gap(p) is True
 
     def test_mandatory_tier_is_critical(self):
         from src.tools.defender_coverage import _is_critical_gap
+
         p = _make_profile(tier="MandatoryTier", max_score=2.0)
         assert _is_critical_gap(p) is True
 
     def test_high_max_score_is_critical(self):
         from src.tools.defender_coverage import _is_critical_gap
+
         p = _make_profile(tier="Tier3", max_score=5.0)
         assert _is_critical_gap(p) is True
 
     def test_low_tier_low_score_is_not_critical(self):
         from src.tools.defender_coverage import _is_critical_gap
+
         p = _make_profile(tier="Tier3", max_score=2.0)
         assert _is_critical_gap(p) is False
 
     def test_none_tier_high_score(self):
         from src.tools.defender_coverage import _is_critical_gap
+
         p = _make_profile(tier=None, max_score=10.0)
         assert _is_critical_gap(p) is True
 
@@ -289,11 +332,13 @@ class TestIsCriticalGap:
 # 6. _build_workload_result
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestBuildWorkloadResult:
     """Tests for _build_workload_result helper."""
 
     def test_empty_profiles(self):
         from src.tools.defender_coverage import _build_workload_result
+
         result = _build_workload_result([])
         assert result["coverage_pct"] == 0.0
         assert result["status"] == "red"
@@ -302,6 +347,7 @@ class TestBuildWorkloadResult:
 
     def test_all_resolved(self):
         from src.tools.defender_coverage import _build_workload_result
+
         profiles = [
             _resolved_profile(max_score=10.0),
             _resolved_profile(max_score=5.0),
@@ -314,6 +360,7 @@ class TestBuildWorkloadResult:
 
     def test_all_gaps(self):
         from src.tools.defender_coverage import _build_workload_result
+
         profiles = [
             _gap_profile(max_score=10.0, title="Gap A"),
             _gap_profile(max_score=5.0, title="Gap B"),
@@ -325,6 +372,7 @@ class TestBuildWorkloadResult:
 
     def test_mixed_profiles(self):
         from src.tools.defender_coverage import _build_workload_result
+
         profiles = [
             _resolved_profile(max_score=10.0),
             _gap_profile(max_score=10.0, title="Missing ctrl"),
@@ -338,6 +386,7 @@ class TestBuildWorkloadResult:
 
     def test_deprecated_excluded_from_gap_count(self):
         from src.tools.defender_coverage import _build_workload_result
+
         profiles = [
             _resolved_profile(max_score=10.0),
             _make_profile(max_score=5.0, deprecated=True, control_state_updates=None),
@@ -353,11 +402,13 @@ class TestBuildWorkloadResult:
 # 7. _aggregate_workloads
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestAggregateWorkloads:
     """Tests for _aggregate_workloads helper."""
 
     def test_groups_by_service(self):
-        from src.tools.defender_coverage import _aggregate_workloads, ALL_WORKLOADS
+        from src.tools.defender_coverage import ALL_WORKLOADS, _aggregate_workloads
+
         profiles = [
             _resolved_profile(service="MDE", max_score=10.0),
             _gap_profile(service="MDO", max_score=5.0),
@@ -373,6 +424,7 @@ class TestAggregateWorkloads:
 
     def test_unknown_service_ignored(self):
         from src.tools.defender_coverage import _aggregate_workloads
+
         profiles = [
             _resolved_profile(service="UnknownSvc", max_score=10.0),
         ]
@@ -382,7 +434,8 @@ class TestAggregateWorkloads:
             assert wl_result["details"]["total_controls"] == 0
 
     def test_empty_list(self):
-        from src.tools.defender_coverage import _aggregate_workloads, ALL_WORKLOADS
+        from src.tools.defender_coverage import ALL_WORKLOADS, _aggregate_workloads
+
         result = _aggregate_workloads([])
         assert set(result.keys()) == set(ALL_WORKLOADS)
         for wl_result in result.values():
@@ -390,6 +443,7 @@ class TestAggregateWorkloads:
 
     def test_full_name_service_mapping(self):
         from src.tools.defender_coverage import _aggregate_workloads
+
         profiles = [
             _resolved_profile(service="Microsoft Defender for Endpoint", max_score=5.0),
         ]
@@ -401,11 +455,13 @@ class TestAggregateWorkloads:
 # 8. _compute_overall_coverage
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestComputeOverallCoverage:
     """Tests for _compute_overall_coverage helper."""
 
     def test_weighted_average(self):
         from src.tools.defender_coverage import _compute_overall_coverage
+
         workloads = {
             "A": {"details": {"max_score": 100.0, "achieved_score": 80.0}},
             "B": {"details": {"max_score": 100.0, "achieved_score": 60.0}},
@@ -414,6 +470,7 @@ class TestComputeOverallCoverage:
 
     def test_all_zero_max(self):
         from src.tools.defender_coverage import _compute_overall_coverage
+
         workloads = {
             "A": {"details": {"max_score": 0.0, "achieved_score": 0.0}},
         }
@@ -421,6 +478,7 @@ class TestComputeOverallCoverage:
 
     def test_full_coverage(self):
         from src.tools.defender_coverage import _compute_overall_coverage
+
         workloads = {
             "A": {"details": {"max_score": 50.0, "achieved_score": 50.0}},
             "B": {"details": {"max_score": 25.0, "achieved_score": 25.0}},
@@ -432,11 +490,13 @@ class TestComputeOverallCoverage:
 # 9. _collect_critical_gaps
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestCollectCriticalGaps:
     """Tests for _collect_critical_gaps helper."""
 
     def test_finds_critical_gaps(self):
         from src.tools.defender_coverage import _collect_critical_gaps
+
         profiles = [
             _gap_profile(service="MDE", title="ASR rules", tier="Tier1", max_score=10.0),
             _gap_profile(service="MDO", title="Low prio", tier="Tier3", max_score=1.0),
@@ -448,6 +508,7 @@ class TestCollectCriticalGaps:
 
     def test_resolved_profiles_excluded(self):
         from src.tools.defender_coverage import _collect_critical_gaps
+
         profiles = [
             _resolved_profile(service="MDE", title="Fixed", tier="Tier1", max_score=10.0),
         ]
@@ -455,6 +516,7 @@ class TestCollectCriticalGaps:
 
     def test_high_score_is_critical(self):
         from src.tools.defender_coverage import _collect_critical_gaps
+
         profiles = [
             _gap_profile(service="MDI", title="Big gap", tier="Tier3", max_score=7.0),
         ]
@@ -464,6 +526,7 @@ class TestCollectCriticalGaps:
 
     def test_empty_list(self):
         from src.tools.defender_coverage import _collect_critical_gaps
+
         assert _collect_critical_gaps([]) == []
 
 
@@ -471,25 +534,28 @@ class TestCollectCriticalGaps:
 # 10. _generate_mock_response
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestGenerateMockResponse:
     """Tests for the mock-data fallback."""
 
     def test_has_all_top_level_keys(self):
         from src.tools.defender_coverage import _generate_mock_response
+
         mock = _generate_mock_response()
-        for key in ("overall_coverage_pct", "workloads", "total_gaps",
-                     "critical_gaps", "assessed_at", "data_source"):
+        for key in ("overall_coverage_pct", "workloads", "total_gaps", "critical_gaps", "assessed_at", "data_source"):
             assert key in mock, f"Missing key: {key}"
 
     def test_all_four_workloads_present(self):
-        from src.tools.defender_coverage import _generate_mock_response, ALL_WORKLOADS
+        from src.tools.defender_coverage import ALL_WORKLOADS, _generate_mock_response
+
         mock = _generate_mock_response()
         assert set(mock["workloads"].keys()) == set(ALL_WORKLOADS)
 
     def test_workload_structure(self):
         from src.tools.defender_coverage import _generate_mock_response
+
         mock = _generate_mock_response()
-        for wl_name, wl_data in mock["workloads"].items():
+        for _wl_name, wl_data in mock["workloads"].items():
             assert "coverage_pct" in wl_data
             assert "status" in wl_data
             assert "details" in wl_data
@@ -498,17 +564,21 @@ class TestGenerateMockResponse:
 
     def test_data_source_is_mock(self):
         from src.tools.defender_coverage import _generate_mock_response
+
         assert _generate_mock_response()["data_source"] == "mock"
 
     def test_total_gaps_matches_sum(self):
         from src.tools.defender_coverage import _generate_mock_response
+
         mock = _generate_mock_response()
         total = sum(len(w["gaps"]) for w in mock["workloads"].values())
         assert mock["total_gaps"] == total
 
     def test_assessed_at_is_iso(self):
         from datetime import datetime
+
         from src.tools.defender_coverage import _generate_mock_response
+
         mock = _generate_mock_response()
         # Should not throw
         datetime.fromisoformat(mock["assessed_at"])
@@ -518,6 +588,7 @@ class TestGenerateMockResponse:
 # 11. assess_defender_coverage — Mock path
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestDefenderCoverageMockPath:
     """Tests for the tool when Graph client is not available (mock fallback)."""
 
@@ -525,6 +596,7 @@ class TestDefenderCoverageMockPath:
     @patch("src.tools.defender_coverage._create_graph_client", return_value=None)
     async def test_returns_mock_when_no_client(self, mock_client):
         from src.tools.defender_coverage import assess_defender_coverage
+
         result = await assess_defender_coverage()
         assert result["data_source"] == "mock"
         assert "workloads" in result
@@ -533,6 +605,7 @@ class TestDefenderCoverageMockPath:
     @patch("src.tools.defender_coverage._create_graph_client", return_value=None)
     async def test_mock_has_overall_coverage(self, mock_client):
         from src.tools.defender_coverage import assess_defender_coverage
+
         result = await assess_defender_coverage()
         assert isinstance(result["overall_coverage_pct"], float)
 
@@ -540,6 +613,7 @@ class TestDefenderCoverageMockPath:
     @patch("src.tools.defender_coverage._create_graph_client", return_value=None)
     async def test_mock_has_critical_gaps(self, mock_client):
         from src.tools.defender_coverage import assess_defender_coverage
+
         result = await assess_defender_coverage()
         assert isinstance(result["critical_gaps"], list)
         assert len(result["critical_gaps"]) > 0
@@ -548,6 +622,7 @@ class TestDefenderCoverageMockPath:
     @patch("src.tools.defender_coverage._create_graph_client", return_value=None)
     async def test_mock_has_assessed_at(self, mock_client):
         from src.tools.defender_coverage import assess_defender_coverage
+
         result = await assess_defender_coverage()
         assert "assessed_at" in result
 
@@ -555,6 +630,7 @@ class TestDefenderCoverageMockPath:
 # ═══════════════════════════════════════════════════════════════════════
 # 12. assess_defender_coverage — Graph API path
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _build_graph_response(profiles: list[SimpleNamespace]) -> SimpleNamespace:
     """Build a fake SecureScoreControlProfileCollectionResponse."""
@@ -576,9 +652,7 @@ class TestDefenderCoverageGraphPath:
         ]
 
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -592,9 +666,7 @@ class TestDefenderCoverageGraphPath:
         from src.tools.defender_coverage import assess_defender_coverage
 
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response([])
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response([]))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -606,9 +678,7 @@ class TestDefenderCoverageGraphPath:
         from src.tools.defender_coverage import assess_defender_coverage
 
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=None
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=None)
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -620,9 +690,7 @@ class TestDefenderCoverageGraphPath:
         from src.tools.defender_coverage import assess_defender_coverage
 
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            side_effect=Exception("403 Forbidden")
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(side_effect=Exception("403 Forbidden"))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -635,14 +703,11 @@ class TestDefenderCoverageGraphPath:
 
         profiles = [
             _resolved_profile(service="MDE", max_score=10.0),
-            _make_profile(service="MDE", max_score=10.0, deprecated=True,
-                          control_state_updates=None),
+            _make_profile(service="MDE", max_score=10.0, deprecated=True, control_state_updates=None),
         ]
 
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -663,9 +728,7 @@ class TestDefenderCoverageGraphPath:
         ]
 
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -682,9 +745,7 @@ class TestDefenderCoverageGraphPath:
         ]
 
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -704,9 +765,7 @@ class TestDefenderCoverageGraphPath:
         ]
 
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -719,9 +778,7 @@ class TestDefenderCoverageGraphPath:
 
         profiles = [_resolved_profile(service="MDE")]
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -731,13 +788,11 @@ class TestDefenderCoverageGraphPath:
     @patch("src.tools.defender_coverage._create_graph_client")
     async def test_all_workloads_always_present(self, mock_factory):
         """Even if no profiles match a workload it should appear with 0%."""
-        from src.tools.defender_coverage import assess_defender_coverage, ALL_WORKLOADS
+        from src.tools.defender_coverage import ALL_WORKLOADS, assess_defender_coverage
 
         profiles = [_resolved_profile(service="MDE", max_score=10.0)]
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -754,9 +809,7 @@ class TestDefenderCoverageGraphPath:
             _resolved_profile(service="MDE", max_score=5.0),
         ]
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -768,6 +821,7 @@ class TestDefenderCoverageGraphPath:
 # ═══════════════════════════════════════════════════════════════════════
 # 13. Tracing
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestDefenderCoverageTracing:
     """Verify the @trace_tool_call decorator creates a span."""
@@ -811,6 +865,7 @@ class TestDefenderCoverageTracing:
 # 14. Edge cases
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestDefenderCoverageEdgeCases:
     """Edge cases and boundary conditions."""
 
@@ -824,9 +879,7 @@ class TestDefenderCoverageEdgeCases:
             _make_profile(service="MDO", max_score=5.0, deprecated=True),
         ]
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         # All deprecated → filtered out → empty profiles → triggers empty fallback
@@ -848,9 +901,7 @@ class TestDefenderCoverageEdgeCases:
             _resolved_profile(service="MDE", max_score=0.0),
         ]
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()
@@ -894,9 +945,7 @@ class TestDefenderCoverageEdgeCases:
             profiles.append(_gap_profile(service=svc, max_score=10.0, tier="Tier2"))
 
         mock_client = MagicMock()
-        mock_client.security.secure_score_control_profiles.get = AsyncMock(
-            return_value=_build_graph_response(profiles)
-        )
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
         mock_factory.return_value = mock_client
 
         result = await assess_defender_coverage()

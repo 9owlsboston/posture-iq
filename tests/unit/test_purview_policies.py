@@ -14,15 +14,14 @@ Covers:
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers — build fake Graph SDK objects
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _make_state_update(state: str = "Default") -> SimpleNamespace:
     return SimpleNamespace(
@@ -75,76 +74,91 @@ def _build_graph_response(profiles: list[SimpleNamespace]) -> SimpleNamespace:
 # 1. _is_purview_related
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestIsPurviewRelated:
     """Tests for the _is_purview_related helper."""
 
     def test_service_information_protection(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="Information Protection")
         assert _is_purview_related(p) is True
 
     def test_service_purview(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="Microsoft Purview")
         assert _is_purview_related(p) is True
 
     def test_service_compliance(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="Compliance Center")
         assert _is_purview_related(p) is True
 
     def test_service_dlp(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="DLP")
         assert _is_purview_related(p) is True
 
     def test_service_data_loss_prevention(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="Data Loss Prevention Center")
         assert _is_purview_related(p) is True
 
     def test_service_insider_risk(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="Insider Risk Management")
         assert _is_purview_related(p) is True
 
     def test_service_retention(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="Retention Policies")
         assert _is_purview_related(p) is True
 
     def test_service_sensitivity(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="Sensitivity Labels Service")
         assert _is_purview_related(p) is True
 
     def test_control_category_match(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="SomeService", control_category="Information Protection")
         assert _is_purview_related(p) is True
 
     def test_title_match(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="SomeService", title="Enable DLP for Exchange")
         assert _is_purview_related(p) is True
 
     def test_unrelated_service(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="MDE", title="Some unrelated control")
         assert _is_purview_related(p) is False
 
     def test_empty_fields(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = SimpleNamespace(service="", control_category="", title="")
         assert _is_purview_related(p) is False
 
     def test_none_attrs(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = SimpleNamespace(service=None, control_category=None, title=None)
         assert _is_purview_related(p) is False
 
     def test_case_insensitive(self):
         from src.tools.purview_policies import _is_purview_related
+
         p = _make_profile(service="INFORMATION PROTECTION")
         assert _is_purview_related(p) is True
 
@@ -153,56 +167,67 @@ class TestIsPurviewRelated:
 # 2. _classify_component
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestClassifyComponent:
     """Tests for _classify_component."""
 
     def test_dlp_by_title(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(title="Enable DLP policies everywhere")
         assert _classify_component(p) == "DLP Policies"
 
     def test_dlp_by_service(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(service="Data Loss Prevention")
         assert _classify_component(p) == "DLP Policies"
 
     def test_sensitivity_labels(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(title="Configure sensitivity label auto-labeling")
         assert _classify_component(p) == "Sensitivity Labels"
 
     def test_information_protection_label(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(title="Use information protection labels")
         assert _classify_component(p) == "Sensitivity Labels"
 
     def test_labeling_keyword(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(title="Mandatory labeling for documents")
         assert _classify_component(p) == "Sensitivity Labels"
 
     def test_retention(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(title="Enforce data retention across workloads")
         assert _classify_component(p) == "Retention Policies"
 
     def test_insider_risk(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(title="Enable insider risk policies")
         assert _classify_component(p) == "Insider Risk Management"
 
     def test_insider_threat(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(title="Detect insider threat activities")
         assert _classify_component(p) == "Insider Risk Management"
 
     def test_default_bucket_is_dlp(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(title="Generic compliance control", service="Compliance")
         assert _classify_component(p) == "DLP Policies"
 
     def test_control_category_matters(self):
         from src.tools.purview_policies import _classify_component
+
         p = _make_profile(title="Some control", control_category="Retention")
         assert _classify_component(p) == "Retention Policies"
 
@@ -211,29 +236,36 @@ class TestClassifyComponent:
 # 3. _compute_status
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestPurviewComputeStatus:
     def test_green_at_70(self):
         from src.tools.purview_policies import _compute_status
+
         assert _compute_status(70.0) == "green"
 
     def test_green_above(self):
         from src.tools.purview_policies import _compute_status
+
         assert _compute_status(100.0) == "green"
 
     def test_yellow_at_40(self):
         from src.tools.purview_policies import _compute_status
+
         assert _compute_status(40.0) == "yellow"
 
     def test_yellow_between(self):
         from src.tools.purview_policies import _compute_status
+
         assert _compute_status(55.0) == "yellow"
 
     def test_red_below_40(self):
         from src.tools.purview_policies import _compute_status
+
         assert _compute_status(39.9) == "red"
 
     def test_red_at_zero(self):
         from src.tools.purview_policies import _compute_status
+
         assert _compute_status(0.0) == "red"
 
 
@@ -241,43 +273,53 @@ class TestPurviewComputeStatus:
 # 4. _is_gap
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestPurviewIsGap:
     def test_no_state_updates(self):
         from src.tools.purview_policies import _is_gap
+
         p = _make_profile(control_state_updates=None)
         assert _is_gap(p) is True
 
     def test_empty_state_updates(self):
         from src.tools.purview_policies import _is_gap
+
         p = _make_profile(control_state_updates=[])
         assert _is_gap(p) is True
 
     def test_default_state(self):
         from src.tools.purview_policies import _is_gap
+
         p = _gap_profile()
         assert _is_gap(p) is True
 
     def test_resolved_not_gap(self):
         from src.tools.purview_policies import _is_gap
+
         p = _resolved_profile()
         assert _is_gap(p) is False
 
     def test_thirdparty_not_gap(self):
         from src.tools.purview_policies import _is_gap
+
         p = _make_profile(control_state_updates=[_make_state_update("ThirdParty")])
         assert _is_gap(p) is False
 
     def test_deprecated_not_gap(self):
         from src.tools.purview_policies import _is_gap
+
         p = _make_profile(deprecated=True, control_state_updates=None)
         assert _is_gap(p) is False
 
     def test_latest_state_wins(self):
         from src.tools.purview_policies import _is_gap
-        p = _make_profile(control_state_updates=[
-            _make_state_update("Default"),
-            _make_state_update("Resolved"),
-        ])
+
+        p = _make_profile(
+            control_state_updates=[
+                _make_state_update("Default"),
+                _make_state_update("Resolved"),
+            ]
+        )
         assert _is_gap(p) is False
 
 
@@ -285,9 +327,11 @@ class TestPurviewIsGap:
 # 5. _gap_description
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestPurviewGapDescription:
     def test_basic(self):
         from src.tools.purview_policies import _gap_description
+
         p = _make_profile(title="Enable DLP", tier="Tier1")
         desc = _gap_description(p)
         assert "Enable DLP" in desc
@@ -295,12 +339,14 @@ class TestPurviewGapDescription:
 
     def test_no_tier(self):
         from src.tools.purview_policies import _gap_description
+
         p = _make_profile(title="Some control", tier=None)
         desc = _gap_description(p)
         assert "Some control" in desc
 
     def test_fallback_to_id(self):
         from src.tools.purview_policies import _gap_description
+
         p = SimpleNamespace(id="ctrl-42", tier="Tier2")
         desc = _gap_description(p)
         assert "ctrl-42" in desc
@@ -310,29 +356,35 @@ class TestPurviewGapDescription:
 # 6. _is_critical
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestPurviewIsCritical:
     def test_tier1_is_critical(self):
         from src.tools.purview_policies import _is_critical
+
         p = _make_profile(tier="Tier1", max_score=1.0)
         assert _is_critical(p) is True
 
     def test_mandatory_tier(self):
         from src.tools.purview_policies import _is_critical
+
         p = _make_profile(tier="MandatoryTier", max_score=1.0)
         assert _is_critical(p) is True
 
     def test_high_max_score(self):
         from src.tools.purview_policies import _is_critical
+
         p = _make_profile(tier="Tier3", max_score=5.0)
         assert _is_critical(p) is True
 
     def test_low_tier_low_score(self):
         from src.tools.purview_policies import _is_critical
+
         p = _make_profile(tier="Tier3", max_score=2.0)
         assert _is_critical(p) is False
 
     def test_none_tier_low_score(self):
         from src.tools.purview_policies import _is_critical
+
         p = _make_profile(tier=None, max_score=1.0)
         assert _is_critical(p) is False
 
@@ -341,9 +393,11 @@ class TestPurviewIsCritical:
 # 7. _build_component_result
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestBuildComponentResult:
     def test_empty_list(self):
         from src.tools.purview_policies import _build_component_result
+
         r = _build_component_result([])
         assert r["status"] == "red"
         assert r["details"]["total_controls"] == 0
@@ -351,6 +405,7 @@ class TestBuildComponentResult:
 
     def test_all_resolved(self):
         from src.tools.purview_policies import _build_component_result
+
         profiles = [
             _resolved_profile(max_score=10.0),
             _resolved_profile(max_score=5.0),
@@ -363,6 +418,7 @@ class TestBuildComponentResult:
 
     def test_all_gaps(self):
         from src.tools.purview_policies import _build_component_result
+
         profiles = [
             _gap_profile(title="Gap A", max_score=10.0),
             _gap_profile(title="Gap B", max_score=5.0),
@@ -375,6 +431,7 @@ class TestBuildComponentResult:
 
     def test_mixed(self):
         from src.tools.purview_policies import _build_component_result
+
         profiles = [
             _resolved_profile(max_score=10.0),
             _gap_profile(title="Gap", max_score=10.0),
@@ -386,6 +443,7 @@ class TestBuildComponentResult:
 
     def test_zero_max_score(self):
         from src.tools.purview_policies import _build_component_result
+
         profiles = [_resolved_profile(max_score=0.0)]
         r = _build_component_result(profiles)
         assert r["details"]["max_score"] == 0.0
@@ -395,9 +453,11 @@ class TestBuildComponentResult:
 # 8. _aggregate_components
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestAggregateComponents:
     def test_profiles_sorted_into_components(self):
-        from src.tools.purview_policies import _aggregate_components, ALL_COMPONENTS
+        from src.tools.purview_policies import ALL_COMPONENTS, _aggregate_components
+
         profiles = [
             _gap_profile(title="Enable DLP on Teams", service="DLP"),
             _gap_profile(title="Enforce sensitivity label", service="Information Protection"),
@@ -412,14 +472,16 @@ class TestAggregateComponents:
         assert result["Insider Risk Management"]["details"]["total_controls"] >= 1
 
     def test_all_components_present_even_empty(self):
-        from src.tools.purview_policies import _aggregate_components, ALL_COMPONENTS
+        from src.tools.purview_policies import ALL_COMPONENTS, _aggregate_components
+
         profiles = [_gap_profile(title="DLP stuff", service="DLP")]
         result = _aggregate_components(profiles)
         assert set(result.keys()) == set(ALL_COMPONENTS)
         assert result["Insider Risk Management"]["details"]["total_controls"] == 0
 
     def test_empty_profiles(self):
-        from src.tools.purview_policies import _aggregate_components, ALL_COMPONENTS
+        from src.tools.purview_policies import ALL_COMPONENTS, _aggregate_components
+
         result = _aggregate_components([])
         assert set(result.keys()) == set(ALL_COMPONENTS)
         for comp in result.values():
@@ -430,9 +492,11 @@ class TestAggregateComponents:
 # 9. _compute_overall
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestComputeOverall:
     def test_all_achieved(self):
         from src.tools.purview_policies import _compute_overall
+
         components = {
             "A": {"details": {"max_score": 10.0, "achieved_score": 10.0}},
             "B": {"details": {"max_score": 10.0, "achieved_score": 10.0}},
@@ -441,6 +505,7 @@ class TestComputeOverall:
 
     def test_none_achieved(self):
         from src.tools.purview_policies import _compute_overall
+
         components = {
             "A": {"details": {"max_score": 10.0, "achieved_score": 0.0}},
         }
@@ -448,6 +513,7 @@ class TestComputeOverall:
 
     def test_half_achieved(self):
         from src.tools.purview_policies import _compute_overall
+
         components = {
             "A": {"details": {"max_score": 20.0, "achieved_score": 10.0}},
         }
@@ -455,6 +521,7 @@ class TestComputeOverall:
 
     def test_zero_max_returns_zero(self):
         from src.tools.purview_policies import _compute_overall
+
         components = {
             "A": {"details": {"max_score": 0.0, "achieved_score": 0.0}},
         }
@@ -465,9 +532,11 @@ class TestComputeOverall:
 # 10. _collect_critical_gaps
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestCollectCriticalGaps:
     def test_tier1_gap_collected(self):
         from src.tools.purview_policies import _collect_critical_gaps
+
         profiles = [_gap_profile(title="Critical DLP", tier="Tier1")]
         gaps = _collect_critical_gaps(profiles)
         assert len(gaps) == 1
@@ -475,18 +544,21 @@ class TestCollectCriticalGaps:
 
     def test_resolved_not_collected(self):
         from src.tools.purview_policies import _collect_critical_gaps
+
         profiles = [_resolved_profile(title="Done thing", tier="Tier1")]
         gaps = _collect_critical_gaps(profiles)
         assert len(gaps) == 0
 
     def test_low_tier_not_collected(self):
         from src.tools.purview_policies import _collect_critical_gaps
+
         profiles = [_gap_profile(title="Minor", tier="Tier3", max_score=1.0)]
         gaps = _collect_critical_gaps(profiles)
         assert len(gaps) == 0
 
     def test_high_score_gap_collected(self):
         from src.tools.purview_policies import _collect_critical_gaps
+
         profiles = [_gap_profile(title="Big gap", tier="Tier2", max_score=5.0)]
         gaps = _collect_critical_gaps(profiles)
         assert len(gaps) == 1
@@ -496,6 +568,7 @@ class TestCollectCriticalGaps:
 # 11. Mock fallback — check_purview_policies with no Graph client
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestPurviewMockFallback:
     """Tests that run check_purview_policies with _create_graph_client → None."""
 
@@ -503,13 +576,15 @@ class TestPurviewMockFallback:
     @patch("src.tools.purview_policies._create_graph_client", return_value=None)
     async def test_returns_mock_data_source(self, _mock):
         from src.tools.purview_policies import check_purview_policies
+
         result = await check_purview_policies()
         assert result["data_source"] == "mock"
 
     @pytest.mark.asyncio
     @patch("src.tools.purview_policies._create_graph_client", return_value=None)
     async def test_mock_has_all_components(self, _mock):
-        from src.tools.purview_policies import check_purview_policies, ALL_COMPONENTS
+        from src.tools.purview_policies import ALL_COMPONENTS, check_purview_policies
+
         result = await check_purview_policies()
         assert set(result["components"].keys()) == set(ALL_COMPONENTS)
 
@@ -517,6 +592,7 @@ class TestPurviewMockFallback:
     @patch("src.tools.purview_policies._create_graph_client", return_value=None)
     async def test_mock_has_overall_coverage(self, _mock):
         from src.tools.purview_policies import check_purview_policies
+
         result = await check_purview_policies()
         assert 0.0 <= result["overall_coverage_pct"] <= 100.0
 
@@ -524,6 +600,7 @@ class TestPurviewMockFallback:
     @patch("src.tools.purview_policies._create_graph_client", return_value=None)
     async def test_mock_has_total_gaps(self, _mock):
         from src.tools.purview_policies import check_purview_policies
+
         result = await check_purview_policies()
         assert result["total_gaps"] > 0
 
@@ -531,6 +608,7 @@ class TestPurviewMockFallback:
     @patch("src.tools.purview_policies._create_graph_client", return_value=None)
     async def test_mock_has_critical_gaps(self, _mock):
         from src.tools.purview_policies import check_purview_policies
+
         result = await check_purview_policies()
         assert isinstance(result["critical_gaps"], list)
         assert len(result["critical_gaps"]) > 0
@@ -539,6 +617,7 @@ class TestPurviewMockFallback:
     @patch("src.tools.purview_policies._create_graph_client", return_value=None)
     async def test_mock_has_assessed_at(self, _mock):
         from src.tools.purview_policies import check_purview_policies
+
         result = await check_purview_policies()
         assert "assessed_at" in result
 
@@ -546,6 +625,7 @@ class TestPurviewMockFallback:
     @patch("src.tools.purview_policies._create_graph_client", return_value=None)
     async def test_mock_component_structure(self, _mock):
         from src.tools.purview_policies import check_purview_policies
+
         result = await check_purview_policies()
         for component in result["components"].values():
             assert "status" in component
@@ -558,6 +638,7 @@ class TestPurviewMockFallback:
 # 12. Graph API path — check_purview_policies with mocked SDK
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestPurviewGraphPath:
     """Tests with Graph API returning mocked control profiles."""
 
@@ -568,12 +649,15 @@ class TestPurviewGraphPath:
 
         profiles = [
             _resolved_profile(
-                service="Information Protection", title="Enable DLP",
+                service="Information Protection",
+                title="Enable DLP",
                 max_score=10.0,
             ),
             _gap_profile(
-                service="Information Protection", title="Auto-labeling for sensitivity",
-                max_score=8.0, tier="Tier1",
+                service="Information Protection",
+                title="Auto-labeling for sensitivity",
+                max_score=8.0,
+                tier="Tier1",
             ),
         ]
 
@@ -637,11 +721,14 @@ class TestPurviewGraphPath:
 
         profiles = [
             _resolved_profile(
-                service="MDE", title="MDE control",
-                max_score=10.0, control_category="Endpoint",
+                service="MDE",
+                title="MDE control",
+                max_score=10.0,
+                control_category="Endpoint",
             ),
             _resolved_profile(
-                service="Information Protection", title="DLP control",
+                service="Information Protection",
+                title="DLP control",
                 max_score=8.0,
             ),
         ]
@@ -655,9 +742,7 @@ class TestPurviewGraphPath:
         result = await check_purview_policies()
         assert result["data_source"] == "graph_api"
         # Only the purview profile should be counted
-        total_controls = sum(
-            c["details"]["total_controls"] for c in result["components"].values()
-        )
+        total_controls = sum(c["details"]["total_controls"] for c in result["components"].values())
         assert total_controls == 1
 
     @pytest.mark.asyncio
@@ -668,8 +753,10 @@ class TestPurviewGraphPath:
         profiles = [
             _resolved_profile(service="Information Protection", max_score=10.0),
             _make_profile(
-                service="Information Protection", deprecated=True,
-                max_score=5.0, control_state_updates=None,
+                service="Information Protection",
+                deprecated=True,
+                max_score=5.0,
+                control_state_updates=None,
             ),
         ]
 
@@ -681,9 +768,7 @@ class TestPurviewGraphPath:
 
         result = await check_purview_policies()
         assert result["data_source"] == "graph_api"
-        total_controls = sum(
-            c["details"]["total_controls"] for c in result["components"].values()
-        )
+        total_controls = sum(c["details"]["total_controls"] for c in result["components"].values())
         assert total_controls == 1
 
     @pytest.mark.asyncio
@@ -693,11 +778,13 @@ class TestPurviewGraphPath:
 
         profiles = [
             _resolved_profile(
-                service="Information Protection", title="DLP resolved",
+                service="Information Protection",
+                title="DLP resolved",
                 max_score=20.0,
             ),
             _gap_profile(
-                service="Purview", title="DLP gap",
+                service="Purview",
+                title="DLP gap",
                 max_score=20.0,
             ),
         ]
@@ -718,12 +805,16 @@ class TestPurviewGraphPath:
 
         profiles = [
             _gap_profile(
-                service="Information Protection", title="Critical DLP",
-                tier="Tier1", max_score=10.0,
+                service="Information Protection",
+                title="Critical DLP",
+                tier="Tier1",
+                max_score=10.0,
             ),
             _gap_profile(
-                service="Information Protection", title="Minor fix",
-                tier="Tier3", max_score=1.0,
+                service="Information Protection",
+                title="Minor fix",
+                tier="Tier3",
+                max_score=1.0,
             ),
         ]
 
@@ -740,7 +831,7 @@ class TestPurviewGraphPath:
     @pytest.mark.asyncio
     @patch("src.tools.purview_policies._create_graph_client")
     async def test_all_components_present_in_graph_result(self, mock_factory):
-        from src.tools.purview_policies import check_purview_policies, ALL_COMPONENTS
+        from src.tools.purview_policies import ALL_COMPONENTS, check_purview_policies
 
         profiles = [
             _gap_profile(service="Information Protection", title="DLP thing"),
@@ -795,6 +886,7 @@ class TestPurviewGraphPath:
 # 13. Tracing
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestPurviewTracing:
     @pytest.mark.asyncio
     @patch("src.tools.purview_policies._create_graph_client", return_value=None)
@@ -835,6 +927,7 @@ class TestPurviewTracing:
 # 14. Edge cases
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestPurviewEdgeCases:
     @pytest.mark.asyncio
     @patch("src.tools.purview_policies._create_graph_client")
@@ -843,8 +936,10 @@ class TestPurviewEdgeCases:
 
         profiles = [
             _make_profile(
-                service="Information Protection", deprecated=True,
-                max_score=10.0, control_state_updates=None,
+                service="Information Protection",
+                deprecated=True,
+                max_score=10.0,
+                control_state_updates=None,
             ),
         ]
         mock_client = MagicMock()
@@ -879,9 +974,14 @@ class TestPurviewEdgeCases:
         from src.tools.purview_policies import check_purview_policies
 
         profile = SimpleNamespace(
-            id="no-svc", title="dlp thing", service=None,
-            control_category=None, max_score=5.0, tier="Tier2",
-            deprecated=False, control_state_updates=[_make_state_update("Default")],
+            id="no-svc",
+            title="dlp thing",
+            service=None,
+            control_category=None,
+            max_score=5.0,
+            tier="Tier2",
+            deprecated=False,
+            control_state_updates=[_make_state_update("Default")],
         )
         mock_client = MagicMock()
         mock_client.security.secure_score_control_profiles.get = AsyncMock(
@@ -900,20 +1000,27 @@ class TestPurviewEdgeCases:
 
         profiles = [
             _resolved_profile(
-                service="Information Protection", title="DLP rule 1",
+                service="Information Protection",
+                title="DLP rule 1",
                 max_score=10.0,
             ),
             _gap_profile(
-                service="Information Protection", title="sensitivity label auto",
-                max_score=10.0, tier="Tier1",
+                service="Information Protection",
+                title="sensitivity label auto",
+                max_score=10.0,
+                tier="Tier1",
             ),
             _gap_profile(
-                service="Compliance", title="retention policy Exchange",
-                max_score=5.0, tier="Tier2",
+                service="Compliance",
+                title="retention policy Exchange",
+                max_score=5.0,
+                tier="Tier2",
             ),
             _gap_profile(
-                service="Insider Risk", title="insider risk policy",
-                max_score=8.0, tier="Tier1",
+                service="Insider Risk",
+                title="insider risk policy",
+                max_score=8.0,
+                tier="Tier1",
             ),
         ]
 

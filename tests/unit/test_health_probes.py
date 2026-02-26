@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -244,6 +244,7 @@ class TestCheckCopilotSdk:
     @pytest.mark.asyncio
     async def test_returns_not_installed_when_missing(self):
         import builtins
+
         original_import = builtins.__import__
 
         def _fake_import(name, *args, **kwargs):

@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 import httpx
 import jwt
 import structlog
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2AuthorizationCodeBearer
 
 from src.agent.config import settings
@@ -94,9 +94,7 @@ class JWKSKeyCache:
 
     async def _refresh(self, tenant_id: str) -> None:
         """Fetch JWKS from the Entra ID OpenID Configuration endpoint."""
-        openid_url = (
-            f"{ENTRA_AUTHORITY}/{tenant_id}{OPENID_CONFIG_PATH}"
-        )
+        openid_url = f"{ENTRA_AUTHORITY}/{tenant_id}{OPENID_CONFIG_PATH}"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # Step 1: discover the JWKS URI
@@ -109,11 +107,7 @@ class JWKSKeyCache:
                 jwks_resp.raise_for_status()
 
             jwks_data = jwks_resp.json()
-            self._keys = {
-                k["kid"]: jwt.PyJWK(k)
-                for k in jwks_data.get("keys", [])
-                if "kid" in k
-            }
+            self._keys = {k["kid"]: jwt.PyJWK(k) for k in jwks_data.get("keys", []) if "kid" in k}
             self._fetched_at = time.time()
             logger.info(
                 "auth.jwks.refreshed",
@@ -382,9 +376,7 @@ async def exchange_code_for_tokens(
     Raises:
         HTTPException(401): When the token exchange fails.
     """
-    token_url = (
-        f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/token"
-    )
+    token_url = f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/token"
     data = {
         "client_id": settings.azure_client_id,
         "client_secret": settings.azure_client_secret,

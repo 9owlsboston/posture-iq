@@ -13,9 +13,7 @@ Validates:
 
 from __future__ import annotations
 
-import json
 import time
-from dataclasses import dataclass
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,7 +21,6 @@ import jwt as pyjwt
 import pytest
 import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
 from httpx import ASGITransport, AsyncClient
 
 from src.middleware.auth import (
@@ -44,7 +41,6 @@ from src.middleware.auth import (
     scope_checker,
     validate_token,
 )
-
 
 # ── Test Helpers ───────────────────────────────────────────────────────────
 
@@ -293,7 +289,15 @@ class TestJWKSKeyCache:
                     "kid": "refreshed-kid",
                     "kty": "RSA",
                     "use": "sig",
-                    "n": "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw",
+                    "n": (
+                        "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4"
+                        "cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiF"
+                        "V4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6C"
+                        "f0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c"
+                        "7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhA"
+                        "I4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF4"
+                        "4-csFCur-kEgU8awapJzKnqDKgw"
+                    ),
                     "e": "AQAB",
                 }
             ]
@@ -420,9 +424,11 @@ class TestValidateToken:
     async def test_v1_issuer_also_accepted(self, rsa_keys, _mock_jwks):
         """v1 issuer (sts.windows.net) should also be valid."""
         private_key, _ = rsa_keys
-        claims = _standard_claims({
-            "iss": f"https://sts.windows.net/{TENANT_ID}/",
-        })
+        claims = _standard_claims(
+            {
+                "iss": f"https://sts.windows.net/{TENANT_ID}/",
+            }
+        )
         token = _make_token(claims, private_key)
         user = await validate_token(token)
         assert user.user_id == USER_OID
@@ -431,9 +437,11 @@ class TestValidateToken:
     async def test_scopes_parsed_from_scp(self, rsa_keys, _mock_jwks):
         """Delegated scopes from scp claim should be parsed into a list."""
         private_key, _ = rsa_keys
-        claims = _standard_claims({
-            "scp": "SecurityEvents.Read.All SecurityActions.Read.All Reports.Read.All",
-        })
+        claims = _standard_claims(
+            {
+                "scp": "SecurityEvents.Read.All SecurityActions.Read.All Reports.Read.All",
+            }
+        )
         token = _make_token(claims, private_key)
         user = await validate_token(token)
         assert len(user.scopes) == 3
@@ -700,9 +708,7 @@ class TestExchangeCodeForTokens:
         from fastapi import HTTPException
 
         mock_client = AsyncMock()
-        mock_client.post = AsyncMock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
@@ -866,9 +872,6 @@ class TestManagedIdentityAuth:
             mock_settings.azure_client_secret = CLIENT_SECRET
 
             # We need to import inside the patches
-            from importlib import reload
-
-            import src.tools.graph_client as gc_mod
 
             # Directly test the logic to avoid import side effects
             assert mock_settings.azure_client_secret == CLIENT_SECRET

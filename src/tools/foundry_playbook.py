@@ -16,15 +16,12 @@ useful context.
 
 from __future__ import annotations
 
-import hashlib
-import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 
 from src.agent.config import settings
-from src.middleware.pii_redaction import redact_pii
 from src.middleware.tracing import trace_tool_call
 
 logger = structlog.get_logger(__name__)
@@ -72,8 +69,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
             "name": "Defender XDR Deployment Workshop",
             "id": "P479-DEF-001",
             "description": (
-                "Two-day hands-on workshop covering onboarding, ASR rules, "
-                "AIR configuration, and threat analytics."
+                "Two-day hands-on workshop covering onboarding, ASR rules, AIR configuration, and threat analytics."
             ),
             "duration": "2 days",
             "delivery": "Remote or on-site",
@@ -102,8 +98,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
             "name": "Email Protection Optimization",
             "id": "P479-DEF-002",
             "description": (
-                "One-day assessment and configuration of Safe Attachments, "
-                "Safe Links, and anti-phishing policies."
+                "One-day assessment and configuration of Safe Attachments, Safe Links, and anti-phishing policies."
             ),
             "duration": "1 day",
             "delivery": "Remote",
@@ -131,8 +126,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
             "name": "Identity Threat Protection Engagement",
             "id": "P479-DEF-003",
             "description": (
-                "Sensor deployment, health remediation, and lateral movement "
-                "path analysis with the customer's AD team."
+                "Sensor deployment, health remediation, and lateral movement path analysis with the customer's AD team."
             ),
             "duration": "2 days",
             "delivery": "Remote or on-site",
@@ -158,10 +152,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         "offer": {
             "name": "Cloud App Security Assessment",
             "id": "P479-DEF-004",
-            "description": (
-                "Shadow IT discovery, API connector setup, and session "
-                "policy configuration workshop."
-            ),
+            "description": ("Shadow IT discovery, API connector setup, and session policy configuration workshop."),
             "duration": "1–2 days",
             "delivery": "Remote",
         },
@@ -188,8 +179,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
             "name": "Data Loss Prevention Workshop",
             "id": "P479-PUR-001",
             "description": (
-                "Classification strategy, SIT customization, and DLP policy "
-                "deployment across M365 workloads."
+                "Classification strategy, SIT customization, and DLP policy deployment across M365 workloads."
             ),
             "duration": "2 days",
             "delivery": "Remote",
@@ -241,10 +231,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         "offer": {
             "name": "Records & Retention Strategy",
             "id": "P479-PUR-003",
-            "description": (
-                "Retention schedule development, policy creation, and "
-                "records management configuration."
-            ),
+            "description": ("Retention schedule development, policy creation, and records management configuration."),
             "duration": "1 day",
             "delivery": "Remote",
         },
@@ -267,10 +254,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         "offer": {
             "name": "Insider Risk Management Workshop",
             "id": "P479-PUR-004",
-            "description": (
-                "Config-based setup: HR connector, policy templates, and "
-                "analyst role assignment."
-            ),
+            "description": ("Config-based setup: HR connector, policy templates, and analyst role assignment."),
             "duration": "1 day",
             "delivery": "Remote",
         },
@@ -296,10 +280,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         "offer": {
             "name": "Conditional Access Hardening",
             "id": "P479-EID-001",
-            "description": (
-                "Architecture review, policy design, and staged rollout of "
-                "Conditional Access policies."
-            ),
+            "description": ("Architecture review, policy design, and staged rollout of Conditional Access policies."),
             "duration": "2 days",
             "delivery": "Remote or on-site",
         },
@@ -351,10 +332,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         "offer": {
             "name": "Identity Protection Configuration",
             "id": "P479-EID-003",
-            "description": (
-                "Risk policy setup, tuning, and integration with existing "
-                "security operations workflows."
-            ),
+            "description": ("Risk policy setup, tuning, and integration with existing security operations workflows."),
             "duration": "1 day",
             "delivery": "Remote",
         },
@@ -379,8 +357,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
             "name": "Access Governance Workshop",
             "id": "P479-EID-004",
             "description": (
-                "Access review design, entitlement management setup, and "
-                "governance reporting configuration."
+                "Access review design, entitlement management setup, and governance reporting configuration."
             ),
             "duration": "1 day",
             "delivery": "Remote",
@@ -466,6 +443,7 @@ def _identify_workload_areas(gaps: list[str]) -> list[str]:
 
 # ── Foundry IQ Client ─────────────────────────────────────────────────
 
+
 def _create_foundry_client():
     """Create a Foundry IQ API client.
 
@@ -530,11 +508,7 @@ def _get_built_in_playbooks(
     if not workload_areas:
         return dict(_PLAYBOOKS)
 
-    return {
-        area: _PLAYBOOKS[area]
-        for area in workload_areas
-        if area in _PLAYBOOKS
-    }
+    return {area: _PLAYBOOKS[area] for area in workload_areas if area in _PLAYBOOKS}
 
 
 def _build_playbook_context(
@@ -551,7 +525,7 @@ def _build_playbook_context(
         response.
     """
     sections: list[str] = []
-    for area, pb in playbooks.items():
+    for _area, pb in playbooks.items():
         lines = [f"### {pb['title']}"]
         lines.append("\n**Remediation Steps:**")
         lines.extend(pb["remediation_playbook"])
@@ -566,8 +540,7 @@ def _build_playbook_context(
             lines.append("\n**Onboarding Checklist:**")
             lines.extend(checklist)
         lines.append(
-            f"\nEstimated Effort: {pb.get('estimated_effort', 'TBD')} | "
-            f"Score Impact: +{pb.get('impact_on_score', 0)}"
+            f"\nEstimated Effort: {pb.get('estimated_effort', 'TBD')} | Score Impact: +{pb.get('impact_on_score', 0)}"
         )
         sections.append("\n".join(lines))
     return "\n\n---\n\n".join(sections)
@@ -652,14 +625,8 @@ async def get_project479_playbook(
     context_summary = _build_playbook_context(playbook_data)
 
     # Compute aggregate stats
-    total_impact = sum(
-        pb.get("impact_on_score", 0) for pb in playbook_data.values()
-    )
-    offer_ids = [
-        pb["offer"]["id"]
-        for pb in playbook_data.values()
-        if "offer" in pb
-    ]
+    total_impact = sum(pb.get("impact_on_score", 0) for pb in playbook_data.values())
+    offer_ids = [pb["offer"]["id"] for pb in playbook_data.values() if "offer" in pb]
 
     return {
         "playbook_version": PLAYBOOK_VERSION,
@@ -681,5 +648,5 @@ async def get_project479_playbook(
             for area, pb in playbook_data.items()
         },
         "context_summary": context_summary,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }

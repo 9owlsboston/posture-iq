@@ -6,9 +6,9 @@ and parameter files match the expected schema.
 
 import json
 import subprocess
-import pytest
 from pathlib import Path
 
+import pytest
 
 INFRA_DIR = Path(__file__).parent.parent.parent / "infra"
 MAIN_BICEP = INFRA_DIR / "main.bicep"
@@ -86,9 +86,7 @@ class TestBicepContent:
     def test_main_bicep_references_all_modules(self):
         content = MAIN_BICEP.read_text()
         for module in EXPECTED_MODULES:
-            assert f"modules/{module}" in content, (
-                f"main.bicep does not reference module: {module}"
-            )
+            assert f"modules/{module}" in content, f"main.bicep does not reference module: {module}"
 
     def test_main_bicep_has_environment_param(self):
         content = MAIN_BICEP.read_text()
@@ -186,39 +184,39 @@ class TestBicepCompilation:
             text=True,
             timeout=60,
         )
-        assert result.returncode == 0, (
-            f"Module '{module_name}' build failed:\n{result.stderr}"
-        )
+        assert result.returncode == 0, f"Module '{module_name}' build failed:\n{result.stderr}"
 
     def test_dev_params_build(self):
         result = subprocess.run(
             [
-                "az", "bicep", "build-params",
-                "--file", str(PARAMS_DIR / "dev.bicepparam"),
+                "az",
+                "bicep",
+                "build-params",
+                "--file",
+                str(PARAMS_DIR / "dev.bicepparam"),
                 "--stdout",
             ],
             capture_output=True,
             text=True,
             timeout=60,
         )
-        assert result.returncode == 0, (
-            f"Dev params build failed:\n{result.stderr}"
-        )
+        assert result.returncode == 0, f"Dev params build failed:\n{result.stderr}"
 
     def test_prod_params_build(self):
         result = subprocess.run(
             [
-                "az", "bicep", "build-params",
-                "--file", str(PARAMS_DIR / "prod.bicepparam"),
+                "az",
+                "bicep",
+                "build-params",
+                "--file",
+                str(PARAMS_DIR / "prod.bicepparam"),
                 "--stdout",
             ],
             capture_output=True,
             text=True,
             timeout=60,
         )
-        assert result.returncode == 0, (
-            f"Prod params build failed:\n{result.stderr}"
-        )
+        assert result.returncode == 0, f"Prod params build failed:\n{result.stderr}"
 
     def test_main_bicep_lint(self):
         result = subprocess.run(

@@ -16,7 +16,7 @@ Required scope: SecurityEvents.Read.All, InformationProtection.Read.All
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -30,16 +30,18 @@ logger = structlog.get_logger(__name__)
 
 # We classify a control profile as "Purview-related" when its service or
 # control_category matches one of these (case-insensitive substring check).
-PURVIEW_SERVICE_KEYWORDS = frozenset({
-    "information protection",
-    "purview",
-    "compliance",
-    "data loss prevention",
-    "dlp",
-    "insider risk",
-    "retention",
-    "sensitivity",
-})
+PURVIEW_SERVICE_KEYWORDS = frozenset(
+    {
+        "information protection",
+        "purview",
+        "compliance",
+        "data loss prevention",
+        "dlp",
+        "insider risk",
+        "retention",
+        "sensitivity",
+    }
+)
 
 # Canonical Purview component names we report on
 ALL_COMPONENTS = (
@@ -63,12 +65,14 @@ YELLOW_THRESHOLD = 40.0
 
 # ── Graph client factory ───────────────────────────────────────────────
 
+
 def _create_graph_client():
     """Delegate to the shared Graph client factory."""
     return create_graph_client("purview_policies")
 
 
 # ── Classification helpers ─────────────────────────────────────────────
+
 
 def _is_purview_related(profile: Any) -> bool:
     """Return True when a control profile relates to Purview / data protection."""
@@ -81,11 +85,13 @@ def _is_purview_related(profile: Any) -> bool:
 
 def _classify_component(profile: Any) -> str:
     """Map a Purview-related profile to one of our canonical component names."""
-    text = " ".join([
-        (getattr(profile, "title", None) or ""),
-        (getattr(profile, "service", None) or ""),
-        (getattr(profile, "control_category", None) or ""),
-    ]).lower()
+    text = " ".join(
+        [
+            (getattr(profile, "title", None) or ""),
+            (getattr(profile, "service", None) or ""),
+            (getattr(profile, "control_category", None) or ""),
+        ]
+    ).lower()
 
     for component, keywords in _COMPONENT_KEYWORDS.items():
         if any(kw in text for kw in keywords):
@@ -189,13 +195,11 @@ def _compute_overall(components: dict[str, dict]) -> float:
 
 
 def _collect_critical_gaps(profiles: list[Any]) -> list[str]:
-    return [
-        _gap_description(p) for p in profiles
-        if _is_gap(p) and _is_critical(p)
-    ]
+    return [_gap_description(p) for p in profiles if _is_gap(p) and _is_critical(p)]
 
 
 # ── Mock fallback ──────────────────────────────────────────────────────
+
 
 def _generate_mock_response() -> dict[str, Any]:
     return {
@@ -265,12 +269,13 @@ def _generate_mock_response() -> dict[str, Any]:
             "Mandatory labeling not enforced (tier: Tier1)",
             "Insider Risk Management not enabled (tier: Tier1)",
         ],
-        "assessed_at": datetime.now(timezone.utc).isoformat(),
+        "assessed_at": datetime.now(UTC).isoformat(),
         "data_source": "mock",
     }
 
 
 # ── Main tool function ─────────────────────────────────────────────────
+
 
 @trace_tool_call("check_purview_policies")
 async def check_purview_policies() -> dict[str, Any]:
@@ -305,7 +310,10 @@ async def check_purview_policies() -> dict[str, Any]:
         query = SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetQueryParameters(
             top=200,
         )
-        config = SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetRequestConfiguration(
+        request_config_cls = (
+            SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetRequestConfiguration
+        )
+        config = request_config_cls(
             query_parameters=query,
         )
 
@@ -316,10 +324,7 @@ async def check_purview_policies() -> dict[str, Any]:
         all_profiles = response.value if response and response.value else []
 
         # Filter to Purview-related, non-deprecated profiles
-        purview_profiles = [
-            p for p in all_profiles
-            if _is_purview_related(p) and not getattr(p, "deprecated", False)
-        ]
+        purview_profiles = [p for p in all_profiles if _is_purview_related(p) and not getattr(p, "deprecated", False)]
 
         if not purview_profiles:
             logger.warning("tool.purview_policies.empty_response")
@@ -337,7 +342,7 @@ async def check_purview_policies() -> dict[str, Any]:
             "components": components,
             "total_gaps": total_gaps,
             "critical_gaps": critical_gaps,
-            "assessed_at": datetime.now(timezone.utc).isoformat(),
+            "assessed_at": datetime.now(UTC).isoformat(),
             "data_source": "graph_api",
         }
 

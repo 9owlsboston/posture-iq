@@ -1,7 +1,6 @@
 """Unit tests for PII redaction middleware."""
 
-import pytest
-from src.middleware.pii_redaction import redact_pii, redact_dict
+from src.middleware.pii_redaction import redact_dict, redact_pii
 
 
 class TestRedactPii:

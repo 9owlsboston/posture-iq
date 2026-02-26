@@ -28,7 +28,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -49,11 +49,13 @@ MAX_OUTPUT_SUMMARY_LENGTH: int = 500
 MAX_REASONING_LENGTH: int = 300
 
 # Roles allowed to query audit logs
-AUDIT_READER_ROLES: frozenset[str] = frozenset({
-    "SecurityAdmin",
-    "AuditLog.Read",
-    "GlobalAdmin",
-})
+AUDIT_READER_ROLES: frozenset[str] = frozenset(
+    {
+        "SecurityAdmin",
+        "AuditLog.Read",
+        "GlobalAdmin",
+    }
+)
 
 
 # ── Immutable Audit Entry ──────────────────────────────────────────────
@@ -83,9 +85,7 @@ class AuditEntry:
     """
 
     entry_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     session_id: str = ""
     event_type: str = ""
     user_identity: str = ""
@@ -108,16 +108,18 @@ def _compute_integrity_hash(entry: AuditEntry) -> str:
     The hash covers: timestamp, session_id, event_type, user_identity,
     tool_name, input_summary, output_summary, reasoning.
     """
-    payload = "|".join([
-        entry.timestamp,
-        entry.session_id,
-        entry.event_type,
-        entry.user_identity,
-        entry.tool_name,
-        entry.input_summary,
-        entry.output_summary,
-        entry.reasoning,
-    ])
+    payload = "|".join(
+        [
+            entry.timestamp,
+            entry.session_id,
+            entry.event_type,
+            entry.user_identity,
+            entry.tool_name,
+            entry.input_summary,
+            entry.output_summary,
+            entry.reasoning,
+        ]
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -396,10 +398,7 @@ class AuditLogger:
             results = [e for e in results if e.tool_name == tool_name]
 
         if user_identity:
-            results = [
-                e for e in results
-                if user_identity.lower() in e.user_identity.lower()
-            ]
+            results = [e for e in results if user_identity.lower() in e.user_identity.lower()]
 
         # Newest first, limited
         return list(reversed(results))[:limit]

@@ -14,16 +14,16 @@ Covers:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _make_assessment_data(
     *,
@@ -83,25 +83,30 @@ def _make_assessment_data(
 # 1. _status_from_pct
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestStatusFromPct:
     def test_green(self):
         from src.tools.adoption_scorecard import _status_from_pct
+
         assert _status_from_pct(70.0) == "green"
         assert _status_from_pct(100.0) == "green"
         assert _status_from_pct(85.5) == "green"
 
     def test_yellow(self):
         from src.tools.adoption_scorecard import _status_from_pct
+
         assert _status_from_pct(40.0) == "yellow"
         assert _status_from_pct(69.9) == "yellow"
 
     def test_red(self):
         from src.tools.adoption_scorecard import _status_from_pct
+
         assert _status_from_pct(0.0) == "red"
         assert _status_from_pct(39.9) == "red"
 
     def test_boundaries(self):
         from src.tools.adoption_scorecard import _status_from_pct
+
         assert _status_from_pct(70.0) == "green"
         assert _status_from_pct(40.0) == "yellow"
         assert _status_from_pct(39.99) == "red"
@@ -111,34 +116,41 @@ class TestStatusFromPct:
 # 2. _parse_assessment
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestParseAssessment:
     def test_valid_json(self):
         from src.tools.adoption_scorecard import _parse_assessment
+
         result = _parse_assessment(json.dumps({"key": "value"}))
         assert result == {"key": "value"}
 
     def test_invalid_json(self):
         from src.tools.adoption_scorecard import _parse_assessment
+
         result = _parse_assessment("not json!!!")
         assert result == {}
 
     def test_empty_string(self):
         from src.tools.adoption_scorecard import _parse_assessment
+
         result = _parse_assessment("")
         assert result == {}
 
     def test_none_input(self):
         from src.tools.adoption_scorecard import _parse_assessment
+
         result = _parse_assessment(None)
         assert result == {}
 
     def test_non_dict_json(self):
         from src.tools.adoption_scorecard import _parse_assessment
+
         result = _parse_assessment(json.dumps([1, 2, 3]))
         assert result == {}
 
     def test_whitespace_only(self):
         from src.tools.adoption_scorecard import _parse_assessment
+
         result = _parse_assessment("   \n  ")
         assert result == {}
 
@@ -147,9 +159,11 @@ class TestParseAssessment:
 # 3. _extract_defender
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestExtractDefender:
     def test_with_data(self):
         from src.tools.adoption_scorecard import _extract_defender
+
         data = _make_assessment_data(defender_pct=75.0, defender_gaps=3)
         result = _extract_defender(data)
         assert result["status"] == "green"
@@ -159,12 +173,14 @@ class TestExtractDefender:
 
     def test_without_data(self):
         from src.tools.adoption_scorecard import _extract_defender
+
         result = _extract_defender({})
         assert result["status"] == "unknown"
         assert result["coverage_pct"] == 0.0
 
     def test_empty_components(self):
         from src.tools.adoption_scorecard import _extract_defender
+
         data = {"defender_coverage": {"overall_coverage_pct": 50.0, "total_gaps": 2, "components": {}}}
         result = _extract_defender(data)
         assert result["status"] == "yellow"
@@ -175,9 +191,11 @@ class TestExtractDefender:
 # 4. _extract_purview
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestExtractPurview:
     def test_with_data(self):
         from src.tools.adoption_scorecard import _extract_purview
+
         data = _make_assessment_data(purview_pct=30.0, purview_gaps=8)
         result = _extract_purview(data)
         assert result["status"] == "red"
@@ -186,6 +204,7 @@ class TestExtractPurview:
 
     def test_without_data(self):
         from src.tools.adoption_scorecard import _extract_purview
+
         result = _extract_purview({})
         assert result["status"] == "unknown"
 
@@ -194,9 +213,11 @@ class TestExtractPurview:
 # 5. _extract_entra
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestExtractEntra:
     def test_with_data(self):
         from src.tools.adoption_scorecard import _extract_entra
+
         data = _make_assessment_data(entra_pct=72.0, entra_gaps=2)
         result = _extract_entra(data)
         assert result["status"] == "green"
@@ -204,11 +225,13 @@ class TestExtractEntra:
 
     def test_without_data(self):
         from src.tools.adoption_scorecard import _extract_entra
+
         result = _extract_entra({})
         assert result["status"] == "unknown"
 
     def test_sub_workloads(self):
         from src.tools.adoption_scorecard import _extract_entra
+
         data = _make_assessment_data(entra_pct=50.0)
         result = _extract_entra(data)
         assert "Conditional Access" in result["sub_workloads"]
@@ -221,9 +244,11 @@ class TestExtractEntra:
 # 6. _default_workload
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestDefaultWorkload:
     def test_returns_unknown(self):
         from src.tools.adoption_scorecard import _default_workload
+
         result = _default_workload()
         assert result["status"] == "unknown"
         assert result["coverage_pct"] == 0.0
@@ -235,9 +260,11 @@ class TestDefaultWorkload:
 # 7. _collect_critical_gaps
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestCollectCriticalGaps:
     def test_from_all_sources(self):
         from src.tools.adoption_scorecard import _collect_critical_gaps
+
         data = _make_assessment_data()
         gaps = _collect_critical_gaps(data)
         # defender_coverage: Gap A, Gap B − purview: Gap C − entra: legacy auth
@@ -246,6 +273,7 @@ class TestCollectCriticalGaps:
 
     def test_includes_remediaton_p0_steps(self):
         from src.tools.adoption_scorecard import _collect_critical_gaps
+
         data = _make_assessment_data(include_remediation=True)
         gaps = _collect_critical_gaps(data)
         titles = [g["gap"] for g in gaps]
@@ -254,6 +282,7 @@ class TestCollectCriticalGaps:
 
     def test_no_remediaton_p1_steps(self):
         from src.tools.adoption_scorecard import _collect_critical_gaps
+
         data = _make_assessment_data(include_remediation=True)
         gaps = _collect_critical_gaps(data)
         titles = [g["gap"] for g in gaps]
@@ -263,17 +292,17 @@ class TestCollectCriticalGaps:
     def test_dedup_with_remediation(self):
         """Gap title matching existing gap should not be duplicated."""
         from src.tools.adoption_scorecard import _collect_critical_gaps
+
         data = _make_assessment_data(include_remediation=True)
         # Add a remediation step whose title matches an existing gap
-        data["remediation_plan"]["steps"].append(
-            {"priority": "P0", "title": "Gap A"}
-        )
+        data["remediation_plan"]["steps"].append({"priority": "P0", "title": "Gap A"})
         gaps = _collect_critical_gaps(data)
         titles = [g["gap"] for g in gaps]
         assert titles.count("Gap A") == 1
 
     def test_max_five(self):
         from src.tools.adoption_scorecard import _collect_critical_gaps
+
         data = _make_assessment_data()
         # Add many critical gaps
         data["defender_coverage"]["critical_gaps"] = [f"Gap {i}" for i in range(20)]
@@ -282,11 +311,13 @@ class TestCollectCriticalGaps:
 
     def test_empty_data(self):
         from src.tools.adoption_scorecard import _collect_critical_gaps
+
         gaps = _collect_critical_gaps({})
         assert gaps == []
 
     def test_dict_gaps(self):
         from src.tools.adoption_scorecard import _collect_critical_gaps
+
         data = {
             "defender_coverage": {
                 "critical_gaps": [
@@ -305,14 +336,17 @@ class TestCollectCriticalGaps:
 # 8. _extract_days_to_green
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestExtractDaysToGreen:
     def test_from_remediation_plan(self):
         from src.tools.adoption_scorecard import _extract_days_to_green
+
         data = _make_assessment_data(include_remediation=True, remediation_days=14)
         assert _extract_days_to_green(data) == 14
 
     def test_heuristic_from_gaps(self):
         from src.tools.adoption_scorecard import _extract_days_to_green
+
         data = _make_assessment_data(defender_gaps=5, purview_gaps=3, entra_gaps=2)
         # no remediation plan → heuristic: total_gaps * 2 = (5+3+2)*2 = 20
         result = _extract_days_to_green(data)
@@ -320,11 +354,13 @@ class TestExtractDaysToGreen:
 
     def test_minimum_one_day(self):
         from src.tools.adoption_scorecard import _extract_days_to_green
+
         data = _make_assessment_data(defender_gaps=0, purview_gaps=0, entra_gaps=0)
         assert _extract_days_to_green(data) >= 1
 
     def test_no_data_at_all(self):
         from src.tools.adoption_scorecard import _extract_days_to_green
+
         result = _extract_days_to_green({})
         assert result >= 1
 
@@ -333,9 +369,11 @@ class TestExtractDaysToGreen:
 # 9. _generate_markdown_scorecard
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestGenerateMarkdownScorecard:
     def test_contains_header(self):
         from src.tools.adoption_scorecard import _generate_markdown_scorecard
+
         workloads = {"Test Workload": {"status": "green", "coverage_pct": 80.0}}
         md = _generate_markdown_scorecard(workloads, [], 80.0, 5)
         assert "# PostureIQ" in md
@@ -343,12 +381,14 @@ class TestGenerateMarkdownScorecard:
 
     def test_contains_overall_pct(self):
         from src.tools.adoption_scorecard import _generate_markdown_scorecard
+
         workloads = {"Test": {"status": "green", "coverage_pct": 80.0}}
         md = _generate_markdown_scorecard(workloads, [], 80.0, 5)
         assert "80.0%" in md
 
     def test_contains_workload_table(self):
         from src.tools.adoption_scorecard import _generate_markdown_scorecard
+
         workloads = {
             "Defender XDR": {"status": "yellow", "coverage_pct": 55.0},
             "Entra ID": {"status": "red", "coverage_pct": 20.0},
@@ -361,6 +401,7 @@ class TestGenerateMarkdownScorecard:
 
     def test_contains_gaps(self):
         from src.tools.adoption_scorecard import _generate_markdown_scorecard
+
         gaps = [
             {"gap": "MFA missing", "priority": "P0", "workload": "Entra"},
         ]
@@ -370,18 +411,21 @@ class TestGenerateMarkdownScorecard:
 
     def test_green_status_message(self):
         from src.tools.adoption_scorecard import _generate_markdown_scorecard
+
         workloads = {"All": {"status": "green", "coverage_pct": 90.0}}
         md = _generate_markdown_scorecard(workloads, [], 90.0, 0)
         assert "GREEN ✅" in md
 
     def test_out_of_green_message(self):
         from src.tools.adoption_scorecard import _generate_markdown_scorecard
+
         workloads = {"All": {"status": "red", "coverage_pct": 20.0}}
         md = _generate_markdown_scorecard(workloads, [], 20.0, 30)
         assert "OUT OF GREEN" in md
 
     def test_days_to_green(self):
         from src.tools.adoption_scorecard import _generate_markdown_scorecard
+
         md = _generate_markdown_scorecard({}, [], 50.0, 42)
         assert "42" in md
 
@@ -390,39 +434,52 @@ class TestGenerateMarkdownScorecard:
 # 10. Mock fallback path
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestScorecardMockFallback:
     @pytest.mark.asyncio
     async def test_empty_context_returns_mock(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         result = await create_adoption_scorecard("")
         assert result["data_source"] == "mock"
 
     @pytest.mark.asyncio
     async def test_invalid_json_returns_mock(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         result = await create_adoption_scorecard("not json!!!")
         assert result["data_source"] == "mock"
 
     @pytest.mark.asyncio
     async def test_no_assessment_keys_returns_mock(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         result = await create_adoption_scorecard(json.dumps({"foo": "bar"}))
         assert result["data_source"] == "mock"
 
     @pytest.mark.asyncio
     async def test_mock_has_all_keys(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         result = await create_adoption_scorecard("")
         required_keys = {
-            "overall_adoption_pct", "overall_status", "green_threshold",
-            "workload_status", "top_5_gaps", "estimated_days_to_green",
-            "scorecard_markdown", "disclaimer", "generated_at", "data_source",
+            "overall_adoption_pct",
+            "overall_status",
+            "green_threshold",
+            "workload_status",
+            "top_5_gaps",
+            "estimated_days_to_green",
+            "scorecard_markdown",
+            "disclaimer",
+            "generated_at",
+            "data_source",
         }
         assert required_keys.issubset(set(result.keys()))
 
     @pytest.mark.asyncio
     async def test_mock_workloads(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         result = await create_adoption_scorecard("")
         workloads = result["workload_status"]
         assert "Defender XDR" in workloads
@@ -432,6 +489,7 @@ class TestScorecardMockFallback:
     @pytest.mark.asyncio
     async def test_mock_has_markdown(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         result = await create_adoption_scorecard("")
         assert "PostureIQ" in result["scorecard_markdown"]
 
@@ -440,10 +498,12 @@ class TestScorecardMockFallback:
 # 11. Live data path
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_data_source_is_live(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data()
         result = await create_adoption_scorecard(json.dumps(data))
         assert result["data_source"] == "live"
@@ -451,6 +511,7 @@ class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_overall_pct_computed(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data(defender_pct=60.0, purview_pct=40.0, entra_pct=50.0)
         result = await create_adoption_scorecard(json.dumps(data))
         # average of 60, 40, 50 = 50.0
@@ -459,6 +520,7 @@ class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_overall_status_yellow(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data(defender_pct=60.0, purview_pct=40.0, entra_pct=50.0)
         result = await create_adoption_scorecard(json.dumps(data))
         assert result["overall_status"] == "yellow"
@@ -466,6 +528,7 @@ class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_overall_status_green(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data(defender_pct=80.0, purview_pct=75.0, entra_pct=90.0)
         result = await create_adoption_scorecard(json.dumps(data))
         assert result["overall_status"] == "green"
@@ -473,6 +536,7 @@ class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_overall_status_red(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data(defender_pct=10.0, purview_pct=20.0, entra_pct=15.0)
         result = await create_adoption_scorecard(json.dumps(data))
         assert result["overall_status"] == "red"
@@ -480,6 +544,7 @@ class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_workloads_extracted(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data()
         result = await create_adoption_scorecard(json.dumps(data))
         assert "Defender XDR" in result["workload_status"]
@@ -489,6 +554,7 @@ class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_has_markdown(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data()
         result = await create_adoption_scorecard(json.dumps(data))
         assert "PostureIQ" in result["scorecard_markdown"]
@@ -497,6 +563,7 @@ class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_days_from_remediation(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data(include_remediation=True, remediation_days=10)
         result = await create_adoption_scorecard(json.dumps(data))
         assert result["estimated_days_to_green"] == 10
@@ -504,6 +571,7 @@ class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_days_heuristic(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data(defender_gaps=3, purview_gaps=2, entra_gaps=1)
         result = await create_adoption_scorecard(json.dumps(data))
         # heuristic: (3+2+1)*2 = 12
@@ -512,6 +580,7 @@ class TestScorecardLiveData:
     @pytest.mark.asyncio
     async def test_green_threshold(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data()
         result = await create_adoption_scorecard(json.dumps(data))
         assert result["green_threshold"] == 70.0
@@ -520,6 +589,7 @@ class TestScorecardLiveData:
     async def test_partial_data_only_defender(self):
         """Only defender_coverage present — should still produce live result."""
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = {
             "defender_coverage": {
                 "overall_coverage_pct": 55.0,
@@ -537,6 +607,7 @@ class TestScorecardLiveData:
 # ═══════════════════════════════════════════════════════════════════════
 # 12. Tracing
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestScorecardTracing:
     @pytest.mark.asyncio
@@ -577,11 +648,13 @@ class TestScorecardTracing:
 # 13. Edge cases
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestScorecardEdgeCases:
     @pytest.mark.asyncio
     async def test_all_unknown_workloads(self):
         """When no assessment keys match extraction, unknown workloads → 0% overall."""
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         # Has a key that triggers "live" path but no matching sub-keys
         data = {"secure_score": {"current_score": 50}}
         result = await create_adoption_scorecard(json.dumps(data))
@@ -591,12 +664,14 @@ class TestScorecardEdgeCases:
     @pytest.mark.asyncio
     async def test_disclaimer_present(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         result = await create_adoption_scorecard("")
         assert "PostureIQ" in result["disclaimer"]
 
     @pytest.mark.asyncio
     async def test_generated_at_is_iso(self):
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         result = await create_adoption_scorecard("")
         # Should not raise
         datetime.fromisoformat(result["generated_at"])
@@ -605,6 +680,7 @@ class TestScorecardEdgeCases:
     async def test_sub_workload_status(self):
         """Verify sub-workload statuses follow thresholds."""
         from src.tools.adoption_scorecard import create_adoption_scorecard
+
         data = _make_assessment_data(defender_pct=60.0)
         result = await create_adoption_scorecard(json.dumps(data))
         defender = result["workload_status"]["Defender XDR"]

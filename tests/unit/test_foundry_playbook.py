@@ -14,22 +14,20 @@ Covers:
 from __future__ import annotations
 
 import json
-from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from src.tools.foundry_playbook import (
-    PLAYBOOK_VERSION,
-    WORKLOAD_AREAS,
     _GAP_KEYWORD_MAP,
     _PLAYBOOKS,
+    PLAYBOOK_VERSION,
+    WORKLOAD_AREAS,
     _build_playbook_context,
     _get_built_in_playbooks,
     _identify_workload_areas,
     get_project479_playbook,
 )
-
 
 # ========================================================================
 # SECTION 1: Built-in Playbook Content Validation
@@ -260,9 +258,7 @@ class TestGetPlaybookByGaps:
 
     @pytest.mark.asyncio
     async def test_gap_based_lookup(self):
-        result = await get_project479_playbook(
-            gaps=["MFA not enforced", "No DLP policies configured"]
-        )
+        result = await get_project479_playbook(gaps=["MFA not enforced", "No DLP policies configured"])
         assert result["matched_count"] >= 2
         assert "entra_conditional_access" in result["matched_areas"]
         assert "purview_dlp" in result["matched_areas"]
@@ -285,9 +281,7 @@ class TestGetPlaybookByGaps:
 
     @pytest.mark.asyncio
     async def test_result_has_recommended_offers(self):
-        result = await get_project479_playbook(
-            gaps=["MFA not enforced", "Safe Links disabled"]
-        )
+        result = await get_project479_playbook(gaps=["MFA not enforced", "Safe Links disabled"])
         assert len(result["recommended_offers"]) >= 2
         assert all(o.startswith("P479-") for o in result["recommended_offers"])
 
@@ -318,9 +312,7 @@ class TestGetPlaybookByAreas:
 
     @pytest.mark.asyncio
     async def test_explicit_areas(self):
-        result = await get_project479_playbook(
-            workload_areas=["defender_endpoint", "entra_pim"]
-        )
+        result = await get_project479_playbook(workload_areas=["defender_endpoint", "entra_pim"])
         assert result["matched_count"] == 2
         assert "defender_endpoint" in result["matched_areas"]
         assert "entra_pim" in result["matched_areas"]
@@ -336,9 +328,7 @@ class TestGetPlaybookByAreas:
 
     @pytest.mark.asyncio
     async def test_invalid_areas_filtered(self):
-        result = await get_project479_playbook(
-            workload_areas=["fake_area", "defender_endpoint"]
-        )
+        result = await get_project479_playbook(workload_areas=["fake_area", "defender_endpoint"])
         assert result["matched_areas"] == ["defender_endpoint"]
 
     @pytest.mark.asyncio
@@ -430,9 +420,7 @@ class TestPlaybookResponseStructure:
 
     @pytest.mark.asyncio
     async def test_playbook_entry_fields(self):
-        result = await get_project479_playbook(
-            workload_areas=["defender_endpoint"]
-        )
+        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
         pb = result["playbooks"]["defender_endpoint"]
         assert "title" in pb
         assert "remediation_steps" in pb
@@ -443,18 +431,14 @@ class TestPlaybookResponseStructure:
 
     @pytest.mark.asyncio
     async def test_remediation_steps_are_list(self):
-        result = await get_project479_playbook(
-            workload_areas=["defender_endpoint"]
-        )
+        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
         pb = result["playbooks"]["defender_endpoint"]
         assert isinstance(pb["remediation_steps"], list)
         assert len(pb["remediation_steps"]) >= 3
 
     @pytest.mark.asyncio
     async def test_offer_has_required_fields(self):
-        result = await get_project479_playbook(
-            workload_areas=["defender_endpoint"]
-        )
+        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
         offer = result["playbooks"]["defender_endpoint"]["offer"]
         assert "name" in offer
         assert "id" in offer
@@ -471,18 +455,14 @@ class TestFoundryIQFallback:
 
     @pytest.mark.asyncio
     async def test_default_uses_builtin(self):
-        result = await get_project479_playbook(
-            workload_areas=["defender_endpoint"]
-        )
+        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
         assert result["source"] == "built_in"
 
     @pytest.mark.asyncio
     @patch("src.tools.foundry_playbook._create_foundry_client")
     async def test_no_client_uses_builtin(self, mock_client):
         mock_client.return_value = None
-        result = await get_project479_playbook(
-            workload_areas=["defender_endpoint"]
-        )
+        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
         assert result["source"] == "built_in"
         assert result["matched_count"] == 1
 
@@ -492,9 +472,7 @@ class TestFoundryIQFallback:
     async def test_fetch_failure_falls_back(self, mock_client, mock_fetch):
         mock_client.return_value = {"endpoint": "https://foundry.example.com"}
         mock_fetch.return_value = None  # API failed
-        result = await get_project479_playbook(
-            workload_areas=["defender_endpoint"]
-        )
+        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
         assert result["source"] == "built_in"
 
     @pytest.mark.asyncio
@@ -518,9 +496,7 @@ class TestFoundryIQFallback:
                 "impact_on_score": 10.0,
             }
         }
-        result = await get_project479_playbook(
-            workload_areas=["defender_endpoint"]
-        )
+        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
         assert result["source"] == "foundry_iq"
         assert result["playbooks"]["defender_endpoint"]["title"] == "Remote Playbook"
 
@@ -620,17 +596,13 @@ class TestEdgeCases:
 
     @pytest.mark.asyncio
     async def test_single_area(self):
-        result = await get_project479_playbook(
-            workload_areas=["entra_pim"]
-        )
+        result = await get_project479_playbook(workload_areas=["entra_pim"])
         assert result["matched_count"] == 1
         assert "entra_pim" in result["matched_areas"]
 
     @pytest.mark.asyncio
     async def test_result_is_json_serializable(self):
-        result = await get_project479_playbook(
-            workload_areas=["defender_endpoint"]
-        )
+        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
         # Should not raise
         serialized = json.dumps(result, default=str)
         assert serialized

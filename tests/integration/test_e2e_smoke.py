@@ -14,15 +14,10 @@ Verifies that the FastAPI application:
 
 from __future__ import annotations
 
-import json
-from typing import Any
-from unittest.mock import AsyncMock, patch
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from src.api.app import app
-
 
 # ── Fixtures ───────────────────────────────────────────────────────────
 
@@ -432,9 +427,7 @@ class TestSystemPromptE2E:
         from src.agent.system_prompt import SYSTEM_PROMPT
 
         for tool in TOOLS:
-            assert tool.name in SYSTEM_PROMPT, (
-                f"System prompt missing tool: {tool.name}"
-            )
+            assert tool.name in SYSTEM_PROMPT, f"System prompt missing tool: {tool.name}"
 
     def test_prompt_has_guardrails(self):
         from src.agent.system_prompt import SYSTEM_PROMPT

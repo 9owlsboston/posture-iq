@@ -13,11 +13,9 @@ Covers:
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import FrozenInstanceError
-from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -37,7 +35,6 @@ from src.tools.fabric_telemetry import (
     query_snapshots,
     validate_snapshot,
 )
-
 
 # ── Fixtures ───────────────────────────────────────────────────────────
 
@@ -182,9 +179,7 @@ class TestBuildSnapshot:
         assert snap.secure_score_percentage == 25.0
 
     def test_gaps_anonymised(self):
-        snap = _make_snapshot(
-            top_gaps=["Tenant 12345678-1234-1234-1234-123456789abc exposed"]
-        )
+        snap = _make_snapshot(top_gaps=["Tenant 12345678-1234-1234-1234-123456789abc exposed"])
         assert "12345678" not in snap.top_gaps[0]
 
     def test_summary_truncated(self):
@@ -535,9 +530,7 @@ class TestComputeCommonGaps:
         assert result[0]["count"] == 3
 
     def test_top_n_limits(self):
-        snapshots = [
-            PostureSnapshot(top_gaps=[f"Gap {i}" for i in range(20)])
-        ]
+        snapshots = [PostureSnapshot(top_gaps=[f"Gap {i}" for i in range(20)])]
         result = compute_common_gaps(snapshots, top_n=5)
         assert len(result) == 5
 

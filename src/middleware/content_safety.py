@@ -24,6 +24,7 @@ logger = structlog.get_logger(__name__)
 
 # ── Severity Thresholds ────────────────────────────────────────────────
 
+
 class Severity(IntEnum):
     """Azure AI Content Safety severity levels (0–6)."""
 
@@ -54,6 +55,7 @@ SAFE_FALLBACK_OUTPUT = (
 
 # ── Content Safety Client ──────────────────────────────────────────────
 
+
 def _create_content_safety_client():
     """Create an Azure AI Content Safety client.
 
@@ -69,9 +71,7 @@ def _create_content_safety_client():
         if settings.azure_content_safety_key:
             from azure.core.credentials import AzureKeyCredential
 
-            return ContentSafetyClient(
-                endpoint, AzureKeyCredential(settings.azure_content_safety_key)
-            )
+            return ContentSafetyClient(endpoint, AzureKeyCredential(settings.azure_content_safety_key))
         else:
             from azure.identity import DefaultAzureCredential
 
@@ -82,6 +82,7 @@ def _create_content_safety_client():
 
 
 # ── Core Analysis ──────────────────────────────────────────────────────
+
 
 async def check_content_safety(
     text: str,
@@ -151,9 +152,7 @@ async def _check_with_service(
             if mapped in categories:
                 categories[mapped] = severity
 
-        blocked = [
-            cat for cat, sev in categories.items() if sev >= BLOCK_THRESHOLD
-        ]
+        blocked = [cat for cat, sev in categories.items() if sev >= BLOCK_THRESHOLD]
         is_safe = len(blocked) == 0
 
         reason = None
@@ -207,11 +206,17 @@ def _check_local_heuristics(
 
     # Very basic keyword heuristics for dev/test; real filtering uses the service
     hate_indicators = [
-        "kill all", "hate all", "death to", "exterminate",
+        "kill all",
+        "hate all",
+        "death to",
+        "exterminate",
     ]
     violence_indicators = [
-        "how to attack", "how to hack into", "destroy the",
-        "bomb", "weapon",
+        "how to attack",
+        "how to hack into",
+        "destroy the",
+        "bomb",
+        "weapon",
     ]
 
     if any(phrase in lower for phrase in hate_indicators):
@@ -219,9 +224,7 @@ def _check_local_heuristics(
     if any(phrase in lower for phrase in violence_indicators):
         categories["violence"] = Severity.MEDIUM
 
-    blocked = [
-        cat for cat, sev in categories.items() if sev >= BLOCK_THRESHOLD
-    ]
+    blocked = [cat for cat, sev in categories.items() if sev >= BLOCK_THRESHOLD]
     is_safe = len(blocked) == 0
     reason = f"Blocked categories: {', '.join(blocked)}" if not is_safe else None
 
@@ -255,6 +258,7 @@ def _safe_result(context: str = "") -> dict[str, Any]:
 
 
 # ── LLM I/O Filters ───────────────────────────────────────────────────
+
 
 async def filter_llm_input(user_input: str) -> dict[str, Any]:
     """Filter LLM input — checks both content safety and prompt injection.

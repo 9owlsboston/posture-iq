@@ -10,16 +10,13 @@ Validates:
 
 from __future__ import annotations
 
-import asyncio
 import json
-import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
 import structlog
 
 from src.middleware.tracing import (
-    _latest_secure_score,
     get_meter,
     get_tracer,
     record_assessment_duration,
@@ -31,7 +28,6 @@ from src.middleware.tracing import (
     trace_session,
     trace_tool_call,
 )
-
 
 # ── Tracer & Meter Initialization ────────────────────────
 
@@ -73,6 +69,7 @@ class TestTracingSetup:
             return original_import(name, *args, **kwargs)
 
         import builtins
+
         original_import = builtins.__import__
 
         with (
@@ -290,14 +287,16 @@ class TestCustomMetrics:
 
     def test_record_secure_score(self):
         record_secure_score(72.5)
-        from src.middleware.tracing import _latest_secure_score
-        assert _latest_secure_score == 72.5
+        from src.middleware import tracing
+
+        assert tracing._latest_secure_score == 72.5
 
     def test_record_secure_score_updates(self):
         record_secure_score(50.0)
         record_secure_score(80.0)
-        from src.middleware.tracing import _latest_secure_score
-        assert _latest_secure_score == 80.0
+        from src.middleware import tracing
+
+        assert tracing._latest_secure_score == 80.0
 
     def test_record_assessment_duration(self):
         # Should not raise, even without full setup
@@ -316,6 +315,7 @@ class TestCustomMetrics:
 
     def test_secure_score_callback(self):
         from src.middleware.tracing import _secure_score_callback
+
         record_secure_score(88.0)
         observations = _secure_score_callback(MagicMock())
         assert len(observations) == 1
@@ -330,20 +330,24 @@ class TestStructuredLogging:
 
     def test_logging_config_imports(self):
         from src.middleware.logging_config import setup_logging
+
         assert callable(setup_logging)
 
     def test_setup_logging_json_mode(self):
         from src.middleware.logging_config import setup_logging
+
         setup_logging(log_level="INFO", json_format=True)
         # Should not raise
 
     def test_setup_logging_console_mode(self):
         from src.middleware.logging_config import setup_logging
+
         setup_logging(log_level="DEBUG", json_format=False)
         # Should not raise
 
     def test_structlog_produces_json(self, capsys):
         from src.middleware.logging_config import setup_logging
+
         setup_logging(log_level="INFO", json_format=True)
 
         test_logger = structlog.get_logger("test.json_format")
@@ -368,6 +372,7 @@ class TestStructuredLogging:
 
     def test_pii_redacted_from_logs(self, capsys):
         from src.middleware.logging_config import setup_logging
+
         setup_logging(log_level="INFO", json_format=True)
 
         test_logger = structlog.get_logger("test.pii")
@@ -446,11 +451,13 @@ class TestDashboard:
 
     def test_dashboard_file_exists(self):
         from pathlib import Path
+
         dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "postureiq-dashboard.json"
         assert dashboard.exists(), "Dashboard JSON file missing"
 
     def test_dashboard_is_valid_json(self):
         from pathlib import Path
+
         dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "postureiq-dashboard.json"
         content = json.loads(dashboard.read_text())
         assert "items" in content
@@ -458,6 +465,7 @@ class TestDashboard:
 
     def test_dashboard_has_required_panels(self):
         from pathlib import Path
+
         dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "postureiq-dashboard.json"
         content = json.loads(dashboard.read_text())
         panel_names = [item.get("name", "") for item in content["items"]]
@@ -473,6 +481,7 @@ class TestDashboard:
 
     def test_dashboard_queries_use_correct_metric_names(self):
         from pathlib import Path
+
         dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "postureiq-dashboard.json"
         raw = dashboard.read_text()
 

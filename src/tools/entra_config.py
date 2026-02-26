@@ -15,7 +15,7 @@ Required scopes: Policy.Read.All, RoleManagement.Read.Directory,
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -44,12 +44,14 @@ GLOBAL_ADMIN_ROLE_ID = "62e90394-69f5-4237-9190-012177145e10"
 
 # ── Graph client factory ───────────────────────────────────────────────
 
+
 def _create_graph_client():
     """Delegate to the shared Graph client factory."""
     return create_graph_client("entra_config")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
+
 
 def _compute_status(pct: float) -> str:
     if pct >= GREEN_THRESHOLD:
@@ -60,6 +62,7 @@ def _compute_status(pct: float) -> str:
 
 
 # ── API parsers ────────────────────────────────────────────────────────
+
 
 def _parse_conditional_access(policies: list[Any]) -> dict[str, Any]:
     """Parse Conditional Access policies into a component result."""
@@ -150,24 +153,15 @@ def _parse_role_assignments(assignments: list[Any]) -> dict[str, Any]:
         }
 
     total = len(assignments)
-    global_admins = [
-        a for a in assignments
-        if getattr(a, "role_definition_id", None) == GLOBAL_ADMIN_ROLE_ID
-    ]
+    global_admins = [a for a in assignments if getattr(a, "role_definition_id", None) == GLOBAL_ADMIN_ROLE_ID]
 
     gaps: list[str] = []
     if len(global_admins) > 2:
-        gaps.append(
-            f"{len(global_admins)} permanent Global Admin assignments — should be ≤ 2"
-        )
+        gaps.append(f"{len(global_admins)} permanent Global Admin assignments — should be ≤ 2")
     if total > 10:
-        gaps.append(
-            f"{total} active role assignments — consider converting to eligible (JIT)"
-        )
+        gaps.append(f"{total} active role assignments — consider converting to eligible (JIT)")
 
-    pct = 100.0 if (len(global_admins) <= 2 and total <= 10) else (
-        50.0 if len(global_admins) <= 4 else 20.0
-    )
+    pct = 100.0 if (len(global_admins) <= 2 and total <= 10) else (50.0 if len(global_admins) <= 4 else 20.0)
 
     return {
         "status": _compute_status(pct),
@@ -220,6 +214,7 @@ def _parse_access_reviews(reviews: list[Any]) -> dict[str, Any]:
 
 
 # ── Mock fallback ──────────────────────────────────────────────────────
+
 
 def _generate_mock_response() -> dict[str, Any]:
     return {
@@ -288,12 +283,13 @@ def _generate_mock_response() -> dict[str, Any]:
             "12 risky users detected — review and remediate",
             "No access reviews configured",
         ],
-        "assessed_at": datetime.now(timezone.utc).isoformat(),
+        "assessed_at": datetime.now(UTC).isoformat(),
         "data_source": "mock",
     }
 
 
 # ── Main tool function ─────────────────────────────────────────────────
+
 
 @trace_tool_call("get_entra_config")
 async def get_entra_config() -> dict[str, Any]:
@@ -389,10 +385,16 @@ async def get_entra_config() -> dict[str, Any]:
         for c in components.values():
             for gap in c["gaps"]:
                 g_lower = gap.lower()
-                if any(kw in g_lower for kw in (
-                    "legacy auth", "global admin", "risky users",
-                    "no access reviews", "not blocked",
-                )):
+                if any(
+                    kw in g_lower
+                    for kw in (
+                        "legacy auth",
+                        "global admin",
+                        "risky users",
+                        "no access reviews",
+                        "not blocked",
+                    )
+                ):
                     critical_gaps.append(gap)
 
         # Compute overall — skip "unknown" components
@@ -410,7 +412,7 @@ async def get_entra_config() -> dict[str, Any]:
             "components": components,
             "total_gaps": total_gaps,
             "critical_gaps": critical_gaps,
-            "assessed_at": datetime.now(timezone.utc).isoformat(),
+            "assessed_at": datetime.now(UTC).isoformat(),
             "data_source": "graph_api",
         }
 

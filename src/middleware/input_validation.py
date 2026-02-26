@@ -8,8 +8,8 @@ This is the first line of defense — it runs BEFORE content safety checks.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import Any
 
 import structlog
 
@@ -19,32 +19,30 @@ logger = structlog.get_logger(__name__)
 # ── Configuration ──────────────────────────────────────────────────────
 
 MAX_QUERY_LENGTH = 5000  # characters
-MIN_QUERY_LENGTH = 3     # minimum meaningful query
-MAX_LINE_COUNT = 100     # prevent multi-line injection payloads
+MIN_QUERY_LENGTH = 3  # minimum meaningful query
+MAX_LINE_COUNT = 100  # prevent multi-line injection payloads
 
 # Characters allowed: letters, digits, punctuation, whitespace, common symbols
 # Block control characters, zero-width chars, and other adversarial inputs
 _ALLOWED_CHARS_PATTERN = (
-    r"^[\x20-\x7E"          # printable ASCII
-    r"\u00A0-\u024F"        # Latin Extended
-    r"\u2000-\u206F"        # General Punctuation
-    r"\u2010-\u2027"        # Dashes and quotation marks
-    r"\n\r\t"               # whitespace
+    r"^[\x20-\x7E"  # printable ASCII
+    r"\u00A0-\u024F"  # Latin Extended
+    r"\u2000-\u206F"  # General Punctuation
+    r"\u2010-\u2027"  # Dashes and quotation marks
+    r"\n\r\t"  # whitespace
     r"]*$"
 )
-
-import re
 
 _ALLOWED_RE = re.compile(_ALLOWED_CHARS_PATTERN)
 
 # Blocked character patterns (zero-width, RTL override, etc.)
 _BLOCKED_CHARS = re.compile(
-    r"[\u200B-\u200F"      # zero-width spaces / directional marks
-    r"\u202A-\u202E"       # directional overrides (LRE, RLE, etc.)
-    r"\u2060-\u2064"       # invisible operators
-    r"\uFEFF"              # BOM
-    r"\x00-\x08"           # null + control chars
-    r"\x0E-\x1F]"          # more control chars
+    r"[\u200B-\u200F"  # zero-width spaces / directional marks
+    r"\u202A-\u202E"  # directional overrides (LRE, RLE, etc.)
+    r"\u2060-\u2064"  # invisible operators
+    r"\uFEFF"  # BOM
+    r"\x00-\x08"  # null + control chars
+    r"\x0E-\x1F]"  # more control chars
 )
 
 

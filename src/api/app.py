@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -24,17 +24,16 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from src.agent.config import settings
+from src.middleware.audit_logger import (
+    AUDIT_READER_ROLES,
+    AuditLogger,
+    check_audit_access,
+)
 from src.middleware.auth import (
     UserContext,
     build_auth_url,
     exchange_code_for_tokens,
     get_current_user,
-    validate_token,
-)
-from src.middleware.audit_logger import (
-    AUDIT_READER_ROLES,
-    AuditLogger,
-    check_audit_access,
 )
 
 logger = structlog.get_logger(__name__)
@@ -47,6 +46,7 @@ app = FastAPI(
 
 
 # ── Response Models ────────────────────────────────────────────────────────
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -68,6 +68,7 @@ class VersionResponse(BaseModel):
 
 # ── Health Probes ──────────────────────────────────────────────────────────
 
+
 @app.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     """Liveness probe — returns 200 if the process is alive.
@@ -76,7 +77,7 @@ async def health_check() -> HealthResponse:
     """
     return HealthResponse(
         status="healthy",
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
 
@@ -113,7 +114,7 @@ async def readiness_check() -> ReadinessResponse:
     response = ReadinessResponse(
         status=status,
         checks=checks,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
     if failed:
@@ -308,6 +309,7 @@ async def auth_me(user: UserContext = Depends(get_current_user)) -> AuthMeRespon
 
 
 # ── Assessment Endpoint (protected) ───────────────────────────────────────
+
 
 @app.post("/assess")
 async def trigger_assessment(

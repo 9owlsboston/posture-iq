@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import functools
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import structlog
 from opentelemetry import metrics, trace
@@ -156,9 +157,7 @@ def record_remediation_steps(count: int) -> None:
 def record_content_safety_block(category: str = "unknown") -> None:
     """Increment the content safety blocked counter."""
     if _content_safety_blocked_counter is not None:
-        _content_safety_blocked_counter.add(
-            1, attributes={"postureiq.safety.category": category}
-        )
+        _content_safety_blocked_counter.add(1, attributes={"postureiq.safety.category": category})
     logger.warning("metric.content_safety.blocked", category=category)
 
 
@@ -297,16 +296,12 @@ def trace_llm_call(
                                 "total_tokens",
                                 prompt_tokens + completion_tokens,
                             )
-                            span.set_attribute(
-                                "postureiq.llm.prompt_tokens", prompt_tokens
-                            )
+                            span.set_attribute("postureiq.llm.prompt_tokens", prompt_tokens)
                             span.set_attribute(
                                 "postureiq.llm.completion_tokens",
                                 completion_tokens,
                             )
-                            span.set_attribute(
-                                "postureiq.llm.total_tokens", total_tokens
-                            )
+                            span.set_attribute("postureiq.llm.total_tokens", total_tokens)
 
                         # Record Content Safety filter result if present
                         safety_result = result.get("content_safety_result", "")

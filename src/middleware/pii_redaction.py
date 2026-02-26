@@ -20,23 +20,16 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # ── Regex patterns for PII detection ────────────────────────────────────
-_GUID_PATTERN = re.compile(
-    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
-)
+_GUID_PATTERN = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
 
-_EMAIL_PATTERN = re.compile(
-    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
-)
+_EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
 
 _UPN_PATTERN = re.compile(
     r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"  # UPNs look like emails
 )
 
-_IPV4_PATTERN = re.compile(
-    r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
-)
+_IPV4_PATTERN = re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b")
 
 _IPV6_PATTERN = re.compile(
     r"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b"
@@ -46,9 +39,7 @@ _IPV6_PATTERN = re.compile(
 
 # Display‐name pattern: "First Last" or "First M. Last" (2–4 word names)
 # Only applied via redact_display_name() or inside redact_dict(), not globally
-_DISPLAY_NAME_PATTERN = re.compile(
-    r"\b[A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b"
-)
+_DISPLAY_NAME_PATTERN = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b")
 
 
 def redact_pii(text: str) -> str:
@@ -112,11 +103,19 @@ def redact_dict(data: dict[str, Any], sensitive_keys: set[str] | None = None) ->
     """
     if sensitive_keys is None:
         sensitive_keys = {
-            "tenant_id", "tenantId",
-            "email", "mail", "userPrincipalName", "upn",
-            "displayName", "display_name",
-            "ipAddress", "ip_address",
-            "client_secret", "password", "token",
+            "tenant_id",
+            "tenantId",
+            "email",
+            "mail",
+            "userPrincipalName",
+            "upn",
+            "displayName",
+            "display_name",
+            "ipAddress",
+            "ip_address",
+            "client_secret",
+            "password",
+            "token",
         }
 
     # Keys whose values should be treated as display names
@@ -137,7 +136,8 @@ def redact_dict(data: dict[str, Any], sensitive_keys: set[str] | None = None) ->
             redacted[key] = redact_dict(value, sensitive_keys)
         elif isinstance(value, list):
             redacted[key] = [
-                redact_dict(item, sensitive_keys) if isinstance(item, dict)
+                redact_dict(item, sensitive_keys)
+                if isinstance(item, dict)
                 else (redact_pii(item) if isinstance(item, str) else item)
                 for item in value
             ]
@@ -148,6 +148,7 @@ def redact_dict(data: dict[str, Any], sensitive_keys: set[str] | None = None) ->
 
 
 # ── Re-hydration Support ───────────────────────────────────────────────
+
 
 def create_redaction_map(text: str) -> tuple[str, dict[str, str]]:
     """Redact PII and return a mapping from placeholder → original value.

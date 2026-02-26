@@ -16,7 +16,6 @@ Covers:
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
-from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -34,7 +33,6 @@ from src.middleware.audit_logger import (
     check_audit_access,
     verify_integrity,
 )
-
 
 # ========================================================================
 # SECTION 1: AuditEntry Immutability
@@ -673,7 +671,6 @@ class TestAuditQueryEndpoint:
     @pytest.mark.asyncio
     async def test_audit_logs_requires_admin_role(self):
         """Regular user (no admin role) gets 403."""
-        from unittest.mock import AsyncMock
 
         from httpx import ASGITransport, AsyncClient
 
@@ -692,7 +689,8 @@ class TestAuditQueryEndpoint:
         async def mock_get_current_user():
             return mock_user
 
-        app.dependency_overrides[__import__("src.middleware.auth", fromlist=["get_current_user"]).get_current_user] = mock_get_current_user
+        auth_mod = __import__("src.middleware.auth", fromlist=["get_current_user"])
+        app.dependency_overrides[auth_mod.get_current_user] = mock_get_current_user
 
         try:
             transport = ASGITransport(app=app)
