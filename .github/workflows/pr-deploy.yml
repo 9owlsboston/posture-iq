@@ -96,6 +96,7 @@ jobs:
         id: deploy
         uses: azure/arm-deploy@v2
         with:
+          scope: resourcegroup
           resourceGroupName: ${{ steps.meta.outputs.rg-name }}
           template: ./infra/main.bicep
           parameters: >-

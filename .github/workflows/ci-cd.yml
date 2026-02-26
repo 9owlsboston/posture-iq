@@ -190,6 +190,7 @@ jobs:
       - name: Deploy Bicep
         uses: azure/arm-deploy@v2
         with:
+          scope: resourcegroup
           resourceGroupName: ${{ env.RESOURCE_GROUP }}
           template: ./infra/main.bicep
           parameters: >-
