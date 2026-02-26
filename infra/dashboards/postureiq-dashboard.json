@@ -1,0 +1,172 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## PostureIQ — Security Posture Dashboard\n\nReal-time observability for the ME5 Security Posture Assessment Agent.\n\n---"
+      },
+      "name": "header"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Agent Tool Call Performance"
+      },
+      "name": "tool-calls-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Tool call duration (avg, p50, p95) over last 24 hours\ndependencies\n| where timestamp > ago(24h)\n| where name startswith 'tool.'\n| extend tool_name = tostring(customDimensions['postureiq.tool.name'])\n| summarize\n    avg_duration_ms = avg(duration),\n    p50_ms = percentile(duration, 50),\n    p95_ms = percentile(duration, 95),\n    call_count = count(),\n    error_count = countif(success == false)\n  by tool_name\n| order by call_count desc",
+        "size": 1,
+        "title": "Tool Call Performance (Last 24h)",
+        "timeContext": { "durationMs": 86400000 },
+        "queryType": 0,
+        "visualization": "table"
+      },
+      "name": "tool-call-performance"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Tool call timeline — trend over time\ndependencies\n| where timestamp > ago(24h)\n| where name startswith 'tool.'\n| extend tool_name = tostring(customDimensions['postureiq.tool.name'])\n| summarize call_count = count() by bin(timestamp, 1h), tool_name\n| render timechart",
+        "size": 0,
+        "title": "Tool Calls Over Time",
+        "timeContext": { "durationMs": 86400000 },
+        "queryType": 0,
+        "visualization": "timechart"
+      },
+      "name": "tool-call-timeline"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### LLM Call Metrics"
+      },
+      "name": "llm-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// LLM call token usage and latency\ndependencies\n| where timestamp > ago(24h)\n| where name startswith 'llm.'\n| extend\n    model = tostring(customDimensions['postureiq.llm.model']),\n    prompt_tokens = toint(customDimensions['postureiq.llm.prompt_tokens']),\n    completion_tokens = toint(customDimensions['postureiq.llm.completion_tokens']),\n    total_tokens = toint(customDimensions['postureiq.llm.total_tokens'])\n| summarize\n    avg_duration_ms = avg(duration),\n    avg_prompt_tokens = avg(prompt_tokens),\n    avg_completion_tokens = avg(completion_tokens),\n    total_calls = count(),\n    total_tokens_used = sum(total_tokens)\n  by model\n| order by total_calls desc",
+        "size": 1,
+        "title": "LLM Usage Summary (Last 24h)",
+        "timeContext": { "durationMs": 86400000 },
+        "queryType": 0,
+        "visualization": "table"
+      },
+      "name": "llm-usage"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Secure Score Tracking"
+      },
+      "name": "secure-score-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Secure score over time (from custom metric)\ncustomMetrics\n| where timestamp > ago(7d)\n| where name == 'postureiq.secure_score.current'\n| summarize avg_score = avg(value) by bin(timestamp, 1h)\n| render timechart",
+        "size": 0,
+        "title": "Secure Score Trend (Last 7 Days)",
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "visualization": "timechart"
+      },
+      "name": "secure-score-trend"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Content Safety & RAI"
+      },
+      "name": "safety-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Content Safety blocks\ncustomMetrics\n| where timestamp > ago(24h)\n| where name == 'postureiq.content_safety.blocked_count'\n| summarize total_blocks = sum(value) by bin(timestamp, 1h)\n| render barchart",
+        "size": 0,
+        "title": "Content Safety Blocks (Last 24h)",
+        "timeContext": { "durationMs": 86400000 },
+        "queryType": 0,
+        "visualization": "barchart"
+      },
+      "name": "safety-blocks"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Remediation steps generated\ncustomMetrics\n| where timestamp > ago(7d)\n| where name == 'postureiq.remediation.steps_generated'\n| summarize total_steps = sum(value) by bin(timestamp, 1d)\n| render columnchart",
+        "size": 0,
+        "title": "Remediation Steps Generated (Last 7 Days)",
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "visualization": "columnchart"
+      },
+      "name": "remediation-steps"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Session & Error Monitoring"
+      },
+      "name": "sessions-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Assessment sessions — duration and status\ndependencies\n| where timestamp > ago(24h)\n| where name == 'session'\n| extend\n    session_id = tostring(customDimensions['postureiq.session.id']),\n    status = tostring(customDimensions['postureiq.session.status'])\n| summarize\n    session_count = count(),\n    avg_duration_ms = avg(duration),\n    error_count = countif(status == 'error')\n  by bin(timestamp, 1h)\n| render timechart",
+        "size": 0,
+        "title": "Assessment Sessions (Last 24h)",
+        "timeContext": { "durationMs": 86400000 },
+        "queryType": 0,
+        "visualization": "timechart"
+      },
+      "name": "sessions-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Recent errors from agent\nexceptions\n| where timestamp > ago(24h)\n| where cloud_RoleName contains 'postureiq'\n| project timestamp, problemId, outerMessage, innermostMessage\n| order by timestamp desc\n| take 20",
+        "size": 1,
+        "title": "Recent Errors (Last 24h)",
+        "timeContext": { "durationMs": 86400000 },
+        "queryType": 0,
+        "visualization": "table"
+      },
+      "name": "recent-errors"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Audit Trail"
+      },
+      "name": "audit-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Audit trail — recent tool calls and interactions\ntraces\n| where timestamp > ago(24h)\n| where message startswith 'audit.'\n| extend\n    event_type = tostring(customDimensions['event']),\n    session_id = tostring(customDimensions['session_id']),\n    tool_name = tostring(customDimensions['tool_name'])\n| project timestamp, event_type, session_id, tool_name, message\n| order by timestamp desc\n| take 50",
+        "size": 1,
+        "title": "Audit Trail (Last 24h)",
+        "timeContext": { "durationMs": 86400000 },
+        "queryType": 0,
+        "visualization": "table"
+      },
+      "name": "audit-trail"
+    }
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

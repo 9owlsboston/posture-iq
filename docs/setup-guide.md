@@ -1,7 +1,71 @@
-# PostureIQ — Graph API Permission Setup Guide
+# PostureIQ — Azure Resource Provisioning & Graph API Setup Guide
 
-This guide documents the Microsoft Graph API permissions required by PostureIQ
-and how to configure them via Entra ID App Registration.
+This guide covers the full provisioning of PostureIQ's Azure environment and
+the Microsoft Graph API permissions required for security assessment.
+
+---
+
+## Quick Start (Automated)
+
+The fastest way to provision the complete dev environment:
+
+```bash
+# Login to Azure
+az login
+
+# Provision everything: resource group, Azure resources, App Registration
+./scripts/provision-dev.sh
+
+# To skip specific stages:
+./scripts/provision-dev.sh --skip-app-reg    # Skip Entra ID App Registration
+./scripts/provision-dev.sh --skip-infra      # Skip Azure resource deployment
+```
+
+This script handles:
+| Step | Resource | Description |
+|------|----------|-------------|
+| 1 | Resource Group (`rg-postureiq-dev`) | Container for all Azure resources |
+| 2 | Azure OpenAI (GPT-4o) | LLM reasoning & summarization |
+| 3 | Azure AI Content Safety | RAI content filtering |
+| 4 | Azure Application Insights | Distributed tracing & observability |
+| 5 | Azure Key Vault | Secrets management (Graph API credentials) |
+| 6 | Azure Container Apps | Deployment target (scale 0–5 replicas) |
+| 7 | Entra ID App Registration | Graph API access with least-privilege scopes |
+
+---
+
+## Manual Provisioning
+
+### Azure Resources (Bicep)
+
+To deploy infrastructure manually using the Bicep templates:
+
+```bash
+# Create resource group
+az group create --name rg-postureiq-dev --location eastus2 --tags project=postureiq environment=dev
+
+# Validate templates
+az deployment group validate \
+  --resource-group rg-postureiq-dev \
+  --template-file infra/main.bicep \
+  --parameters infra/parameters/dev.bicepparam
+
+# Deploy
+az deployment group create \
+  --resource-group rg-postureiq-dev \
+  --template-file infra/main.bicep \
+  --parameters infra/parameters/dev.bicepparam
+```
+
+### Infrastructure Modules
+
+| Module | File | Resources |
+|--------|------|-----------|
+| OpenAI | `infra/modules/openai.bicep` | Azure OpenAI account + GPT-4o deployment |
+| Content Safety | `infra/modules/content-safety.bicep` | Azure AI Content Safety (S0) |
+| App Insights | `infra/modules/app-insights.bicep` | Application Insights + Log Analytics workspace |
+| Key Vault | `infra/modules/keyvault.bicep` | Key Vault with RBAC authorization |
+| Container App | `infra/modules/container-app.bicep` | Container Apps Environment + App with managed identity |
 
 ---
 

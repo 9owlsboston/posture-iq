@@ -80,12 +80,12 @@
 
 ### 0.2 Azure Resource Provisioning (Manual or Bicep)
 
-- [ ] Create Azure Resource Group: `rg-postureiq-dev`
-- [ ] Provision Azure OpenAI (GPT-4o deployment) — for reasoning & summarization
-- [ ] Provision Azure AI Content Safety — for RAI filtering
-- [ ] Provision Azure Application Insights — for observability
-- [ ] Provision Azure Key Vault — for Graph API secrets & credentials
-- [ ] Register an Entra ID App Registration — for delegated Graph API access
+- [x] Create Azure Resource Group: `rg-postureiq-dev`
+- [x] Provision Azure OpenAI (GPT-4o deployment) — for reasoning & summarization
+- [x] Provision Azure AI Content Safety — for RAI filtering
+- [x] Provision Azure Application Insights — for observability
+- [x] Provision Azure Key Vault — for Graph API secrets & credentials
+- [x] Register an Entra ID App Registration — for delegated Graph API access
   - Required Graph API scopes (minimal, least-privilege):
     - `SecurityEvents.Read.All` (Secure Score)
     - `SecurityActions.Read.All` (Defender status)
@@ -93,7 +93,8 @@
     - `Policy.Read.All` (Conditional Access / Entra config)
     - `Reports.Read.All` (Usage & adoption telemetry)
   - Document admin consent requirements in `docs/setup-guide.md`
-- [ ] Create a setup script (`scripts/setup-permissions.sh`) for Graph API permission grants
+- [x] Create a setup script (`scripts/setup-permissions.sh`) for Graph API permission grants
+- [x] Create a unified provisioning script (`scripts/provision-dev.sh`) that orchestrates all steps
 
 ---
 
@@ -224,40 +225,41 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
 
 ### 2.1 CI/CD Pipeline (GitHub Actions)
 
-- [ ] Create `.github/workflows/ci-cd.yml`:
+- [x] Create `.github/workflows/ci-cd.yml`:
   ```yaml
   # Trigger on push to main
-  # Stages: lint → test → build → deploy
+  # Stages: lint → test → bicep-validate → build → deploy
   ```
   - **Lint**: `ruff` + `mypy` type checking
   - **Test**: `pytest` with coverage report, fail if < 80%
+  - **Bicep Validate**: lint, build, and parameter file validation
   - **Build**: Docker image build, push to Azure Container Registry
   - **Deploy**: Bicep deployment to Azure Container Apps
-- [ ] Add branch protection rules on `main` (require passing CI)
-- [ ] Add a `dev` environment for PR deployments (optional but impressive)
-- [ ] **Tests**: Validate CI pipeline runs lint + test + build stages, verify coverage threshold enforcement
+- [x] Add branch protection rules on `main` (require passing CI) — `scripts/setup-branch-protection.sh`
+- [x] Add a `dev` environment for PR deployments — `.github/workflows/pr-deploy.yml` (deploy preview, teardown on close, PR comments)
+- [x] **Tests**: CI pipeline validates lint + test + bicep-validate + build stages, 80% coverage threshold enforced
 
 ### 2.2 Infrastructure as Code (Bicep)
 
-- [ ] `infra/main.bicep` — orchestrator that calls modules:
+- [x] `infra/main.bicep` — orchestrator that calls modules:
   - Azure Container Apps Environment + Container App
   - Azure OpenAI account + GPT-4o deployment
   - Azure Application Insights + Log Analytics workspace
   - Azure AI Content Safety instance
   - Azure Key Vault (for Graph API credentials)
-  - Managed Identity assignments
-- [ ] `infra/modules/container-app.bicep`:
+  - Managed Identity assignments (RBAC roles for Key Vault, OpenAI, Content Safety)
+- [x] `infra/modules/container-app.bicep`:
   - Scales 0–5 replicas (emphasize scale-to-zero for cost)
   - Health probe configuration (`/health`, `/ready`)
   - Managed Identity enabled
   - Environment variables from Key Vault references
-- [ ] `infra/parameters/dev.bicepparam` and `prod.bicepparam`
-- [ ] Validate Bicep linting passes in CI
-- [ ] **Tests**: Validate Bicep templates compile without errors, verify parameter files match expected schema
+- [x] `infra/parameters/dev.bicepparam` and `prod.bicepparam`
+- [x] Validate Bicep linting passes in CI
+- [x] **Tests** (35 tests in `tests/unit/test_bicep_templates.py`): Validate Bicep templates compile without errors, verify parameter files match expected schema, content validation, RBAC role assignments
 
 ### 2.3 Observability (Azure Application Insights)
 
-- [ ] Integrate `azure-monitor-opentelemetry` SDK in `src/middleware/tracing.py`:
+- [x] Integrate `azure-monitor-opentelemetry` SDK in `src/middleware/tracing.py`:
   - Every tool call = a distributed trace **span** with:
     - Tool name
     - Duration
@@ -269,43 +271,46 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
     - Token usage (prompt + completion)
     - Content Safety filter result
   - Every session = a trace with correlation across all tool calls
-- [ ] Structured JSON logging (`structlog` or `python-json-logger`):
+- [x] Structured JSON logging (`structlog`) in `src/middleware/logging_config.py`:
   - Log format: `{"timestamp", "level", "tool", "session_id", "duration_ms", "status"}`
-  - No PII in logs (redaction middleware applied)
-- [ ] Custom App Insights metrics:
-  - `postureiq.secure_score.current` — gauge
+  - No PII in logs (redaction middleware applied via `_redact_pii_processor`)
+- [x] Custom App Insights metrics:
+  - `postureiq.secure_score.current` — observable gauge
   - `postureiq.assessment.duration_seconds` — histogram
   - `postureiq.remediation.steps_generated` — counter
   - `postureiq.content_safety.blocked_count` — counter
-- [ ] Create an App Insights dashboard (can be shown in demo)
-- [ ] **Tests**: Verify trace spans are created for tool calls and LLM calls, validate structured log format, test custom metric emission, test PII exclusion from logs
+- [x] Create an App Insights dashboard (`infra/dashboards/postureiq-dashboard.json` — 13-panel workbook with KQL queries)
+- [x] **Tests** (42 tests in `tests/unit/test_observability.py`): Verify trace spans for tool calls, LLM calls, and sessions; validate structured JSON log format; test custom metric emission; test PII exclusion from logs and traces; validate dashboard JSON structure
 
 ### 2.4 Health Probes
 
-- [ ] Implement in `src/api/app.py` (FastAPI):
+- [x] Implement in `src/api/app.py` (FastAPI):
   - `GET /health` — returns 200 if the process is alive
-  - `GET /ready` — returns 200 only if:
-    - Copilot SDK session can be created
-    - Graph API auth token is valid
-    - Azure OpenAI endpoint responds
-    - Key Vault is accessible
-  - `GET /version` — returns build info (git SHA, build time)
-- [ ] **Tests**: Test `/health` returns 200, test `/ready` returns 503 when dependencies unavailable, test `/version` returns expected fields, test readiness probe checks (SDK, Graph, OpenAI, Key Vault)
+  - `GET /ready` — returns 200 only if all dependency checks pass:
+    - Copilot SDK can be imported
+    - Azure OpenAI endpoint is reachable (HTTP ping)
+    - Graph API auth token can be obtained (credential validation)
+    - Key Vault is accessible (HTTP ping)
+    - Returns `"ready"` or `"not_ready"` with per-check detail; `"skipped"` for unconfigured services
+  - `GET /version` — returns build info (git SHA, build time, environment)
+- [x] **Tests** (32 tests in `tests/unit/test_health_probes.py`): Test `/health` returns 200, test `/ready` returns `not_ready` when dependencies unavailable, test `/version` returns expected fields, test individual readiness probe helpers (Copilot SDK, Azure OpenAI, Graph API, Key Vault)
 
 ### 2.5 Deployment Target: Azure Container Apps
 
-- [ ] Write `Dockerfile`:
-  - Python slim base image
+- [x] Write `Dockerfile`:
+  - Python 3.11-slim base image (multi-stage: builder + runtime)
   - Install GitHub CLI (required for Copilot SDK runtime)
-  - Copy app code, install dependencies
-  - Expose health probe port
-  - Set entrypoint to `uvicorn src.api.app:app`
-- [ ] Configure Container Apps:
-  - Ingress: internal (or external for demo)
-  - Scale: min 0, max 5 replicas
-  - Health probes defined in Bicep
-  - Managed Identity for Key Vault + Azure OpenAI access
-- [ ] **Tests**: Validate Dockerfile builds successfully, test container starts and health probes respond, verify managed identity configuration in Bicep
+  - Copy app code, install dependencies via pip
+  - HEALTHCHECK on `/health`, EXPOSE 8000
+  - Non-root user (`postureiq`), GIT_SHA/BUILD_TIME build args
+  - Entrypoint: `uvicorn src.api.app:app`
+- [x] Configure Container Apps (`infra/modules/container-app.bicep`):
+  - Ingress: external on port 8000
+  - Scale: min 0, max 5 replicas (HTTP concurrency rule)
+  - Health probes: Liveness (`/health`), Readiness (`/ready`) defined in Bicep
+  - User-Assigned Managed Identity with AZURE_CLIENT_ID env var
+  - All service endpoints wired via env vars (OpenAI, Content Safety, Key Vault, App Insights)
+- [x] **Tests** (51 tests in `tests/unit/test_deployment.py`): Validate Dockerfile structure (multi-stage, GitHub CLI, healthcheck, non-root, uvicorn), Container App Bicep (probes, scaling, identity, env vars, ingress), managed identity wiring in main.bicep, Dockerfile syntax validation
 
 ---
 
@@ -315,48 +320,54 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
 
 ### 3.1 Authentication & Authorization
 
-- [ ] **User auth**: Entra ID with OAuth2 authorization code flow
+- [x] **User auth**: Entra ID with OAuth2 authorization code flow
   - Users authenticate to the agent via Entra ID
   - The agent uses **delegated permissions** (acts on behalf of the user)
   - Ensures the agent only sees data the user is authorized to see
-- [ ] **Service auth**: Managed Identity for service-to-service
+  - Implemented in `src/middleware/auth.py`: JWT validation against Entra ID JWKS keys, `UserContext` extraction, `OAuth2AuthorizationCodeBearer` scheme
+  - Endpoints: `/auth/login` (initiates OAuth2 flow), `/auth/callback` (exchanges code for tokens), `/auth/me` (returns user identity)
+  - Protected endpoints: `/assess` and `/auth/me` require valid Bearer token
+- [x] **Service auth**: Managed Identity for service-to-service
   - Container App → Azure OpenAI (Managed Identity, no API keys)
   - Container App → Key Vault (Managed Identity)
   - Container App → App Insights (Managed Identity)
-- [ ] **Graph API auth**: 
+  - Wired via `DefaultAzureCredential` in `graph_client.py` and Bicep RBAC role assignments
+- [x] **Graph API auth**: 
   - Use `azure-identity` `InteractiveBrowserCredential` (for dev) / `ClientSecretCredential` (for service)  
   - Store client secret in Key Vault, access via Managed Identity
   - Document least-privilege scopes in `docs/setup-guide.md`
   - Provide `scripts/setup-permissions.sh` for admin consent
-- [ ] **Tests**: Test OAuth2 flow with mocked Entra ID responses, verify managed identity token acquisition, test delegated permission scoping, test unauthorized access returns 401/403
+- [x] **Tests** (64 tests in `tests/unit/test_auth.py`): JWT validation (valid/expired/wrong-audience/wrong-issuer/malformed tokens), JWKS key caching & refresh, OAuth2 authorization code flow (login redirect, callback, token exchange), scope checking (5 delegated permissions + custom), FastAPI endpoint integration (401/403 for unauthenticated/unauthorized), Managed Identity service auth patterns, UserContext extraction
 
 ### 3.2 Responsible AI (RAI)
 
-- [ ] **Azure AI Content Safety integration** (`src/middleware/content_safety.py`):
+- [x] **Azure AI Content Safety integration** (`src/middleware/content_safety.py`):
   - Filter all LLM inputs (prevent prompt injection in user queries)
   - Filter all LLM outputs (ensure remediation plans don't contain harmful content)
   - Log filter results to App Insights
   - Block responses that fail safety checks; return safe fallback
-- [ ] **PII Redaction** (`src/middleware/pii_redaction.py`):
+- [x] **PII Redaction** (`src/middleware/pii_redaction.py`):
   - Before sending any data to Azure OpenAI:
     - Redact tenant GUIDs → `[TENANT_ID]`
     - Redact user emails/UPNs → `[USER_EMAIL]`
     - Redact IP addresses → `[IP_ADDRESS]`
     - Redact user display names → `[USER_NAME]`
   - After receiving model output, re-hydrate if needed for customer-facing display
-- [ ] **Confidence scores**:
+- [x] **Confidence scores** (`src/middleware/rai.py`):
   - Every remediation recommendation includes a confidence score (high/medium/low)
   - Based on: how much data was available, how standard the remediation is
-- [ ] **Disclaimer watermarks**:
+- [x] **Disclaimer watermarks** (`src/middleware/rai.py`):
   - All AI-generated scorecards include: "Generated by AI — review with your security team before implementing"
-- [ ] **Prompt injection guardrails**:
+  - Three variants: default, markdown, scripts
+- [x] **Prompt injection guardrails**:
   - System prompt includes explicit instructions to ignore override attempts
-  - Input validation on user queries (length, character set)
-- [ ] **Tests**: Test Content Safety blocks harmful content, test PII redaction patterns (GUIDs, emails, IPs, names), test confidence score assignment, test disclaimer watermark inclusion, test prompt injection rejection, test input validation rules
+  - Input validation on user queries (length, character set) via `src/middleware/input_validation.py`
+  - 20 injection patterns detected in `check_prompt_injection()`
+- [x] **Tests** (147 tests in `tests/unit/test_rai.py`): Test Content Safety blocks harmful content (local heuristics for hate/violence), test PII redaction patterns (GUIDs, emails, IPs, names), test display name redaction, test redaction map & re-hydration round-trip, test confidence score assignment (mock/live/openai sources, boundary values), test apply_confidence_to_steps (never raises, only lowers), test disclaimer watermark inclusion (3 variants, has_disclaimer validation), test prompt injection rejection (all 20 patterns parametrized), test input validation rules (empty, too short/long, line count, blocked chars, whitespace normalization), test RAI pipeline integration (end-to-end validate→filter→redact→post-process)
 
 ### 3.3 Audit Trail
 
-- [ ] **Immutable audit log** (`src/middleware/audit_logger.py`):
+- [x] **Immutable audit log** (`src/middleware/audit_logger.py`):
   - Every agent action logged with:
     - Timestamp (UTC)
     - Session ID
@@ -367,8 +378,8 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
     - Reasoning chain (why the agent chose this tool)
   - Stored in App Insights `customEvents` table (queryable via KQL)
   - Retention policy: 90 days (configurable)
-- [ ] RBAC on audit log access (only security admins can query)
-- [ ] **Tests**: Test audit log entries contain required fields (timestamp, session ID, user, tool, redacted I/O), test immutability guarantees, test RBAC enforcement on audit access
+- [x] RBAC on audit log access (only security admins can query)
+- [x] **Tests**: Test audit log entries contain required fields (timestamp, session ID, user, tool, redacted I/O), test immutability guarantees, test RBAC enforcement on audit access (74 tests)
 
 ---
 

@@ -27,6 +27,12 @@ param keyVaultUrl string
 @description('Environment name')
 param environment string
 
+@description('User-Assigned Managed Identity resource ID')
+param managedIdentityId string
+
+@description('User-Assigned Managed Identity client ID (for AZURE_CLIENT_ID env var)')
+param managedIdentityClientId string
+
 // ── Container Apps Environment ────────────────────────────
 resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: '${name}-env'
@@ -36,12 +42,6 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// ── User-Assigned Managed Identity ────────────────────────
-resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: '${name}-identity'
-  location: location
-}
-
 // ── Container App ─────────────────────────────────────────
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
@@ -49,7 +49,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${managedIdentity.id}': {}
+      '${managedIdentityId}': {}
     }
   }
   properties: {
@@ -76,6 +76,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AZURE_CONTENT_SAFETY_ENDPOINT', value: contentSafetyEndpoint }
             { name: 'AZURE_KEYVAULT_URL', value: keyVaultUrl }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
+            { name: 'AZURE_CLIENT_ID', value: managedIdentityClientId }
             { name: 'PORT', value: '8000' }
           ]
           probes: [

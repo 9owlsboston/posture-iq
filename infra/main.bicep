@@ -1,12 +1,12 @@
 // PostureIQ — Main Bicep Template
 //
 // Orchestrates all Azure resources required for PostureIQ:
-//   - Azure Container Apps (deployment target)
-//   - Azure OpenAI (LLM reasoning)
+//   - User-Assigned Managed Identity (service auth — deployed first for RBAC)
+//   - Azure OpenAI (LLM reasoning) + RBAC for managed identity
+//   - Azure AI Content Safety (RAI filtering) + RBAC for managed identity
 //   - Azure Application Insights + Log Analytics (observability)
-//   - Azure AI Content Safety (RAI filtering)
-//   - Azure Key Vault (secrets management)
-//   - User-Assigned Managed Identity (service auth)
+//   - Azure Key Vault (secrets management) + RBAC for managed identity
+//   - Azure Container Apps (deployment target)
 
 targetScope = 'resourceGroup'
 
@@ -28,6 +28,12 @@ param containerImage string = ''
 var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
 var resourcePrefix = '${projectName}-${environment}'
 
+// ── Managed Identity (deployed early for RBAC wiring) ─────
+resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: '${resourcePrefix}-app-identity'
+  location: location
+}
+
 // ── Modules ───────────────────────────────────────────────
 
 module appInsights 'modules/app-insights.bicep' = {
@@ -43,6 +49,7 @@ module contentSafety 'modules/content-safety.bicep' = {
   params: {
     name: '${resourcePrefix}-cs-${uniqueSuffix}'
     location: location
+    managedIdentityPrincipalId: managedIdentity.properties.principalId
   }
 }
 
@@ -51,6 +58,7 @@ module keyVault 'modules/keyvault.bicep' = {
   params: {
     name: '${resourcePrefix}-kv-${uniqueSuffix}'
     location: location
+    managedIdentityPrincipalId: managedIdentity.properties.principalId
   }
 }
 
@@ -59,6 +67,7 @@ module openai 'modules/openai.bicep' = {
   params: {
     name: '${resourcePrefix}-oai-${uniqueSuffix}'
     location: location
+    managedIdentityPrincipalId: managedIdentity.properties.principalId
   }
 }
 
@@ -73,6 +82,8 @@ module containerApp 'modules/container-app.bicep' = {
     contentSafetyEndpoint: contentSafety.outputs.endpoint
     keyVaultUrl: keyVault.outputs.vaultUri
     environment: environment
+    managedIdentityId: managedIdentity.id
+    managedIdentityClientId: managedIdentity.properties.clientId
   }
 }
 
@@ -80,3 +91,5 @@ module containerApp 'modules/container-app.bicep' = {
 output containerAppUrl string = containerApp.outputs.fqdn
 output appInsightsName string = appInsights.outputs.name
 output keyVaultName string = keyVault.outputs.name
+output managedIdentityName string = managedIdentity.name
+output managedIdentityClientId string = managedIdentity.properties.clientId

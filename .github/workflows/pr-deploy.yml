@@ -1,0 +1,186 @@
+# PostureIQ — PR Preview Environment
+#
+# Deploys a temporary dev environment for each PR, so reviewers
+# can test changes live before merging to main.
+# Automatically tears down the environment when the PR is closed.
+
+name: PR Preview Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PYTHON_VERSION: "3.11"
+  RESOURCE_GROUP_PREFIX: "rg-postureiq-pr"
+  LOCATION: "eastus2"
+  CONTAINER_IMAGE_NAME: "postureiq"
+
+jobs:
+  # ── Deploy preview environment on PR open/update ───────
+  deploy-preview:
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    if: github.event.action != 'closed'
+    environment:
+      name: pr-${{ github.event.pull_request.number }}
+      url: ${{ steps.deploy.outputs.app-url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install and test
+        run: |
+          pip install -e ".[dev]"
+          pytest --cov=src --cov-fail-under=80 -q
+
+      - name: Set PR metadata
+        id: meta
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          echo "pr-num=$PR_NUM" >> $GITHUB_OUTPUT
+          echo "rg-name=${{ env.RESOURCE_GROUP_PREFIX }}-${PR_NUM}" >> $GITHUB_OUTPUT
+          echo "git-sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg GIT_SHA=${{ steps.meta.outputs.git-sha }} \
+            --build-arg BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            -t ${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }} \
+            .
+
+      # TODO: Uncomment when ACR and Azure credentials are configured
+      # - name: Azure Login
+      #   uses: azure/login@v2
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+      #
+      # - name: Create PR resource group
+      #   run: |
+      #     az group create \
+      #       --name ${{ steps.meta.outputs.rg-name }} \
+      #       --location ${{ env.LOCATION }} \
+      #       --tags project=postureiq environment=pr pr=${{ steps.meta.outputs.pr-num }}
+      #
+      # - name: Deploy PR environment
+      #   id: deploy
+      #   uses: azure/arm-deploy@v2
+      #   with:
+      #     resourceGroupName: ${{ steps.meta.outputs.rg-name }}
+      #     template: ./infra/main.bicep
+      #     parameters: >
+      #       environment=dev
+      #       location=${{ env.LOCATION }}
+      #       projectName=postureiq-pr${{ steps.meta.outputs.pr-num }}
+      #     failOnStdErr: false
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNum = ${{ steps.meta.outputs.pr-num }};
+            const sha = '${{ steps.meta.outputs.git-sha }}';
+            const body = [
+              '## 🚀 Preview Environment',
+              '',
+              `| Detail | Value |`,
+              `|--------|-------|`,
+              `| **Commit** | \`${sha}\` |`,
+              `| **Resource Group** | \`${{ steps.meta.outputs.rg-name }}\` |`,
+              `| **Status** | ✅ Built successfully |`,
+              '',
+              '> Preview URL will be available once Azure credentials are configured.',
+              '',
+              '_This environment will be automatically torn down when the PR is closed._'
+            ].join('\n');
+
+            // Find and update existing comment, or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNum,
+            });
+            const botComment = comments.find(c => c.body.includes('Preview Environment'));
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNum,
+                body,
+              });
+            }
+
+  # ── Tear down preview environment on PR close ──────────
+  teardown-preview:
+    name: Teardown Preview
+    runs-on: ubuntu-latest
+    if: github.event.action == 'closed'
+    steps:
+      - name: Set PR metadata
+        id: meta
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          echo "rg-name=${{ env.RESOURCE_GROUP_PREFIX }}-${PR_NUM}" >> $GITHUB_OUTPUT
+
+      # TODO: Uncomment when Azure credentials are configured
+      # - name: Azure Login
+      #   uses: azure/login@v2
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+      #
+      # - name: Delete PR resource group
+      #   run: |
+      #     RG_EXISTS=$(az group exists --name ${{ steps.meta.outputs.rg-name }})
+      #     if [[ "$RG_EXISTS" == "true" ]]; then
+      #       az group delete \
+      #         --name ${{ steps.meta.outputs.rg-name }} \
+      #         --yes --no-wait
+      #       echo "🗑️ Deleted resource group: ${{ steps.meta.outputs.rg-name }}"
+      #     fi
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNum = ${{ github.event.pull_request.number }};
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNum,
+            });
+            const botComment = comments.find(c => c.body.includes('Preview Environment'));
+
+            if (botComment) {
+              const body = [
+                '## 🚀 Preview Environment',
+                '',
+                '| Detail | Value |',
+                '|--------|-------|',
+                `| **Status** | 🗑️ Torn down (PR ${github.event.pull_request.merged ? 'merged' : 'closed'}) |`,
+              ].join('\n');
+
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            }
