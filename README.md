@@ -16,6 +16,7 @@ PostureIQ is a conversational AI agent that assesses an organization's Microsoft
 | `get_entra_config` | Assess Conditional Access, PIM, Identity Protection, access reviews |
 | `generate_remediation_plan` | AI-generated prioritized remediation with PowerShell scripts |
 | `create_adoption_scorecard` | Executive summary scorecard with RAG status per workload |
+| `get_project479_playbook` | Foundry IQ playbook retrieval for gap-to-remediation mapping |
 
 ## Architecture
 
@@ -58,12 +59,28 @@ python -m src.agent.main
 ### Deploy to Azure
 
 ```bash
-# Deploy infrastructure
+# 1. Set up OIDC Workload Identity Federation (one-time)
+chmod +x scripts/setup-oidc.sh
+./scripts/setup-oidc.sh
+
+# 2. Provision infrastructure (creates ACR, Container App, OpenAI, etc.)
+az group create --name rg-postureiq-dev --location eastus2
 az deployment group create \
   --resource-group rg-postureiq-dev \
   --template-file infra/main.bicep \
   --parameters infra/parameters/dev.bicepparam
+
+# 3. Push to main — CI/CD automatically builds, pushes to ACR, and deploys
+git push origin main
 ```
+
+**CI/CD Pipeline (fully automated on push to main):**
+```
+lint → test (80% coverage) → bicep-validate → build & push to ACR → deploy to Container Apps
+```
+
+**Authentication:** OIDC Workload Identity Federation — zero stored secrets.  
+Only 3 non-sensitive GitHub secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
 
 ## Development
 
@@ -79,6 +96,10 @@ pytest --cov=src
 
 # Format
 ruff format src/ tests/
+
+# Pre-flight check (run before commit/push)
+./scripts/preflight.sh          # Full check (tests, lint, Bicep, YAML, Docker)
+./scripts/preflight.sh --quick  # Skip Docker build
 ```
 
 ## Project Structure
@@ -87,15 +108,15 @@ ruff format src/ tests/
 posture-iq/
 ├── src/
 │   ├── agent/          # Agent host, config, system prompt
-│   ├── tools/          # 6 assessment tools (Graph API wrappers)
-│   ├── middleware/      # Tracing, content safety, PII redaction, audit
+│   ├── tools/          # 7 assessment tools (Graph API + Foundry IQ wrappers)
+│   ├── middleware/      # Tracing, content safety, PII redaction, audit, auth
 │   └── api/            # FastAPI health probes and HTTP endpoints
-├── infra/              # Bicep IaC templates
-├── tests/              # Unit and integration tests
+├── infra/              # Bicep IaC templates (ACR, Container Apps, OpenAI, etc.)
+├── tests/              # Unit (1093) and integration (41) tests
 ├── docs/               # Architecture, setup guide, SDK feedback
-├── scripts/            # Setup and utility scripts
+├── scripts/            # Setup (permissions, OIDC, provisioning), cleanup, pre-flight
 ├── Dockerfile          # Multi-stage container build
-└── .github/workflows/  # CI/CD pipeline
+└── .github/workflows/  # CI/CD pipeline (OIDC auth, ACR push, Bicep deploy)
 ```
 
 ## Security & RAI
@@ -113,7 +134,7 @@ posture-iq/
 |----------|--------|-------------------|
 | Enterprise Value | 35 | Project 479 acceleration, Secure Score improvement |
 | Azure Integration | 25 | OpenAI + Content Safety + App Insights + Key Vault + Container Apps |
-| Operational Readiness | 15 | CI/CD, health probes, IaC, auto-scaling |
+| Operational Readiness | 15 | CI/CD (OIDC), health probes, IaC, ACR, auto-scaling |
 | Security & RAI | 15 | Content Safety, PII redaction, audit logs, prompt injection |
 | Storytelling | 15 | 3-min demo: score → gaps → plan → scorecard |
 | Bonus: Foundry IQ | 15 | Azure AI Foundry integration |

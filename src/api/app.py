@@ -148,8 +148,10 @@ async def _check_azure_openai() -> str:
         url = endpoint.rstrip("/") + "/openai/deployments?api-version=2024-02-01"
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(url)
-        # 401/403 = reachable but auth needed (expected with Managed Identity)
-        if resp.status_code in (200, 401, 403):
+        # Any HTTP response means the endpoint is reachable.
+        # 401/403 = auth required (expected with Managed Identity)
+        # 404 = path not found but server responding
+        if resp.status_code in (200, 401, 403, 404):
             return "ok"
         return f"http_{resp.status_code}"
     except httpx.ConnectError:

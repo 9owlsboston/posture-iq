@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # ── Azure Key Vault ───────────────────────────────────
     azure_keyvault_url: str = ""
 
+    # ── Foundry IQ ────────────────────────────────────────
+    foundry_iq_endpoint: str = ""
+
+    # ── Microsoft Fabric ──────────────────────────────────
+    fabric_lakehouse_endpoint: str = ""
+
     # ── App Settings ──────────────────────────────────────
     log_level: str = "INFO"
     environment: str = "development"

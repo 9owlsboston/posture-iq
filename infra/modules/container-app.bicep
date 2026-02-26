@@ -33,6 +33,9 @@ param managedIdentityId string
 @description('User-Assigned Managed Identity client ID (for AZURE_CLIENT_ID env var)')
 param managedIdentityClientId string
 
+@description('ACR login server (e.g., postureiqdevacrabcdef.azurecr.io)')
+param acrLoginServer string = ''
+
 // ── Container Apps Environment ────────────────────────────
 resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: '${name}-env'
@@ -60,6 +63,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 8000
         transport: 'http'
       }
+      registries: !empty(acrLoginServer) ? [
+        {
+          server: acrLoginServer
+          identity: managedIdentityId
+        }
+      ] : []
     }
     template: {
       containers: [

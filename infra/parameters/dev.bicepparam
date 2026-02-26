@@ -2,6 +2,6 @@
 using '../main.bicep'
 
 param environment = 'dev'
-param location = 'eastus2'
+param location = 'centralus'
 param projectName = 'postureiq'
 param containerImage = '' // Will be set by CI/CD pipeline

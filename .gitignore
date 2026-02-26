@@ -44,3 +44,4 @@ Thumbs.db
 
 # Ruff
 .ruff_cache/
+infra/parameters/*.json

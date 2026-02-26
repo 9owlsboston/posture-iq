@@ -3,6 +3,8 @@
 # Deploys a temporary dev environment for each PR, so reviewers
 # can test changes live before merging to main.
 # Automatically tears down the environment when the PR is closed.
+#
+# Authentication: OIDC Workload Identity Federation (zero stored secrets)
 
 name: PR Preview Deploy
 
@@ -14,6 +16,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write  # Required for OIDC token request
 
 env:
   PYTHON_VERSION: "3.11"
@@ -59,30 +62,48 @@ jobs:
             -t ${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }} \
             .
 
-      # TODO: Uncomment when ACR and Azure credentials are configured
-      # - name: Azure Login
-      #   uses: azure/login@v2
-      #   with:
-      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
-      #
-      # - name: Create PR resource group
-      #   run: |
-      #     az group create \
-      #       --name ${{ steps.meta.outputs.rg-name }} \
-      #       --location ${{ env.LOCATION }} \
-      #       --tags project=postureiq environment=pr pr=${{ steps.meta.outputs.pr-num }}
-      #
-      # - name: Deploy PR environment
-      #   id: deploy
-      #   uses: azure/arm-deploy@v2
-      #   with:
-      #     resourceGroupName: ${{ steps.meta.outputs.rg-name }}
-      #     template: ./infra/main.bicep
-      #     parameters: >
-      #       environment=dev
-      #       location=${{ env.LOCATION }}
-      #       projectName=postureiq-pr${{ steps.meta.outputs.pr-num }}
-      #     failOnStdErr: false
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create PR resource group
+        run: |
+          az group create \
+            --name ${{ steps.meta.outputs.rg-name }} \
+            --location ${{ env.LOCATION }} \
+            --tags project=postureiq environment=pr pr=${{ steps.meta.outputs.pr-num }}
+
+      - name: Get ACR login server
+        id: acr
+        run: |
+          LOGIN_SERVER=$(az acr list --resource-group rg-postureiq-dev \
+            --query "[0].loginServer" -o tsv)
+          echo "LOGIN_SERVER=$LOGIN_SERVER" >> $GITHUB_OUTPUT
+
+      - name: Login to ACR (OIDC)
+        run: az acr login --name $(echo "${{ steps.acr.outputs.LOGIN_SERVER }}" | cut -d. -f1)
+
+      - name: Tag and push PR image
+        run: |
+          docker tag ${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }} \
+            ${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }}
+          docker push ${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }}
+
+      - name: Deploy PR environment
+        id: deploy
+        uses: azure/arm-deploy@v2
+        with:
+          resourceGroupName: ${{ steps.meta.outputs.rg-name }}
+          template: ./infra/main.bicep
+          parameters: >-
+            environment=dev
+            location=${{ env.LOCATION }}
+            projectName=postureiq-pr${{ steps.meta.outputs.pr-num }}
+            containerImage=${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }}
+          failOnStdErr: false
 
       - name: Comment on PR
         uses: actions/github-script@v7
@@ -140,21 +161,22 @@ jobs:
           PR_NUM=${{ github.event.pull_request.number }}
           echo "rg-name=${{ env.RESOURCE_GROUP_PREFIX }}-${PR_NUM}" >> $GITHUB_OUTPUT
 
-      # TODO: Uncomment when Azure credentials are configured
-      # - name: Azure Login
-      #   uses: azure/login@v2
-      #   with:
-      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
-      #
-      # - name: Delete PR resource group
-      #   run: |
-      #     RG_EXISTS=$(az group exists --name ${{ steps.meta.outputs.rg-name }})
-      #     if [[ "$RG_EXISTS" == "true" ]]; then
-      #       az group delete \
-      #         --name ${{ steps.meta.outputs.rg-name }} \
-      #         --yes --no-wait
-      #       echo "🗑️ Deleted resource group: ${{ steps.meta.outputs.rg-name }}"
-      #     fi
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete PR resource group
+        run: |
+          RG_EXISTS=$(az group exists --name ${{ steps.meta.outputs.rg-name }})
+          if [[ "$RG_EXISTS" == "true" ]]; then
+            az group delete \
+              --name ${{ steps.meta.outputs.rg-name }} \
+              --yes --no-wait
+            echo "🗑️ Deleted resource group: ${{ steps.meta.outputs.rg-name }}"
+          fi
 
       - name: Comment on PR
         uses: actions/github-script@v7

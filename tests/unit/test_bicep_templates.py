@@ -19,6 +19,7 @@ PARAMS_DIR = INFRA_DIR / "parameters"
 EXPECTED_MODULES = [
     "app-insights.bicep",
     "container-app.bicep",
+    "container-registry.bicep",
     "content-safety.bicep",
     "keyvault.bicep",
     "openai.bicep",

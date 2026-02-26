@@ -17,9 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 COPY requirements.txt* ./
 
-# Install Python dependencies
+# Copy source for package resolution by setuptools
+COPY src/ ./src/
+
+# Install Python dependencies (non-editable for production)
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir .
+    && pip install --no-cache-dir .
 
 # ── Stage 2: Runtime ───────────────────────────────────────
 FROM python:3.11-slim AS runtime

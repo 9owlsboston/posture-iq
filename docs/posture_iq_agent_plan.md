@@ -213,9 +213,9 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
 - [x] Test PII redaction catches tenant IDs, emails, UPNs (11 tests in `tests/unit/test_pii_redaction.py`)
 - [x] Test content safety integration rejects harmful outputs (8 tests in `tests/unit/test_content_safety.py`)
 - [x] Test secure score tool output structure (68 tests in `tests/unit/test_secure_score.py`)
-- [ ] Integration tests: end-to-end agent flow with mocked Graph API + mocked LLM
+- [x] Integration tests: end-to-end agent flow with mocked Graph API + mocked LLM (41 tests in `tests/integration/test_e2e_smoke.py`)
 
-> **Total: 491 tests passing** (75 agent host + 68 secure score + 78 defender + 85 purview + 54 entra + 53 remediation + 60 scorecard + 8 content safety + 11 PII redaction = 492 collected, 491 passing)
+> **Total: 1134 tests passing** (75 agent host + 68 secure score + 78 defender + 85 purview + 54 entra + 53 remediation + 60 scorecard + 8 content safety + 11 PII redaction + 76 Foundry IQ + 81 Fabric + 147 RAI + 64 auth + 74 audit + 42 observability + 32 health probes + 51 deployment + 35 Bicep + 41 integration = 1134 passing)
 
 ---
 
@@ -233,8 +233,16 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - **Lint**: `ruff` + `mypy` type checking
   - **Test**: `pytest` with coverage report, fail if < 80%
   - **Bicep Validate**: lint, build, and parameter file validation
-  - **Build**: Docker image build, push to Azure Container Registry
-  - **Deploy**: Bicep deployment to Azure Container Apps
+  - **Build**: Docker image build, push to Azure Container Registry (ACR)
+  - **Deploy**: Bicep deployment to Azure Container Apps with tagged image from ACR
+- [x] ACR push fully wired — CI/CD pushes `latest` + git-SHA-tagged images on every push to `main`
+- [x] Deploy stage passes `containerImage` parameter to Bicep, rolling update on Container Apps
+- [x] **OIDC Workload Identity Federation** — zero stored secrets:
+  - Federated credentials on App Registration trust GitHub Actions OIDC issuer
+  - 3 subjects: `refs/heads/main`, `pull_request`, `environment:production`
+  - Only non-sensitive IDs stored as GitHub secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`)
+  - ACR admin account disabled — CI pushes via `az acr login` with OIDC token
+  - Setup script: `scripts/setup-oidc.sh`
 - [x] Add branch protection rules on `main` (require passing CI) — `scripts/setup-branch-protection.sh`
 - [x] Add a `dev` environment for PR deployments — `.github/workflows/pr-deploy.yml` (deploy preview, teardown on close, PR comments)
 - [x] **Tests**: CI pipeline validates lint + test + bicep-validate + build stages, 80% coverage threshold enforced
@@ -242,12 +250,13 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
 ### 2.2 Infrastructure as Code (Bicep)
 
 - [x] `infra/main.bicep` — orchestrator that calls modules:
-  - Azure Container Apps Environment + Container App
+  - Azure Container Registry (image store — ACR, OIDC push via AcrPush role, managed identity pull via AcrPull role, admin disabled)
+  - Azure Container Apps Environment + Container App (ACR registry pull via managed identity)
   - Azure OpenAI account + GPT-4o deployment
   - Azure Application Insights + Log Analytics workspace
   - Azure AI Content Safety instance
   - Azure Key Vault (for Graph API credentials)
-  - Managed Identity assignments (RBAC roles for Key Vault, OpenAI, Content Safety)
+  - Managed Identity assignments (RBAC roles for Key Vault, OpenAI, Content Safety, ACR)
 - [x] `infra/modules/container-app.bicep`:
   - Scales 0–5 replicas (emphasize scale-to-zero for cost)
   - Health probe configuration (`/health`, `/ready`)
@@ -331,10 +340,17 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - Container App → Azure OpenAI (Managed Identity, no API keys)
   - Container App → Key Vault (Managed Identity)
   - Container App → App Insights (Managed Identity)
+  - Container App → ACR (AcrPull role via Managed Identity — no admin credentials)
   - Wired via `DefaultAzureCredential` in `graph_client.py` and Bicep RBAC role assignments
+- [x] **CI/CD auth**: OIDC Workload Identity Federation (zero secrets)
+  - GitHub Actions authenticates to Azure via short-lived OIDC tokens
+  - No stored credentials — only non-sensitive IDs (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`)
+  - ACR admin account disabled — CI pushes via `az acr login` with OIDC token (AcrPush role)
+  - See Section 2.1 for federated credential subjects
 - [x] **Graph API auth**: 
-  - Use `azure-identity` `InteractiveBrowserCredential` (for dev) / `ClientSecretCredential` (for service)  
-  - Store client secret in Key Vault, access via Managed Identity
+  - Use `azure-identity` `InteractiveBrowserCredential` (for dev) / `ClientSecretCredential` (for Graph API OAuth2 token exchange)  
+  - Client secret stored in Key Vault, accessed via Managed Identity in production (not in env vars)
+  - This is separate from CI/CD auth — Graph API requires a client secret for the OAuth2 authorization code flow
   - Document least-privilege scopes in `docs/setup-guide.md`
   - Provide `scripts/setup-permissions.sh` for admin consent
 - [x] **Tests** (64 tests in `tests/unit/test_auth.py`): JWT validation (valid/expired/wrong-audience/wrong-issuer/malformed tokens), JWKS key caching & refresh, OAuth2 authorization code flow (login redirect, callback, token exchange), scope checking (5 delegated permissions + custom), FastAPI endpoint integration (401/403 for unauthenticated/unauthorized), Managed Identity service auth patterns, UserContext extraction
@@ -389,25 +405,25 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
 
 ### 4.1 Foundry IQ Integration (Agent Context)
 
-- [ ] Pull **Project 479 playbooks** from Foundry IQ as agent context:
+- [x] Pull **Project 479 playbooks** from Foundry IQ as agent context:
   - ME5 Get to Green standard playbook
   - Offer catalog (which Project 479 offers to recommend based on gaps)
   - Customer onboarding checklists
-- [ ] Inject playbook summaries into the system prompt or as tool context
-- [ ] Tool: `get_project479_playbook` — retrieves relevant playbook section based on identified gaps
-- [ ] **Tests**: Test playbook retrieval with mocked Foundry IQ responses, verify context injection into system prompt, test gap-to-playbook mapping
+- [x] Inject playbook summaries into the system prompt or as tool context
+- [x] Tool: `get_project479_playbook` — retrieves relevant playbook section based on identified gaps
+- [x] **Tests**: Test playbook retrieval with mocked Foundry IQ responses, verify context injection into system prompt, test gap-to-playbook mapping (76 tests)
 
 ### 4.2 Fabric Integration (Telemetry Push)
 
-- [ ] Push security posture snapshots to a **Fabric lakehouse**:
+- [x] Push security posture snapshots to a **Fabric lakehouse**:
   - After each assessment, write a row to the lakehouse:
     - Tenant ID (hashed), assessment timestamp, secure score, per-workload scores, gap count, estimated days to green
   - Enables longitudinal dashboards showing posture improvement over time
-- [ ] Create a simple Power BI dashboard template showing:
+- [x] Create a simple Power BI dashboard template showing:
   - Secure score trend across assessed tenants
   - Most common gaps (aggregated, anonymized)
   - Average time-to-green
-- [ ] **Tests**: Test lakehouse write with mocked Fabric API, verify snapshot schema (hashed tenant ID, scores, gaps), test data anonymization
+- [x] **Tests**: Test lakehouse write with mocked Fabric API, verify snapshot schema (hashed tenant ID, scores, gaps), test data anonymization (81 tests)
 
 ---
 

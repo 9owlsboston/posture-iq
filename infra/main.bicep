@@ -2,6 +2,7 @@
 //
 // Orchestrates all Azure resources required for PostureIQ:
 //   - User-Assigned Managed Identity (service auth — deployed first for RBAC)
+//   - Azure Container Registry (image store — OIDC push, managed identity pull)
 //   - Azure OpenAI (LLM reasoning) + RBAC for managed identity
 //   - Azure AI Content Safety (RAI filtering) + RBAC for managed identity
 //   - Azure Application Insights + Log Analytics (observability)
@@ -24,6 +25,9 @@ param projectName string = 'postureiq'
 @description('Container image to deploy (e.g., myacr.azurecr.io/postureiq:latest)')
 param containerImage string = ''
 
+@description('Principal ID of the CI/CD service principal (for AcrPush RBAC via OIDC)')
+param cicdPrincipalId string = ''
+
 // ── Variables ─────────────────────────────────────────────
 var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
 var resourcePrefix = '${projectName}-${environment}'
@@ -35,6 +39,17 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 }
 
 // ── Modules ───────────────────────────────────────────────
+
+module containerRegistry 'modules/container-registry.bicep' = {
+  name: 'containerRegistryDeployment'
+  params: {
+    name: '${projectName}${environment}acr${uniqueSuffix}'  // ACR names must be alphanumeric
+    location: location
+    sku: environment == 'prod' ? 'Standard' : 'Basic'
+    pullIdentityPrincipalId: managedIdentity.properties.principalId
+    pushIdentityPrincipalId: cicdPrincipalId
+  }
+}
 
 module appInsights 'modules/app-insights.bicep' = {
   name: 'appInsightsDeployment'
@@ -84,6 +99,7 @@ module containerApp 'modules/container-app.bicep' = {
     environment: environment
     managedIdentityId: managedIdentity.id
     managedIdentityClientId: managedIdentity.properties.clientId
+    acrLoginServer: containerRegistry.outputs.loginServer
   }
 }
 
@@ -93,3 +109,5 @@ output appInsightsName string = appInsights.outputs.name
 output keyVaultName string = keyVault.outputs.name
 output managedIdentityName string = managedIdentity.name
 output managedIdentityClientId string = managedIdentity.properties.clientId
+output acrLoginServer string = containerRegistry.outputs.loginServer
+output acrName string = containerRegistry.outputs.name

@@ -248,10 +248,11 @@ class TestToolsRegistry:
         "get_entra_config",
         "generate_remediation_plan",
         "create_adoption_scorecard",
+        "get_project479_playbook",
     ]
 
-    def test_exactly_six_tools(self):
-        assert len(TOOLS) == 6
+    def test_exactly_seven_tools(self):
+        assert len(TOOLS) == 7
 
     def test_all_expected_tools_present(self):
         tool_names = [t.name for t in TOOLS]

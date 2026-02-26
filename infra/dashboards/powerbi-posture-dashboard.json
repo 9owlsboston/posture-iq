@@ -1,0 +1,144 @@
+{
+  "$schema": "http://powerbi.com/product/schema#basic",
+  "version": "1.0.0",
+  "name": "PostureIQ — ME5 Security Posture Dashboard",
+  "description": "Longitudinal dashboard showing ME5 security posture trends across assessed tenants. Powered by PostureIQ Fabric lakehouse telemetry.",
+  "dataSource": {
+    "type": "fabric_lakehouse",
+    "table": "posture_snapshots",
+    "schema": {
+      "snapshot_id": { "type": "string", "description": "Unique snapshot identifier (UUID)" },
+      "schema_version": { "type": "string", "description": "Schema version string" },
+      "tenant_id_hash": { "type": "string", "description": "SHA-256 hashed tenant identifier (anonymised)" },
+      "timestamp": { "type": "datetime", "description": "Assessment timestamp (UTC ISO-8601)" },
+      "secure_score_current": { "type": "number", "description": "Current Microsoft Secure Score" },
+      "secure_score_max": { "type": "number", "description": "Maximum possible Secure Score" },
+      "secure_score_percentage": { "type": "number", "description": "Score as percentage (0-100)" },
+      "workload_scores": { "type": "object", "description": "Per-workload coverage percentages" },
+      "gap_count": { "type": "integer", "description": "Total number of identified gaps" },
+      "estimated_days_to_green": { "type": "integer", "description": "Estimated days to reach green status" },
+      "top_gaps": { "type": "array", "description": "Top anonymised gap descriptions" },
+      "assessment_summary": { "type": "string", "description": "Brief assessment summary" }
+    }
+  },
+  "pages": [
+    {
+      "name": "Secure Score Trend",
+      "description": "Track Secure Score improvement over time across assessed tenants.",
+      "visuals": [
+        {
+          "type": "lineChart",
+          "title": "Secure Score Trend (All Tenants)",
+          "description": "Line chart showing secure score percentage over time, one line per tenant (anonymised).",
+          "xAxis": { "field": "timestamp", "label": "Assessment Date" },
+          "yAxis": { "field": "secure_score_percentage", "label": "Secure Score (%)" },
+          "legend": { "field": "tenant_id_hash", "label": "Tenant (Hashed)" },
+          "filters": [
+            { "field": "timestamp", "type": "dateRange", "defaultLast": "90 days" }
+          ]
+        },
+        {
+          "type": "card",
+          "title": "Average Secure Score",
+          "measure": "AVERAGE(secure_score_percentage)",
+          "format": "0.0%"
+        },
+        {
+          "type": "card",
+          "title": "Total Assessments",
+          "measure": "COUNT(snapshot_id)",
+          "format": "#,##0"
+        },
+        {
+          "type": "card",
+          "title": "Unique Tenants Assessed",
+          "measure": "DISTINCTCOUNT(tenant_id_hash)",
+          "format": "#,##0"
+        }
+      ]
+    },
+    {
+      "name": "Most Common Gaps",
+      "description": "Aggregated, anonymised view of the most frequent security gaps across all tenants.",
+      "visuals": [
+        {
+          "type": "barChart",
+          "title": "Top 10 Most Common Gaps",
+          "description": "Horizontal bar chart showing gap frequency across all assessments.",
+          "xAxis": { "field": "gap_count_per_type", "label": "Occurrences" },
+          "yAxis": { "field": "gap_description", "label": "Gap" },
+          "dataTransform": {
+            "type": "unnest_and_count",
+            "sourceField": "top_gaps",
+            "topN": 10
+          }
+        },
+        {
+          "type": "treemap",
+          "title": "Gap Distribution by Workload",
+          "description": "Treemap showing gap volume by workload area.",
+          "category": { "field": "workload_area", "label": "Workload" },
+          "size": { "field": "gap_count", "label": "Gaps" }
+        }
+      ]
+    },
+    {
+      "name": "Time to Green",
+      "description": "Average time-to-green metrics and progress tracking.",
+      "visuals": [
+        {
+          "type": "gauge",
+          "title": "Average Days to Green",
+          "measure": "AVERAGE(estimated_days_to_green)",
+          "min": 0,
+          "max": 180,
+          "target": 30,
+          "format": "#,##0",
+          "thresholds": {
+            "green": { "max": 30 },
+            "yellow": { "max": 90 },
+            "red": { "max": 180 }
+          }
+        },
+        {
+          "type": "lineChart",
+          "title": "Days to Green — Trend Over Time",
+          "description": "Shows whether tenants are converging toward green status over successive assessments.",
+          "xAxis": { "field": "timestamp", "label": "Assessment Date" },
+          "yAxis": { "field": "estimated_days_to_green", "label": "Est. Days to Green" },
+          "legend": { "field": "tenant_id_hash", "label": "Tenant (Hashed)" }
+        },
+        {
+          "type": "table",
+          "title": "Latest Assessment per Tenant",
+          "columns": [
+            { "field": "tenant_id_hash", "label": "Tenant (Hashed)", "width": 200 },
+            { "field": "timestamp", "label": "Last Assessed", "width": 150 },
+            { "field": "secure_score_percentage", "label": "Score (%)", "width": 80 },
+            { "field": "gap_count", "label": "Gaps", "width": 60 },
+            { "field": "estimated_days_to_green", "label": "Days to Green", "width": 100 }
+          ],
+          "dataTransform": {
+            "type": "latest_per_group",
+            "groupBy": "tenant_id_hash",
+            "orderBy": "timestamp",
+            "order": "desc"
+          }
+        }
+      ]
+    }
+  ],
+  "theme": {
+    "primary": "#0078D4",
+    "secondary": "#50E6FF",
+    "success": "#13A10E",
+    "warning": "#FCE100",
+    "danger": "#D13438",
+    "background": "#F5F5F5",
+    "font": "Segoe UI"
+  },
+  "refreshSchedule": {
+    "frequency": "daily",
+    "time": "06:00 UTC"
+  }
+}

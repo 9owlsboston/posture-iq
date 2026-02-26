@@ -37,6 +37,7 @@ from src.middleware.tracing import setup_tracing
 from src.tools.adoption_scorecard import create_adoption_scorecard
 from src.tools.defender_coverage import assess_defender_coverage
 from src.tools.entra_config import get_entra_config
+from src.tools.foundry_playbook import get_project479_playbook
 from src.tools.purview_policies import check_purview_policies
 from src.tools.remediation_plan import generate_remediation_plan
 from src.tools.secure_score import query_secure_score
@@ -89,6 +90,25 @@ async def _handle_adoption_scorecard(invocation: ToolInvocation) -> ToolResult:
     args = invocation.get("arguments") or {}
     assessment_context = args.get("assessment_context", "{}")
     result = await create_adoption_scorecard(assessment_context=assessment_context)
+    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+
+
+async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
+    """Adapter: get_project479_playbook → ToolResult."""
+    args = invocation.get("arguments") or {}
+    gaps_raw = args.get("gaps", [])
+    workload_areas_raw = args.get("workload_areas", [])
+    # Ensure lists (the SDK may pass JSON strings)
+    gaps = json.loads(gaps_raw) if isinstance(gaps_raw, str) else gaps_raw
+    workload_areas = (
+        json.loads(workload_areas_raw)
+        if isinstance(workload_areas_raw, str)
+        else workload_areas_raw
+    )
+    result = await get_project479_playbook(
+        gaps=gaps or None,
+        workload_areas=workload_areas or None,
+    )
     return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
 
 
@@ -204,6 +224,41 @@ TOOLS: list[Tool] = [
                 },
             },
             "required": ["assessment_context"],
+        },
+    ),
+    Tool(
+        name="get_project479_playbook",
+        description=(
+            "Retrieve Project 479 Get-to-Green playbooks from Foundry IQ. "
+            "Given identified security gaps or workload area keys, returns "
+            "step-by-step remediation playbooks, recommended Project 479 offers "
+            "(workshops, engagements), and customer onboarding checklists. "
+            "Use this AFTER identifying gaps to enrich remediation plans with "
+            "Project 479 offer recommendations."
+        ),
+        handler=_handle_foundry_playbook,
+        parameters={
+            "type": "object",
+            "properties": {
+                "gaps": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "List of gap descriptions from assessment tools. "
+                        "The tool maps these to workload areas automatically."
+                    ),
+                },
+                "workload_areas": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Explicit workload area keys (e.g. defender_endpoint, "
+                        "purview_dlp, entra_conditional_access). Takes precedence "
+                        "over gap-based mapping."
+                    ),
+                },
+            },
+            "required": [],
         },
     ),
 ]
