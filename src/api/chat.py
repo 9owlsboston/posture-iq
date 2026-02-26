@@ -138,12 +138,16 @@ def _classify_intent(message: str) -> list[str]:
 def _format_secure_score(data: dict[str, Any]) -> str:
     lines = ["## 📊 Microsoft Secure Score\n"]
     lines.append(f"**Current Score**: {data.get('current_score', 'N/A')} / {data.get('max_score', 'N/A')}")
-    pct = data.get("percentage")
+    pct = data.get("score_percentage") or data.get("percentage")
     if pct is not None:
         icon = "🟢" if pct >= 80 else ("🟡" if pct >= 60 else "🔴")
         lines.append(f"**Percentage**: {icon} {pct:.0f}%")
-    trend = data.get("trend")
-    if trend:
+    # trend_30d is a list of {date, score, max_score} dicts
+    trend = data.get("trend_30d") or data.get("trend")
+    if isinstance(trend, list) and len(trend) >= 2:
+        delta = round(trend[0].get("score", 0) - trend[-1].get("score", 0), 1)
+        lines.append(f"**30-day Trend**: {'+' if delta > 0 else ''}{delta} points")
+    elif isinstance(trend, (int, float)) and trend:
         lines.append(f"**30-day Trend**: {'+' if trend > 0 else ''}{trend} points")
     cats = data.get("categories", {})
     if cats:
@@ -151,16 +155,21 @@ def _format_secure_score(data: dict[str, Any]) -> str:
         lines.append("| Category | Score | Max |")
         lines.append("| --- | --- | --- |")
         for name, info in cats.items():
-            lines.append(f"| {name} | {info.get('score', '?')} | {info.get('max', '?')} |")
-    comp = data.get("comparison")
-    if comp:
+            lines.append(f"| {name} | {info.get('score', '?')} | {info.get('max_score', info.get('max', '?'))} |")
+    # industry_comparison is a dict with tenant_score, industry_avg, delta, basis
+    comp = data.get("industry_comparison") or data.get("comparison")
+    if isinstance(comp, dict):
+        avg = comp.get("industry_avg", "?")
+        delta = comp.get("delta", "?")
+        lines.append(f"\n**Industry Comparison**: avg {avg}, delta {'+' if isinstance(delta, (int, float)) and delta > 0 else ''}{delta}")
+    elif isinstance(comp, str) and comp:
         lines.append(f"\n**Industry Comparison**: {comp}")
     return "\n".join(lines)
 
 
 def _format_defender(data: dict[str, Any]) -> str:
     lines = ["## 🛡️ Defender Coverage Assessment\n"]
-    overall = data.get("overall_coverage")
+    overall = data.get("overall_coverage_pct") or data.get("overall_coverage")
     if overall is not None:
         icon = "🟢" if overall >= 80 else ("🟡" if overall >= 60 else "🔴")
         lines.append(f"**Overall Coverage**: {icon} {overall:.0f}%\n")
@@ -169,12 +178,12 @@ def _format_defender(data: dict[str, Any]) -> str:
         lines.append("| Workload | Coverage | Status |")
         lines.append("| --- | --- | --- |")
         for wl, info in workloads.items():
-            cov = info.get("coverage", 0)
+            cov = info.get("coverage_pct") or info.get("coverage", 0)
             status = "🟢" if cov >= 80 else ("🟡" if cov >= 60 else "🔴")
             lines.append(f"| {wl} | {cov}% | {status} |")
-    gaps = data.get("gaps", [])
+    gaps = data.get("critical_gaps") or data.get("gaps", [])
     if gaps:
-        lines.append("\n### Gaps Identified\n")
+        lines.append("\n### Critical Gaps\n")
         for g in gaps[:10]:
             lines.append(f"- {g}")
     return "\n".join(lines)
@@ -182,16 +191,26 @@ def _format_defender(data: dict[str, Any]) -> str:
 
 def _format_purview(data: dict[str, Any]) -> str:
     lines = ["## 📋 Purview Policy Assessment\n"]
-    policies = data.get("policies", {})
-    for policy_type, info in policies.items():
-        status = info.get("status", "unknown")
-        icon = "✅" if status == "active" else ("⚠️" if status == "partial" else "❌")
-        lines.append(f"- **{policy_type}**: {icon} {status}")
-        if info.get("count"):
-            lines.append(f"  - Count: {info['count']}")
-    gaps = data.get("gaps", [])
+    overall = data.get("overall_coverage_pct")
+    if overall is not None:
+        icon = "🟢" if overall >= 70 else ("🟡" if overall >= 40 else "🔴")
+        lines.append(f"**Overall Coverage**: {icon} {overall:.0f}%\n")
+    # Tool returns "components" dict, not "policies"
+    components = data.get("components") or data.get("policies", {})
+    if components:
+        lines.append("| Component | Status | Gaps |")
+        lines.append("| --- | --- | --- |")
+        for name, info in components.items():
+            status = info.get("status", "unknown")
+            icon = "🟢" if status == "green" else ("🟡" if status == "yellow" else "🔴")
+            gap_list = info.get("gaps", [])
+            lines.append(f"| {name} | {icon} {status} | {len(gap_list)} |")
+            for g in gap_list:
+                lines.append(f"  - {g}")
+    # Tool returns "critical_gaps", not "gaps"
+    gaps = data.get("critical_gaps") or data.get("gaps", [])
     if gaps:
-        lines.append("\n### Gaps\n")
+        lines.append("\n### Critical Gaps\n")
         for g in gaps[:10]:
             lines.append(f"- {g}")
     return "\n".join(lines)
@@ -199,17 +218,26 @@ def _format_purview(data: dict[str, Any]) -> str:
 
 def _format_entra(data: dict[str, Any]) -> str:
     lines = ["## 🔐 Entra ID P2 Configuration\n"]
-    config = data.get("configuration", data)
-    for section, info in config.items():
-        if isinstance(info, dict):
-            status = info.get("status", info.get("enabled", "unknown"))
-            icon = "✅" if status in (True, "enabled", "configured") else "⚠️"
-            lines.append(f"- **{section}**: {icon} {status}")
-        else:
-            lines.append(f"- **{section}**: {info}")
-    risks = data.get("risk_flags", [])
+    overall = data.get("overall_coverage_pct")
+    if overall is not None:
+        icon = "🟢" if overall >= 70 else ("🟡" if overall >= 40 else "🔴")
+        lines.append(f"**Overall Coverage**: {icon} {overall:.0f}%\n")
+    # Tool returns "components", not "configuration"
+    config = data.get("components") or data.get("configuration", {})
+    if config:
+        for section, info in config.items():
+            if isinstance(info, dict):
+                status = info.get("status", info.get("enabled", "unknown"))
+                icon = "✅" if status in (True, "enabled", "configured", "green") else (
+                    "🟡" if status == "yellow" else "⚠️"
+                )
+                lines.append(f"- **{section}**: {icon} {status}")
+                for g in info.get("gaps", []):
+                    lines.append(f"  - {g}")
+    # Tool returns "critical_gaps", not "risk_flags"
+    risks = data.get("critical_gaps") or data.get("risk_flags", [])
     if risks:
-        lines.append("\n### ⚠️ Risk Flags\n")
+        lines.append("\n### ⚠️ Critical Gaps\n")
         for r in risks:
             lines.append(f"- 🚨 {r}")
     return "\n".join(lines)
@@ -217,20 +245,28 @@ def _format_entra(data: dict[str, Any]) -> str:
 
 def _format_remediation(data: dict[str, Any]) -> str:
     lines = ["## 📝 Remediation Plan\n"]
+    ttg = data.get("estimated_days_to_green") or data.get("time_to_green")
+    if ttg:
+        lines.append(f"**Estimated Days to Green**: {ttg}\n")
+    improvement = data.get("estimated_score_improvement")
+    if improvement:
+        lines.append(f"**Estimated Score Improvement**: +{improvement} points\n")
     steps = data.get("steps", [])
     for i, step in enumerate(steps, 1):
         pri = step.get("priority", "P2")
         icon = "🔴" if pri == "P0" else ("🟡" if pri == "P1" else "🟢")
-        lines.append(f"### {icon} {pri} — Step {i}: {step.get('description', 'N/A')}\n")
-        if step.get("impact"):
-            lines.append(f"- **Score Impact**: +{step['impact']} points")
+        title = step.get("title") or step.get("description", "N/A")
+        lines.append(f"### {icon} {pri} — Step {i}: {title}\n")
+        desc = step.get("description", "")
+        if desc and desc != title:
+            lines.append(f"{desc}\n")
+        impact = step.get("impact_on_score") or step.get("impact")
+        if impact:
+            lines.append(f"- **Score Impact**: +{impact} points")
         if step.get("effort"):
             lines.append(f"- **Effort**: {step['effort']}")
         if step.get("script"):
             lines.append(f"\n```powershell\n{step['script']}\n```\n")
-    ttg = data.get("time_to_green")
-    if ttg:
-        lines.append(f"\n**Estimated Time to Green**: {ttg}")
     lines.append("\n> ⚠️ *Generated by AI — review with your security team before implementing.*")
     return "\n".join(lines)
 
