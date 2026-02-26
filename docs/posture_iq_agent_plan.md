@@ -13,8 +13,8 @@
 
 ### 0.1 Repository & Dev Environment
 
-- [ ] Create GitHub repo `posture-iq`
-- [ ] Initialize Python project structure:
+- [x] Create GitHub repo `posture-iq`
+- [x] Initialize Python project structure:
   ```
   posture-iq/
   ├── src/
@@ -66,7 +66,7 @@
   ├── requirements.txt
   └── README.md
   ```
-- [ ] Set up Python virtual environment with dependencies:
+- [x] Set up Python virtual environment with dependencies:
   - `copilot-sdk` (GitHub Copilot SDK)
   - `azure-identity` (Entra ID auth)
   - `msgraph-sdk` (Microsoft Graph API)
@@ -75,8 +75,8 @@
   - `azure-monitor-opentelemetry` (App Insights distributed tracing)
   - `fastapi` + `uvicorn` (health probes API)
   - `pytest`, `pytest-asyncio` (testing)
-- [ ] Configure `.env.example` with required environment variables
-- [ ] **Start `docs/sdk-feedback.md`** — log every friction point from day 1
+- [x] Configure `.env.example` with required environment variables
+- [x] **Start `docs/sdk-feedback.md`** — log every friction point from day 1
 
 ### 0.2 Azure Resource Provisioning (Manual or Bicep)
 
@@ -101,79 +101,95 @@
 
 ### 1.1 Agent Host Setup (Copilot SDK)
 
-- [ ] Implement `src/agent/main.py` — Copilot SDK client initialization:
+- [x] Implement `src/agent/main.py` — Copilot SDK client initialization:
   - Import SDK, create `CopilotClient`
   - Register all 6 tools (see 1.2)
   - Set system prompt (see 1.3)
   - Create session and handle multi-turn conversation loop
-- [ ] Implement session lifecycle management (create, maintain, close)
-- [ ] Wire up streaming responses for real-time UX
+- [x] Implement session lifecycle management (create, maintain, close)
+- [x] Wire up streaming responses for real-time UX
+- [x] **Tests** (`tests/unit/test_agent_host.py` — 75 tests):
+  - [x] Adapter handler tests (all 6 tools): valid args, missing args, empty args, error propagation
+  - [x] TOOLS registry validation: count, names, descriptions, handler callability, JSON Schema params
+  - [x] PostureIQAgent lifecycle: start/stop client, create/resume/close session, configuration
+  - [x] send_message: success, timeout, session errors, no-session guard
+  - [x] send_message_streaming: event subscription, no-session guard
+  - [x] Session event handler: message deltas, tool execution events, errors, unknown events
+  - [x] Response text extraction: content field, message fallback, empty/missing content
+  - [x] System prompt integration: content injected into session config, replace mode
+  - [x] TypedDict access patterns validated (dict access, not attribute access)
 
 ### 1.2 Tool Implementations (6 tools — the agent's "hands")
 
 Each tool wraps Microsoft Graph Security API calls and returns structured data for the runtime to reason over.
 
 #### Tool 1: `query_secure_score`
-- [ ] Call Graph API: `GET /security/secureScores`
-- [ ] Parse and return:
+- [x] Call Graph API: `GET /security/secureScores`
+- [x] Parse and return:
   - Current secure score (numerical)
   - Score breakdown by category (Identity, Data, Device, Apps, Infrastructure)
   - Trend data (last 30 days)
   - Comparison to avg tenant in same industry
-- [ ] Add App Insights trace span for this tool call
+- [x] Add App Insights trace span for this tool call
+- [x] **Tests** (68 tests in `tests/unit/test_secure_score.py`): Mock Graph API responses, verify parsed output structure, error handling, trace span creation
 
 #### Tool 2: `assess_defender_coverage`
-- [ ] Query M365 Defender deployment status:
+- [x] Query M365 Defender deployment status:
   - Defender for Endpoint: onboarded device count vs total
   - Defender for Office 365: enabled policies (Safe Links, Safe Attachments)
   - Defender for Identity: sensor coverage
   - Defender for Cloud Apps: connected apps count
-- [ ] Return coverage percentage per workload + gap list
-- [ ] Add App Insights trace span
+- [x] Return coverage percentage per workload + gap list
+- [x] Add App Insights trace span
+- [x] **Tests** (78 tests in `tests/unit/test_defender_coverage.py`): Mock Defender API responses, verify coverage calculations, gap detection, trace span creation
 
 #### Tool 3: `check_purview_policies`
-- [ ] Query Information Protection & Compliance policies:
+- [x] Query Information Protection & Compliance policies:
   - DLP policies: count, status (active/test/disabled), scope
   - Sensitivity labels: published labels, auto-labeling rules
   - Retention policies: coverage across Exchange, SharePoint, OneDrive, Teams
   - Insider Risk Management: policy status
-- [ ] Return adoption status with specific gaps identified
-- [ ] Add App Insights trace span
+- [x] Return adoption status with specific gaps identified
+- [x] Add App Insights trace span
+- [x] **Tests** (85 tests in `tests/unit/test_purview_policies.py`): Mock Purview API responses, verify policy status parsing, gap identification, trace span creation
 
 #### Tool 4: `get_entra_config`
-- [ ] Query Entra ID P2 security configuration:
+- [x] Query Entra ID P2 security configuration:
   - Conditional Access policies: count, named locations, MFA enforcement
   - PIM (Privileged Identity Management): active assignments vs eligible
   - Identity Protection: risk policies (sign-in risk, user risk) — enabled or not
   - Access Reviews: configured or not
   - SSO app registrations count
-- [ ] Return config assessment with risk flags
-- [ ] Add App Insights trace span
+- [x] Return config assessment with risk flags
+- [x] Add App Insights trace span
+- [x] **Tests** (54 tests in `tests/unit/test_entra_config.py`): Mock Entra ID API responses, verify config assessment, risk flag logic, trace span creation
 
 #### Tool 5: `generate_remediation_plan`
-- [ ] Takes output from tools 1–4 as input context
-- [ ] Uses Azure OpenAI (GPT-4o) to generate:
+- [x] Takes output from tools 1–4 as input context
+- [x] Uses Azure OpenAI (GPT-4o) to generate:
   - Prioritized remediation steps (P0/P1/P2)
   - For each step: description, impact on secure score, effort estimate, PowerShell/CLI config scripts
   - Estimated time-to-green if all steps completed
-- [ ] Route LLM output through **Azure AI Content Safety** before returning
-- [ ] Add confidence scores to each recommendation
-- [ ] Redact tenant-specific PII (tenant IDs, user emails) before sending to model
-- [ ] Add App Insights trace span
+- [x] Route LLM output through **Azure AI Content Safety** before returning
+- [x] Add confidence scores to each recommendation
+- [x] Redact tenant-specific PII (tenant IDs, user emails) before sending to model
+- [x] Add App Insights trace span
+- [x] **Tests** (53 tests in `tests/unit/test_remediation_plan.py`): Mock LLM responses, verify prioritization logic, Content Safety integration, PII redaction, confidence scores, trace span creation
 
 #### Tool 6: `create_adoption_scorecard`
-- [ ] Aggregates data from all tools into a structured scorecard:
+- [x] Aggregates data from all tools into a structured scorecard:
   - Overall ME5 adoption percentage
   - Per-workload status (green/yellow/red): Defender XDR, Purview, Entra ID P2
   - Top 5 gaps with remediation priority
   - Estimated days to green
   - Historical trend (if available)
-- [ ] Output format: structured JSON (for programmatic consumption) + markdown (for human reading)
-- [ ] Add App Insights trace span
+- [x] Output format: structured JSON (for programmatic consumption) + markdown (for human reading)
+- [x] Add App Insights trace span
+- [x] **Tests** (60 tests in `tests/unit/test_adoption_scorecard.py`): Verify aggregation logic, scorecard structure (JSON + markdown), workload status thresholds (green/yellow/red), trace span creation
 
 ### 1.3 System Prompt Engineering
 
-- [ ] Write system prompt in `src/agent/system_prompt.py`:
+- [x] Write system prompt in `src/agent/system_prompt.py`:
   - Persona: "You are an ME5 Security Posture Assessment specialist..."
   - Context: Project 479 "Get to Green" campaign objectives
   - Behavioral instructions:
@@ -186,13 +202,19 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
     - Do not make changes to customer tenants — assessment only
     - Flag when admin consent is needed for deeper assessment
     - Include disclaimers on AI-generated recommendations
+- [x] **Tests**: Verify prompt contains all required sections (persona, tools, behavioral instructions, guardrails), validate no PII leaks in prompt, test prompt injection resistance instructions
 
 ### 1.4 Unit Tests
 
-- [ ] Test each tool with mocked Graph API responses
-- [ ] Test system prompt produces expected agent behavior patterns
-- [ ] Test PII redaction catches tenant IDs, emails, UPNs
-- [ ] Test content safety integration rejects harmful outputs
+- [x] Test agent host setup with mocked SDK (75 tests in `tests/unit/test_agent_host.py`)
+- [x] Test each tool with mocked Graph API responses (all 6 tools — 398 tool tests total)
+- [x] Test system prompt produces expected agent behavior patterns
+- [x] Test PII redaction catches tenant IDs, emails, UPNs (11 tests in `tests/unit/test_pii_redaction.py`)
+- [x] Test content safety integration rejects harmful outputs (8 tests in `tests/unit/test_content_safety.py`)
+- [x] Test secure score tool output structure (68 tests in `tests/unit/test_secure_score.py`)
+- [ ] Integration tests: end-to-end agent flow with mocked Graph API + mocked LLM
+
+> **Total: 491 tests passing** (75 agent host + 68 secure score + 78 defender + 85 purview + 54 entra + 53 remediation + 60 scorecard + 8 content safety + 11 PII redaction = 492 collected, 491 passing)
 
 ---
 
@@ -213,6 +235,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - **Deploy**: Bicep deployment to Azure Container Apps
 - [ ] Add branch protection rules on `main` (require passing CI)
 - [ ] Add a `dev` environment for PR deployments (optional but impressive)
+- [ ] **Tests**: Validate CI pipeline runs lint + test + build stages, verify coverage threshold enforcement
 
 ### 2.2 Infrastructure as Code (Bicep)
 
@@ -230,6 +253,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - Environment variables from Key Vault references
 - [ ] `infra/parameters/dev.bicepparam` and `prod.bicepparam`
 - [ ] Validate Bicep linting passes in CI
+- [ ] **Tests**: Validate Bicep templates compile without errors, verify parameter files match expected schema
 
 ### 2.3 Observability (Azure Application Insights)
 
@@ -254,6 +278,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - `postureiq.remediation.steps_generated` — counter
   - `postureiq.content_safety.blocked_count` — counter
 - [ ] Create an App Insights dashboard (can be shown in demo)
+- [ ] **Tests**: Verify trace spans are created for tool calls and LLM calls, validate structured log format, test custom metric emission, test PII exclusion from logs
 
 ### 2.4 Health Probes
 
@@ -265,6 +290,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
     - Azure OpenAI endpoint responds
     - Key Vault is accessible
   - `GET /version` — returns build info (git SHA, build time)
+- [ ] **Tests**: Test `/health` returns 200, test `/ready` returns 503 when dependencies unavailable, test `/version` returns expected fields, test readiness probe checks (SDK, Graph, OpenAI, Key Vault)
 
 ### 2.5 Deployment Target: Azure Container Apps
 
@@ -279,6 +305,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - Scale: min 0, max 5 replicas
   - Health probes defined in Bicep
   - Managed Identity for Key Vault + Azure OpenAI access
+- [ ] **Tests**: Validate Dockerfile builds successfully, test container starts and health probes respond, verify managed identity configuration in Bicep
 
 ---
 
@@ -301,6 +328,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - Store client secret in Key Vault, access via Managed Identity
   - Document least-privilege scopes in `docs/setup-guide.md`
   - Provide `scripts/setup-permissions.sh` for admin consent
+- [ ] **Tests**: Test OAuth2 flow with mocked Entra ID responses, verify managed identity token acquisition, test delegated permission scoping, test unauthorized access returns 401/403
 
 ### 3.2 Responsible AI (RAI)
 
@@ -324,6 +352,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
 - [ ] **Prompt injection guardrails**:
   - System prompt includes explicit instructions to ignore override attempts
   - Input validation on user queries (length, character set)
+- [ ] **Tests**: Test Content Safety blocks harmful content, test PII redaction patterns (GUIDs, emails, IPs, names), test confidence score assignment, test disclaimer watermark inclusion, test prompt injection rejection, test input validation rules
 
 ### 3.3 Audit Trail
 
@@ -339,6 +368,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - Stored in App Insights `customEvents` table (queryable via KQL)
   - Retention policy: 90 days (configurable)
 - [ ] RBAC on audit log access (only security admins can query)
+- [ ] **Tests**: Test audit log entries contain required fields (timestamp, session ID, user, tool, redacted I/O), test immutability guarantees, test RBAC enforcement on audit access
 
 ---
 
@@ -354,6 +384,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - Customer onboarding checklists
 - [ ] Inject playbook summaries into the system prompt or as tool context
 - [ ] Tool: `get_project479_playbook` — retrieves relevant playbook section based on identified gaps
+- [ ] **Tests**: Test playbook retrieval with mocked Foundry IQ responses, verify context injection into system prompt, test gap-to-playbook mapping
 
 ### 4.2 Fabric Integration (Telemetry Push)
 
@@ -365,6 +396,7 @@ Each tool wraps Microsoft Graph Security API calls and returns structured data f
   - Secure score trend across assessed tenants
   - Most common gaps (aggregated, anonymized)
   - Average time-to-green
+- [ ] **Tests**: Test lakehouse write with mocked Fabric API, verify snapshot schema (hashed tenant ID, scores, gaps), test data anonymization
 
 ---
 

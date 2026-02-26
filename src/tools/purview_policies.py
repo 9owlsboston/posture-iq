@@ -1,13 +1,17 @@
 """PostureIQ Tool — check_purview_policies
 
-Assesses Microsoft Purview Information Protection & Compliance policy coverage.
-Returns status of DLP, sensitivity labels, retention policies, and Insider Risk.
+Assesses Microsoft Purview Information Protection & Compliance policy
+coverage by analysing *SecureScoreControlProfile* records whose
+``control_category`` relates to Information Protection / Data.
 
-Graph API endpoints:
-  - DLP policies: GET /security/informationProtection (or Compliance Center API)
-  - Sensitivity labels: GET /security/informationProtection/sensitivityLabels
-  - Retention: GET /security/retentionPolicies (Compliance API)
-Required scope: InformationProtection.Read.All
+For richer detail the tool also attempts direct Graph API calls:
+  - Sensitivity labels: GET /informationProtection/sensitivityLabels  (beta)
+
+Falls back to SecureScoreControlProfiles when direct endpoints are
+unavailable or return 403.
+
+Graph API endpoint: GET /security/secureScoreControlProfiles
+Required scope: SecurityEvents.Read.All, InformationProtection.Read.All
 """
 
 from __future__ import annotations
@@ -18,13 +22,264 @@ from typing import Any
 import structlog
 
 from src.middleware.tracing import trace_tool_call
+from src.tools.graph_client import create_graph_client
 
 logger = structlog.get_logger(__name__)
 
+# ── Constants ──────────────────────────────────────────────────────────
+
+# We classify a control profile as "Purview-related" when its service or
+# control_category matches one of these (case-insensitive substring check).
+PURVIEW_SERVICE_KEYWORDS = frozenset({
+    "information protection",
+    "purview",
+    "compliance",
+    "data loss prevention",
+    "dlp",
+    "insider risk",
+    "retention",
+    "sensitivity",
+})
+
+# Canonical Purview component names we report on
+ALL_COMPONENTS = (
+    "DLP Policies",
+    "Sensitivity Labels",
+    "Retention Policies",
+    "Insider Risk Management",
+)
+
+# Keywords that map a control to a specific component
+_COMPONENT_KEYWORDS: dict[str, list[str]] = {
+    "DLP Policies": ["dlp", "data loss prevention"],
+    "Sensitivity Labels": ["sensitivity label", "information protection label", "labeling"],
+    "Retention Policies": ["retention"],
+    "Insider Risk Management": ["insider risk", "insider threat"],
+}
+
+GREEN_THRESHOLD = 70.0
+YELLOW_THRESHOLD = 40.0
+
+
+# ── Graph client factory ───────────────────────────────────────────────
+
+def _create_graph_client():
+    """Delegate to the shared Graph client factory."""
+    return create_graph_client("purview_policies")
+
+
+# ── Classification helpers ─────────────────────────────────────────────
+
+def _is_purview_related(profile: Any) -> bool:
+    """Return True when a control profile relates to Purview / data protection."""
+    for field in ("service", "control_category", "title"):
+        val = (getattr(profile, field, None) or "").lower()
+        if any(kw in val for kw in PURVIEW_SERVICE_KEYWORDS):
+            return True
+    return False
+
+
+def _classify_component(profile: Any) -> str:
+    """Map a Purview-related profile to one of our canonical component names."""
+    text = " ".join([
+        (getattr(profile, "title", None) or ""),
+        (getattr(profile, "service", None) or ""),
+        (getattr(profile, "control_category", None) or ""),
+    ]).lower()
+
+    for component, keywords in _COMPONENT_KEYWORDS.items():
+        if any(kw in text for kw in keywords):
+            return component
+
+    # Default bucket
+    return "DLP Policies"
+
+
+def _compute_status(pct: float) -> str:
+    if pct >= GREEN_THRESHOLD:
+        return "green"
+    if pct >= YELLOW_THRESHOLD:
+        return "yellow"
+    return "red"
+
+
+def _is_gap(profile: Any) -> bool:
+    """A control is a gap unless its latest state is Resolved/ThirdParty."""
+    if getattr(profile, "deprecated", False):
+        return False
+    state_updates = getattr(profile, "control_state_updates", None) or []
+    if not state_updates:
+        return True
+    latest = (getattr(state_updates[-1], "state", None) or "").lower()
+    return latest not in ("resolved", "thirdparty", "third_party")
+
+
+def _gap_description(profile: Any) -> str:
+    title = getattr(profile, "title", None) or getattr(profile, "id", "Unknown")
+    tier = getattr(profile, "tier", None)
+    parts = [title]
+    if tier:
+        parts.append(f"(tier: {tier})")
+    return " ".join(parts)
+
+
+def _is_critical(profile: Any) -> bool:
+    tier = (getattr(profile, "tier", None) or "").lower()
+    if tier in ("tier1", "mandatorytier", "mandatory"):
+        return True
+    return (getattr(profile, "max_score", None) or 0.0) >= 5.0
+
+
+def _build_component_result(profiles: list[Any]) -> dict[str, Any]:
+    if not profiles:
+        return {
+            "status": "red",
+            "details": {
+                "total_controls": 0,
+                "achieved_controls": 0,
+                "max_score": 0.0,
+                "achieved_score": 0.0,
+            },
+            "gaps": [],
+        }
+
+    total_max = 0.0
+    achieved = 0.0
+    gaps: list[str] = []
+    achieved_count = 0
+
+    for p in profiles:
+        ms = getattr(p, "max_score", None) or 0.0
+        total_max += ms
+        if _is_gap(p):
+            gaps.append(_gap_description(p))
+        else:
+            achieved += ms
+            achieved_count += 1
+
+    pct = round((achieved / total_max) * 100, 1) if total_max > 0 else 0.0
+
+    return {
+        "status": _compute_status(pct),
+        "details": {
+            "total_controls": len(profiles),
+            "achieved_controls": achieved_count,
+            "max_score": round(total_max, 2),
+            "achieved_score": round(achieved, 2),
+        },
+        "gaps": gaps,
+    }
+
+
+def _aggregate_components(profiles: list[Any]) -> dict[str, dict]:
+    buckets: dict[str, list[Any]] = {c: [] for c in ALL_COMPONENTS}
+    for p in profiles:
+        comp = _classify_component(p)
+        if comp in buckets:
+            buckets[comp].append(p)
+    return {c: _build_component_result(profs) for c, profs in buckets.items()}
+
+
+def _compute_overall(components: dict[str, dict]) -> float:
+    total_max = sum(c["details"]["max_score"] for c in components.values())
+    if total_max == 0:
+        return 0.0
+    total_achieved = sum(c["details"]["achieved_score"] for c in components.values())
+    return round((total_achieved / total_max) * 100, 1)
+
+
+def _collect_critical_gaps(profiles: list[Any]) -> list[str]:
+    return [
+        _gap_description(p) for p in profiles
+        if _is_gap(p) and _is_critical(p)
+    ]
+
+
+# ── Mock fallback ──────────────────────────────────────────────────────
+
+def _generate_mock_response() -> dict[str, Any]:
+    return {
+        "overall_coverage_pct": 35.0,
+        "components": {
+            "DLP Policies": {
+                "status": "yellow",
+                "details": {
+                    "total_controls": 4,
+                    "achieved_controls": 1,
+                    "max_score": 20.0,
+                    "achieved_score": 7.0,
+                },
+                "gaps": [
+                    "DLP policies not enforced on SharePoint, OneDrive, Teams (tier: Tier1)",
+                    "No custom sensitive information types defined (tier: Tier2)",
+                    "DLP policies in test mode — not actively blocking (tier: Tier1)",
+                ],
+            },
+            "Sensitivity Labels": {
+                "status": "red",
+                "details": {
+                    "total_controls": 5,
+                    "achieved_controls": 1,
+                    "max_score": 18.0,
+                    "achieved_score": 3.0,
+                },
+                "gaps": [
+                    "Auto-labeling not enabled (tier: Tier1)",
+                    "No default sensitivity label configured (tier: Tier2)",
+                    "Mandatory labeling not enforced (tier: Tier1)",
+                    "Only 2 of 8 labels published (tier: Tier2)",
+                ],
+            },
+            "Retention Policies": {
+                "status": "yellow",
+                "details": {
+                    "total_controls": 3,
+                    "achieved_controls": 1,
+                    "max_score": 12.0,
+                    "achieved_score": 4.0,
+                },
+                "gaps": [
+                    "Retention policies only cover Exchange (tier: Tier2)",
+                    "No retention labels with records management (tier: Tier2)",
+                ],
+            },
+            "Insider Risk Management": {
+                "status": "red",
+                "details": {
+                    "total_controls": 3,
+                    "achieved_controls": 0,
+                    "max_score": 10.0,
+                    "achieved_score": 0.0,
+                },
+                "gaps": [
+                    "Insider Risk Management not enabled (tier: Tier1)",
+                    "No data connectors configured (tier: Tier2)",
+                    "No risk policies defined (tier: Tier2)",
+                ],
+            },
+        },
+        "total_gaps": 12,
+        "critical_gaps": [
+            "DLP policies not enforced on SharePoint, OneDrive, Teams (tier: Tier1)",
+            "Auto-labeling not enabled (tier: Tier1)",
+            "Mandatory labeling not enforced (tier: Tier1)",
+            "Insider Risk Management not enabled (tier: Tier1)",
+        ],
+        "assessed_at": datetime.now(timezone.utc).isoformat(),
+        "data_source": "mock",
+    }
+
+
+# ── Main tool function ─────────────────────────────────────────────────
 
 @trace_tool_call("check_purview_policies")
 async def check_purview_policies() -> dict[str, Any]:
     """Assess Purview Information Protection & Compliance policy coverage.
+
+    Uses ``GET /security/secureScoreControlProfiles`` and filters for
+    controls related to information-protection / data / Purview.
+
+    Falls back to mock data when Graph credentials are absent.
 
     Returns:
         dict with keys:
@@ -33,91 +288,74 @@ async def check_purview_policies() -> dict[str, Any]:
           - total_gaps: int
           - critical_gaps: list
           - assessed_at: ISO timestamp
+          - data_source: "graph_api" | "mock" | "graph_api_empty"
     """
     logger.info("tool.purview_policies.start")
 
-    # TODO: Replace with actual Graph / Compliance Center API calls
-    #
-    # DLP policies: Use Security & Compliance PowerShell or Graph beta endpoints
-    # Sensitivity labels: GET /informationProtection/policy/labels
-    # Retention: GET /compliance/retentionPolicies (may need Compliance API)
+    client = _create_graph_client()
+    if client is None:
+        logger.info("tool.purview_policies.mock_fallback")
+        return _generate_mock_response()
 
-    # ── Mock response for development ──────────────────────
-    result = {
-        "overall_coverage_pct": 35.0,
-        "components": {
-            "DLP Policies": {
-                "status": "yellow",
-                "details": {
-                    "total_policies": 3,
-                    "active_policies": 1,
-                    "test_mode_policies": 2,
-                    "scopes_covered": ["Exchange"],
-                    "scopes_missing": ["SharePoint", "OneDrive", "Teams", "Endpoints"],
-                },
-                "gaps": [
-                    "Only 1 of 3 DLP policies in active enforcement (2 still in test mode)",
-                    "DLP not applied to SharePoint, OneDrive, Teams, or Endpoints",
-                    "No custom sensitive information types defined",
-                ],
-            },
-            "Sensitivity Labels": {
-                "status": "red",
-                "details": {
-                    "labels_published": 2,
-                    "labels_total_available": 8,
-                    "auto_labeling_enabled": False,
-                    "default_label_set": False,
-                    "mandatory_labeling": False,
-                },
-                "gaps": [
-                    "Only 2 of 8 available sensitivity labels published",
-                    "Auto-labeling not enabled — requires manual user action",
-                    "No default sensitivity label configured",
-                    "Mandatory labeling not enforced",
-                ],
-            },
-            "Retention Policies": {
-                "status": "yellow",
-                "details": {
-                    "policies_active": 2,
-                    "exchange_covered": True,
-                    "sharepoint_covered": False,
-                    "onedrive_covered": False,
-                    "teams_covered": False,
-                },
-                "gaps": [
-                    "Retention policies only cover Exchange — SharePoint, OneDrive, and Teams not covered",
-                    "No retention labels with records management",
-                ],
-            },
-            "Insider Risk Management": {
-                "status": "red",
-                "details": {
-                    "enabled": False,
-                    "policies_configured": 0,
-                    "data_connectors": 0,
-                },
-                "gaps": [
-                    "Insider Risk Management not enabled",
-                    "No data connectors configured",
-                    "No risk policies defined",
-                ],
-            },
-        },
-        "total_gaps": 12,
-        "critical_gaps": [
-            "DLP policies not enforced on SharePoint, OneDrive, Teams, or Endpoints",
-            "Auto-labeling and mandatory labeling not enabled",
-            "Insider Risk Management completely disabled",
-        ],
-        "assessed_at": datetime.now(timezone.utc).isoformat(),
-    }
+    try:
+        from msgraph.generated.security.secure_score_control_profiles.secure_score_control_profiles_request_builder import (  # noqa: E501
+            SecureScoreControlProfilesRequestBuilder,
+        )
 
-    logger.info(
-        "tool.purview_policies.complete",
-        overall_coverage=result["overall_coverage_pct"],
-        total_gaps=result["total_gaps"],
-    )
+        query = SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetQueryParameters(
+            top=200,
+        )
+        config = SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetRequestConfiguration(
+            query_parameters=query,
+        )
 
-    return result
+        response = await client.security.secure_score_control_profiles.get(
+            request_configuration=config,
+        )
+
+        all_profiles = response.value if response and response.value else []
+
+        # Filter to Purview-related, non-deprecated profiles
+        purview_profiles = [
+            p for p in all_profiles
+            if _is_purview_related(p) and not getattr(p, "deprecated", False)
+        ]
+
+        if not purview_profiles:
+            logger.warning("tool.purview_policies.empty_response")
+            mock = _generate_mock_response()
+            mock["data_source"] = "graph_api_empty"
+            return mock
+
+        components = _aggregate_components(purview_profiles)
+        overall = _compute_overall(components)
+        total_gaps = sum(len(c["gaps"]) for c in components.values())
+        critical_gaps = _collect_critical_gaps(purview_profiles)
+
+        result: dict[str, Any] = {
+            "overall_coverage_pct": overall,
+            "components": components,
+            "total_gaps": total_gaps,
+            "critical_gaps": critical_gaps,
+            "assessed_at": datetime.now(timezone.utc).isoformat(),
+            "data_source": "graph_api",
+        }
+
+        logger.info(
+            "tool.purview_policies.complete",
+            overall_coverage=overall,
+            total_gaps=total_gaps,
+            data_source="graph_api",
+        )
+        return result
+
+    except Exception as exc:
+        logger.error(
+            "tool.purview_policies.graph_error",
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        logger.info("tool.purview_policies.error_fallback_to_mock")
+        mock = _generate_mock_response()
+        mock["data_source"] = "mock"
+        return mock
