@@ -1,9 +1,11 @@
 """PostureIQ — FastAPI application with health probes and Entra ID auth.
 
 Provides:
-  - GET /health  — liveness probe (is the process alive?)
-  - GET /ready   — readiness probe (are dependencies accessible?)
-  - GET /version — build info (git SHA, build time)
+  - GET /         — Chat UI (static HTML page)
+  - GET /health   — liveness probe (is the process alive?)
+  - GET /ready    — readiness probe (are dependencies accessible?)
+  - GET /version  — build info (git SHA, build time)
+  - POST /chat    — chat endpoint (bridges HTTP → agent tools)
   - GET /auth/login    — initiate OAuth2 authorization code flow
   - GET /auth/callback — handle Entra ID redirect with auth code
   - GET /auth/me       — return current user identity (protected)
@@ -15,15 +17,18 @@ from __future__ import annotations
 import os
 import secrets
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
 import structlog
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src.agent.config import settings
+from src.api.chat import ChatRequest, ChatResponse, handle_chat
 from src.middleware.audit_logger import (
     AUDIT_READER_ROLES,
     AuditLogger,
@@ -43,6 +48,12 @@ app = FastAPI(
     description="ME5 Security Posture Assessment Agent — Project 479 Get-to-Green",
     version="0.1.0",
 )
+
+# ── Static files ───────────────────────────────────────────────────────────
+
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+if _STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 
 # ── Response Models ────────────────────────────────────────────────────────
@@ -64,6 +75,25 @@ class VersionResponse(BaseModel):
     git_sha: str
     build_time: str
     environment: str
+
+
+# ── Chat UI + Endpoint ─────────────────────────────────────────────────────
+
+
+@app.get("/", include_in_schema=False)
+async def chat_ui() -> FileResponse:
+    """Serve the chat UI at the root path."""
+    return FileResponse(str(_STATIC_DIR / "index.html"), media_type="text/html")
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest) -> ChatResponse:
+    """Chat with the PostureIQ agent.
+
+    Sends a user message, invokes the appropriate assessment tools,
+    and returns a formatted response with tool-call metadata.
+    """
+    return await handle_chat(request)
 
 
 # ── Health Probes ──────────────────────────────────────────────────────────

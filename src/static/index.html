@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostureIQ — ME5 Security Posture Assessment</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --border: #475569;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--primary), #8b5cf6);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .logo h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .logo h1 span { color: var(--text-muted); font-weight: 400; }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-label { font-size: 13px; color: var(--text-muted); }
+
+    .btn-outline {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ── Main layout ────────────────────────────────────── */
+    .main-layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ────────────────────────────────────────── */
+    .sidebar {
+      width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-section h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .quick-action {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 8px 12px;
+      margin-bottom: 4px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+
+    .quick-action:hover { background: var(--surface2); }
+    .quick-action .qa-icon { margin-right: 8px; }
+
+    .tools-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .tools-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .tool-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
+      flex-shrink: 0;
+    }
+
+    /* ── Chat area ──────────────────────────────────────── */
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      scroll-behavior: smooth;
+    }
+
+    .message {
+      max-width: 800px;
+      margin: 0 auto 20px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .msg-avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+
+    .msg-user .msg-avatar { background: var(--surface2); }
+    .msg-agent .msg-avatar { background: linear-gradient(135deg, var(--primary), #8b5cf6); }
+
+    .msg-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .msg-role {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text-muted);
+    }
+
+    .msg-text {
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg-text code {
+      background: var(--surface2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .msg-text pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 8px 0;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .tool-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 12px;
+      font-size: 12px;
+      color: var(--primary);
+      margin: 4px 4px 4px 0;
+    }
+
+    .tool-badge.running::after {
+      content: '';
+      width: 8px; height: 8px;
+      border: 2px solid var(--primary);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Welcome ────────────────────────────────────────── */
+    .welcome {
+      max-width: 640px;
+      margin: 80px auto;
+      text-align: center;
+      padding: 0 24px;
+    }
+
+    .welcome-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+
+    .welcome h2 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .welcome p {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .suggested-prompts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .suggested-prompt {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+
+    .suggested-prompt:hover {
+      border-color: var(--primary);
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    /* ── Input area ─────────────────────────────────────── */
+    .input-area {
+      padding: 16px 24px 20px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .input-wrap {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .input-box {
+      flex: 1;
+      position: relative;
+    }
+
+    #userInput {
+      width: 100%;
+      min-height: 44px;
+      max-height: 160px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: var(--font);
+      resize: none;
+      outline: none;
+      line-height: 1.5;
+      transition: border-color 0.15s;
+    }
+
+    #userInput:focus { border-color: var(--primary); }
+
+    #userInput::placeholder { color: var(--text-muted); }
+
+    #sendBtn {
+      width: 44px; height: 44px;
+      border: none;
+      border-radius: 10px;
+      background: var(--primary);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+
+    #sendBtn:hover { background: var(--primary-hover); }
+    #sendBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #sendBtn svg { width: 20px; height: 20px; }
+
+    .input-hint {
+      max-width: 800px;
+      margin: 6px auto 0;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .input-hint a { color: var(--primary); text-decoration: none; }
+
+    /* ── Typing indicator ───────────────────────────────── */
+    .typing-indicator {
+      display: none;
+      max-width: 800px;
+      margin: 0 auto 20px;
+      padding: 0 12px;
+    }
+
+    .typing-indicator.visible { display: flex; }
+
+    .typing-dots {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      padding: 8px 16px;
+      background: var(--surface);
+      border-radius: 16px;
+    }
+
+    .typing-dots span {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: bounce 1.2s infinite ease-in-out;
+    }
+
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-8px); }
+    }
+
+    /* ── Markdown rendering ─────────────────────────────── */
+    .msg-text h1, .msg-text h2, .msg-text h3 {
+      margin: 16px 0 8px;
+      font-weight: 600;
+    }
+
+    .msg-text h1 { font-size: 20px; }
+    .msg-text h2 { font-size: 17px; }
+    .msg-text h3 { font-size: 15px; }
+
+    .msg-text ul, .msg-text ol {
+      margin: 8px 0;
+      padding-left: 24px;
+    }
+
+    .msg-text li { margin: 4px 0; }
+
+    .msg-text table {
+      border-collapse: collapse;
+      margin: 12px 0;
+      width: 100%;
+    }
+
+    .msg-text th, .msg-text td {
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    .msg-text th {
+      background: var(--surface2);
+      font-weight: 600;
+    }
+
+    .msg-text blockquote {
+      border-left: 3px solid var(--primary);
+      padding: 8px 16px;
+      margin: 8px 0;
+      color: var(--text-muted);
+      background: rgba(59, 130, 246, 0.05);
+      border-radius: 0 8px 8px 0;
+    }
+
+    /* ── Status colors ──────────────────────────────────── */
+    .score-green { color: var(--green); }
+    .score-yellow { color: var(--yellow); }
+    .score-red { color: var(--red); }
+
+    /* ── Responsive ─────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .messages { padding: 16px; }
+      .input-area { padding: 12px 16px 16px; }
+    }
+
+    /* ── Scrollbar ──────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🛡️</div>
+      <h1>PostureIQ <span>— ME5 Security Assessment</span></h1>
+    </div>
+    <div class="header-actions">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-label" id="statusLabel">Connected</span>
+      <button class="btn-outline" onclick="clearChat()">New Chat</button>
+      <button class="btn-outline" onclick="showEndpoints()">API Docs</button>
+    </div>
+  </header>
+
+  <!-- ── Main ───────────────────────────────────────────── -->
+  <div class="main-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <h3>Quick Actions</h3>
+        <button class="quick-action" onclick="sendQuick('Assess this tenant\'s ME5 security posture')">
+          <span class="qa-icon">🔍</span> Full Assessment
+        </button>
+        <button class="quick-action" onclick="sendQuick('What is the current Secure Score?')">
+          <span class="qa-icon">📊</span> Secure Score
+        </button>
+        <button class="quick-action" onclick="sendQuick('Check Defender coverage across all workloads')">
+          <span class="qa-icon">🛡️</span> Defender Coverage
+        </button>
+        <button class="quick-action" onclick="sendQuick('Review Purview DLP and compliance policies')">
+          <span class="qa-icon">📋</span> Purview Policies
+        </button>
+        <button class="quick-action" onclick="sendQuick('Assess Entra ID P2 security configuration')">
+          <span class="qa-icon">🔐</span> Entra ID Config
+        </button>
+        <button class="quick-action" onclick="sendQuick('Generate a prioritized remediation plan')">
+          <span class="qa-icon">📝</span> Remediation Plan
+        </button>
+        <button class="quick-action" onclick="sendQuick('Create an ME5 adoption scorecard')">
+          <span class="qa-icon">📈</span> Adoption Scorecard
+        </button>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>Available Tools</h3>
+        <ul class="tools-list">
+          <li><span class="tool-dot"></span> query_secure_score</li>
+          <li><span class="tool-dot"></span> assess_defender_coverage</li>
+          <li><span class="tool-dot"></span> check_purview_policies</li>
+          <li><span class="tool-dot"></span> get_entra_config</li>
+          <li><span class="tool-dot"></span> generate_remediation_plan</li>
+          <li><span class="tool-dot"></span> create_adoption_scorecard</li>
+          <li><span class="tool-dot"></span> get_project479_playbook</li>
+        </ul>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>About</h3>
+        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+          PostureIQ assesses Microsoft E5 security posture using Graph Security APIs,
+          powered by the GitHub Copilot SDK and Azure OpenAI.
+        </p>
+      </div>
+    </aside>
+
+    <!-- Chat -->
+    <div class="chat-container">
+      <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+          <div class="welcome-icon">🛡️</div>
+          <h2>PostureIQ Agent</h2>
+          <p>
+            I'm your ME5 Security Posture Assessment specialist for the Project 479
+            "Get to Green" campaign. I can assess your tenant's security posture,
+            identify gaps, and generate prioritized remediation plans with actionable scripts.
+          </p>
+          <div class="suggested-prompts">
+            <button class="suggested-prompt" onclick="sendQuick('Assess this tenant\'s ME5 security posture')">
+              🔍 Run full assessment
+            </button>
+            <button class="suggested-prompt" onclick="sendQuick('What is the current Secure Score and how does it compare to industry average?')">
+              📊 Check Secure Score
+            </button>
+            <button class="suggested-prompt" onclick="sendQuick('Which Defender workloads have gaps in coverage?')">
+              🛡️ Find Defender gaps
+            </button>
+            <button class="suggested-prompt" onclick="sendQuick('Generate a Get-to-Green remediation plan')">
+              📝 Remediation plan
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typing indicator -->
+      <div class="typing-indicator" id="typingIndicator">
+        <div style="width:32px"></div>
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="input-area">
+        <div class="input-wrap">
+          <div class="input-box">
+            <textarea id="userInput"
+              placeholder="Ask about your tenant's security posture…"
+              rows="1"
+              onkeydown="handleKey(event)"
+              oninput="autoResize(this)"></textarea>
+          </div>
+          <button id="sendBtn" onclick="sendMessage()" title="Send message">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="input-hint">
+          PostureIQ uses AI to generate recommendations — <a href="/docs" target="_blank">API docs</a>
+          · Review with your security team before implementing
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── State ────────────────────────────────────────────
+    let sessionId = null;
+    let isProcessing = false;
+
+    // ── Health Check ─────────────────────────────────────
+    async function checkHealth() {
+      try {
+        const r = await fetch('/health');
+        const d = await r.json();
+        document.getElementById('statusDot').style.background =
+          d.status === 'healthy' ? 'var(--green)' : 'var(--red)';
+        document.getElementById('statusLabel').textContent =
+          d.status === 'healthy' ? 'Connected' : 'Unhealthy';
+      } catch {
+        document.getElementById('statusDot').style.background = 'var(--red)';
+        document.getElementById('statusLabel').textContent = 'Disconnected';
+      }
+    }
+
+    setInterval(checkHealth, 30000);
+    checkHealth();
+
+    // ── Markdown rendering ───────────────────────────────
+    function renderMarkdown(text) {
+      // Escape HTML
+      let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // Code blocks (```...```)
+      html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+        return `<pre><code class="lang-${lang}">${code.trim()}</code></pre>`;
+      });
+
+      // Inline code
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Headers
+      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+      // Bold
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+      // Italic
+      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+      // Tables
+      html = html.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, (_, header, sep, rows) => {
+        const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+        const trs = rows.trim().split('\n').map(row => {
+          const tds = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+          return `<tr>${tds}</tr>`;
+        }).join('');
+        return `<table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+      });
+
+      // Blockquotes
+      html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+      // Unordered lists
+      html = html.replace(/^[*-] (.+)$/gm, '<li>$1</li>');
+      html = html.replace(/((?:<li>.+<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+      // Line breaks
+      html = html.replace(/\n\n/g, '<br><br>');
+
+      return html;
+    }
+
+    // ── Messages ─────────────────────────────────────────
+    function addMessage(role, text, toolCalls) {
+      const welcome = document.getElementById('welcome');
+      if (welcome) welcome.style.display = 'none';
+
+      const container = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = `message msg-${role}`;
+
+      const avatar = role === 'user' ? '👤' : '🛡️';
+      const name = role === 'user' ? 'You' : 'PostureIQ';
+
+      let toolBadges = '';
+      if (toolCalls && toolCalls.length) {
+        toolBadges = '<div style="margin-bottom: 8px">' +
+          toolCalls.map(t => `<span class="tool-badge">⚙️ ${t}</span>`).join('') +
+          '</div>';
+      }
+
+      const rendered = role === 'agent' ? renderMarkdown(text) : text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      div.innerHTML = `
+        <div class="msg-avatar">${avatar}</div>
+        <div class="msg-content">
+          <div class="msg-role">${name}</div>
+          ${toolBadges}
+          <div class="msg-text">${rendered}</div>
+        </div>
+      `;
+
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // ── Send ─────────────────────────────────────────────
+    async function sendMessage() {
+      const input = document.getElementById('userInput');
+      const text = input.value.trim();
+      if (!text || isProcessing) return;
+
+      isProcessing = true;
+      input.value = '';
+      autoResize(input);
+      document.getElementById('sendBtn').disabled = true;
+
+      addMessage('user', text);
+      showTyping(true);
+
+      try {
+        const body = { message: text };
+        if (sessionId) body.session_id = sessionId;
+
+        const r = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        const data = await r.json();
+
+        if (r.ok) {
+          sessionId = data.session_id || sessionId;
+          addMessage('agent', data.response, data.tools_called);
+        } else {
+          addMessage('agent', `⚠️ Error: ${data.detail || data.error || 'Something went wrong'}`);
+        }
+      } catch (err) {
+        addMessage('agent', `⚠️ Connection error: ${err.message}\n\nMake sure the server is running.`);
+      } finally {
+        showTyping(false);
+        isProcessing = false;
+        document.getElementById('sendBtn').disabled = false;
+        input.focus();
+      }
+    }
+
+    function sendQuick(text) {
+      document.getElementById('userInput').value = text;
+      sendMessage();
+    }
+
+    // ── UI Helpers ───────────────────────────────────────
+    function showTyping(show) {
+      document.getElementById('typingIndicator').classList.toggle('visible', show);
+    }
+
+    function handleKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+    }
+
+    function clearChat() {
+      sessionId = null;
+      const msgs = document.getElementById('messages');
+      msgs.innerHTML = `
+        <div class="welcome" id="welcome">
+          <div class="welcome-icon">🛡️</div>
+          <h2>PostureIQ Agent</h2>
+          <p>I'm your ME5 Security Posture Assessment specialist. Ask me anything about your tenant's security posture.</p>
+          <div class="suggested-prompts">
+            <button class="suggested-prompt" onclick="sendQuick('Assess this tenant\\'s ME5 security posture')">🔍 Run full assessment</button>
+            <button class="suggested-prompt" onclick="sendQuick('What is the current Secure Score?')">📊 Check Secure Score</button>
+            <button class="suggested-prompt" onclick="sendQuick('Which Defender workloads have gaps?')">🛡️ Defender gaps</button>
+            <button class="suggested-prompt" onclick="sendQuick('Generate a remediation plan')">📝 Remediation plan</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function showEndpoints() {
+      window.open('/docs', '_blank');
+    }
+
+    // ── Init ─────────────────────────────────────────────
+    document.getElementById('userInput').focus();
+  </script>
+</body>
+</html>
