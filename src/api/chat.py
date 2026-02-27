@@ -275,8 +275,7 @@ def _format_remediation(data: dict[str, Any]) -> str:
         offer = step.get("project_479_offer")
         if offer:
             lines.append(
-                f"- **P479 Offer**: 📘 {offer['name']} ({offer['id']}) — "
-                f"{offer['duration']}, {offer['delivery']}"
+                f"- **P479 Offer**: 📘 {offer['name']} ({offer['id']}) — {offer['duration']}, {offer['delivery']}"
             )
         if step.get("script"):
             lines.append(f"\n```powershell\n{step['script']}\n```\n")

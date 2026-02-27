@@ -826,6 +826,4 @@ class TestFoundryIQEnrichment:
         result = await generate_remediation_plan("{}")
         steps_with_offer = [s for s in result["steps"] if "project_479_offer" in s]
         # Most mock steps should match a workload area
-        assert len(steps_with_offer) >= 5, (
-            f"Expected >=5 steps with P479 offers, got {len(steps_with_offer)}"
-        )
+        assert len(steps_with_offer) >= 5, f"Expected >=5 steps with P479 offers, got {len(steps_with_offer)}"
