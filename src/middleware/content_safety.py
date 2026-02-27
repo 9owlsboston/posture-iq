@@ -56,7 +56,7 @@ SAFE_FALLBACK_OUTPUT = (
 # ── Content Safety Client ──────────────────────────────────────────────
 
 
-def _create_content_safety_client():
+def _create_content_safety_client() -> Any:
     """Create an Azure AI Content Safety client.
 
     Returns None when the endpoint is not configured (triggers local fallback).

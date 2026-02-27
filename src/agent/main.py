@@ -279,16 +279,16 @@ class PostureIQAgent:
 
     # ── Lifecycle ──────────────────────────────────────────
 
-    def start_client(self) -> CopilotClient:
+    async def start_client(self) -> CopilotClient:
         """Create and start the CopilotClient (launches the runtime process)."""
         self._client = CopilotClient()
-        self._client.start()
+        await self._client.start()
 
         state = self._client.get_state()
         logger.info("agent.client.started", state=state)
         return self._client
 
-    def create_session(self) -> CopilotSession:
+    async def create_session(self) -> CopilotSession:
         """Create a new agent session with tools and system prompt.
 
         The session is the primary unit of multi-turn interaction.
@@ -326,7 +326,7 @@ class PostureIQAgent:
                 deployment=settings.azure_openai_deployment,
             )
 
-        self._session = self._client.create_session(session_config)
+        self._session = await self._client.create_session(session_config)
 
         # Subscribe to session events for streaming output + audit logging
         self._event_unsubscribe = self._session.on(self._handle_session_event)
@@ -340,33 +340,33 @@ class PostureIQAgent:
 
         return self._session
 
-    def resume_session(self, session_id: str) -> CopilotSession:
+    async def resume_session(self, session_id: str) -> CopilotSession:
         """Resume a previously created session by ID."""
         if self._client is None:
             raise RuntimeError("CopilotClient not started — call start_client() first")
 
-        self._session = self._client.resume_session(session_id)
+        self._session = await self._client.resume_session(session_id)
         self._event_unsubscribe = self._session.on(self._handle_session_event)
 
         logger.info("agent.session.resumed", session_id=session_id)
         return self._session
 
-    def close_session(self) -> None:
+    async def close_session(self) -> None:
         """Close the current session and unsubscribe from events."""
         if self._event_unsubscribe:
             self._event_unsubscribe()
             self._event_unsubscribe = None
 
         if self._session:
-            self._session.destroy()
+            await self._session.destroy()
             logger.info("agent.session.destroyed")
             self._session = None
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Gracefully shut down: close session, then stop the client."""
-        self.close_session()
+        await self.close_session()
         if self._client:
-            errors = self._client.stop()
+            errors = await self._client.stop()
             if errors:
                 logger.warning("agent.client.stop_errors", errors=[str(e) for e in errors])
             else:
@@ -375,7 +375,7 @@ class PostureIQAgent:
 
     # ── Conversation ───────────────────────────────────────
 
-    def send_message(self, prompt: str) -> str | None:
+    async def send_message(self, prompt: str) -> str | None:
         """Send a user message and wait for the full agent response.
 
         Uses send_and_wait() for synchronous request/response.
@@ -393,7 +393,7 @@ class PostureIQAgent:
 
         logger.info("agent.message.sending", prompt_length=len(prompt))
 
-        response_event = self._session.send_and_wait(
+        response_event = await self._session.send_and_wait(
             {"prompt": prompt},
             timeout=120.0,
         )
@@ -412,7 +412,7 @@ class PostureIQAgent:
 
         return response_text
 
-    def send_message_streaming(self, prompt: str) -> None:
+    async def send_message_streaming(self, prompt: str) -> None:
         """Send a user message with streaming output (fire-and-forget).
 
         The event handler (_handle_session_event) prints deltas in real time.
@@ -422,7 +422,7 @@ class PostureIQAgent:
             raise RuntimeError("No active session — call create_session() first")
 
         logger.info("agent.message.sending_streaming", prompt_length=len(prompt))
-        self._session.send({"prompt": prompt})
+        await self._session.send({"prompt": prompt})
 
     # ── Event Handling ─────────────────────────────────────
 
@@ -550,19 +550,19 @@ async def main() -> None:
         loop.add_signal_handler(sig, lambda: asyncio.create_task(_shutdown(agent)))
 
     try:
-        agent.start_client()
-        agent.create_session()
+        await agent.start_client()
+        await agent.create_session()
 
         # Run conversation (CLI mode for dev; API mode uses FastAPI)
         await run_cli(agent)
     finally:
-        agent.stop()
+        await agent.stop()
 
 
 async def _shutdown(agent: PostureIQAgent) -> None:
     """Handle graceful shutdown on SIGINT/SIGTERM."""
     logger.info("postureiq.shutting_down")
-    agent.stop()
+    await agent.stop()
     sys.exit(0)
 
 

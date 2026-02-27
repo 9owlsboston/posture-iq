@@ -58,7 +58,7 @@ YELLOW_THRESHOLD = 40.0  # ≥ 40% → yellow, else red
 # ── Graph client factory ───────────────────────────────────────────────
 
 
-def _create_graph_client():
+def _create_graph_client() -> Any:
     """Delegate to the shared Graph client factory."""
     return create_graph_client("defender_coverage")
 
@@ -108,11 +108,11 @@ def _is_gap(profile: Any) -> bool:
 
 def _gap_description(profile: Any) -> str:
     """Build a human-readable gap description from a control profile."""
-    title = getattr(profile, "title", None) or getattr(profile, "id", "Unknown control")
+    title = str(getattr(profile, "title", None) or getattr(profile, "id", "Unknown control"))
     tier = getattr(profile, "tier", None)
     remediation = getattr(profile, "remediation", None)
 
-    parts = [title]
+    parts: list[str] = [title]
     if tier:
         parts.append(f"(tier: {tier})")
     if remediation:
@@ -193,13 +193,13 @@ def _aggregate_workloads(
     return {wl: _build_workload_result(profs) for wl, profs in buckets.items()}
 
 
-def _compute_overall_coverage(workloads: dict[str, dict]) -> float:
+def _compute_overall_coverage(workloads: dict[str, dict[str, Any]]) -> float:
     """Weighted-average coverage across all workloads (by max_score)."""
     total_max = sum(w["details"]["max_score"] for w in workloads.values())
     if total_max == 0:
         return 0.0
     total_achieved = sum(w["details"]["achieved_score"] for w in workloads.values())
-    return round((total_achieved / total_max) * 100, 1)
+    return round(float(total_achieved / total_max) * 100, 1)
 
 
 def _collect_critical_gaps(profiles: list[Any]) -> list[str]:

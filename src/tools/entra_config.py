@@ -45,7 +45,7 @@ GLOBAL_ADMIN_ROLE_ID = "62e90394-69f5-4237-9190-012177145e10"
 # ── Graph client factory ───────────────────────────────────────────────
 
 
-def _create_graph_client():
+def _create_graph_client() -> Any:
     """Delegate to the shared Graph client factory."""
     return create_graph_client("entra_config")
 
@@ -318,7 +318,7 @@ async def get_entra_config() -> dict[str, Any]:
         return _generate_mock_response()
 
     try:
-        components: dict[str, dict] = {}
+        components: dict[str, dict[str, Any]] = {}
 
         # ── Conditional Access ─────────────────────────────
         try:

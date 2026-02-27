@@ -278,7 +278,7 @@ def _format_scorecard(data: dict[str, Any]) -> str:
     # The tool returns a full markdown report in "scorecard_markdown"
     md = data.get("scorecard_markdown") or data.get("markdown")
     if md:
-        return md
+        return str(md)
     lines = ["## 📈 ME5 Adoption Scorecard\n"]
     overall = data.get("overall_adoption_pct") or data.get("overall_adoption")
     if overall is not None:

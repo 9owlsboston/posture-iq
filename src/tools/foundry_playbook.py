@@ -444,7 +444,7 @@ def _identify_workload_areas(gaps: list[str]) -> list[str]:
 # ── Foundry IQ Client ─────────────────────────────────────────────────
 
 
-def _create_foundry_client():
+def _create_foundry_client() -> dict[str, Any] | None:
     """Create a Foundry IQ API client.
 
     Returns None when the Foundry IQ endpoint is not configured,

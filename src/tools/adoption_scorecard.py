@@ -56,14 +56,14 @@ def _parse_assessment(raw: str) -> dict[str, Any]:
         return {}
 
 
-def _extract_defender(data: dict) -> dict[str, Any]:
+def _extract_defender(data: dict[str, Any]) -> dict[str, Any]:
     """Build Defender XDR workload entry from assessment data."""
     defender = data.get("defender_coverage", {})
     if not defender:
         return _default_workload()
 
     components = defender.get("components", {})
-    sub_workloads: dict[str, dict] = {}
+    sub_workloads: dict[str, dict[str, Any]] = {}
     for name, comp in components.items():
         pct = comp.get("coverage_pct", 0.0)
         sub_workloads[name] = {"status": _status_from_pct(pct), "coverage_pct": pct}
@@ -78,14 +78,14 @@ def _extract_defender(data: dict) -> dict[str, Any]:
     }
 
 
-def _extract_purview(data: dict) -> dict[str, Any]:
+def _extract_purview(data: dict[str, Any]) -> dict[str, Any]:
     """Build Purview workload entry from assessment data."""
     purview = data.get("purview_policies", {})
     if not purview:
         return _default_workload()
 
     components = purview.get("components", {})
-    sub_workloads: dict[str, dict] = {}
+    sub_workloads: dict[str, dict[str, Any]] = {}
     for name, comp in components.items():
         pct = comp.get("coverage_pct", 0.0)
         sub_workloads[name] = {"status": _status_from_pct(pct), "coverage_pct": pct}
@@ -100,14 +100,14 @@ def _extract_purview(data: dict) -> dict[str, Any]:
     }
 
 
-def _extract_entra(data: dict) -> dict[str, Any]:
+def _extract_entra(data: dict[str, Any]) -> dict[str, Any]:
     """Build Entra ID P2 workload entry from assessment data."""
     entra = data.get("entra_config", {})
     if not entra:
         return _default_workload()
 
     components = entra.get("components", {})
-    sub_workloads: dict[str, dict] = {}
+    sub_workloads: dict[str, dict[str, Any]] = {}
     for name, comp in components.items():
         pct = comp.get("coverage_pct", 0.0)
         sub_workloads[name] = {"status": _status_from_pct(pct), "coverage_pct": pct}
@@ -132,7 +132,7 @@ def _default_workload() -> dict[str, Any]:
     }
 
 
-def _collect_critical_gaps(data: dict) -> list[dict[str, str]]:
+def _collect_critical_gaps(data: dict[str, Any]) -> list[dict[str, str]]:
     """Gather critical / high-priority gaps from all assessments."""
     gaps: list[dict[str, str]] = []
 
@@ -148,7 +148,7 @@ def _collect_critical_gaps(data: dict) -> list[dict[str, str]]:
             elif isinstance(gap, dict):
                 gaps.append(
                     {
-                        "gap": gap.get("description", gap.get("gap", str(gap))),
+                        "gap": str(gap.get("description", gap.get("gap", str(gap)))),
                         "priority": gap.get("priority", "P0"),
                         "workload": workload_label,
                     }
@@ -169,16 +169,16 @@ def _collect_critical_gaps(data: dict) -> list[dict[str, str]]:
     return gaps[:5]
 
 
-def _extract_days_to_green(data: dict) -> int:
+def _extract_days_to_green(data: dict[str, Any]) -> int:
     """Get estimated days to green from remediation plan, or estimate."""
     remediation = data.get("remediation_plan", {})
     if "estimated_days_to_green" in remediation:
-        return remediation["estimated_days_to_green"]
+        return int(remediation["estimated_days_to_green"])
     # Rough heuristic based on gap count
     total_gaps = sum(
         data.get(k, {}).get("total_gaps", 0) for k in ("defender_coverage", "purview_policies", "entra_config")
     )
-    return max(1, total_gaps * 2)
+    return int(max(1, total_gaps * 2))
 
 
 # ── Mock fallback ──────────────────────────────────────────────────────
@@ -230,7 +230,8 @@ def _generate_mock_response() -> dict[str, Any]:
         {"gap": "Insider Risk Management not enabled", "priority": "P1", "workload": "Microsoft Purview"},
     ]
 
-    overall_pct = sum(w["coverage_pct"] for w in workload_status.values()) / len(workload_status)
+    _coverage_values = [float(str(w["coverage_pct"])) for w in workload_status.values()]
+    overall_pct: float = sum(_coverage_values) / len(workload_status)
     scorecard_md = _generate_markdown_scorecard(workload_status, top_5_gaps, overall_pct, 21)
 
     return {

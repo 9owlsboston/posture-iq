@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from copilot import Tool, ToolInvocation
@@ -317,13 +317,14 @@ class TestPostureIQAgentInit:
 class TestPostureIQAgentStartClient:
     """Tests for start_client()."""
 
-    def test_creates_and_starts_client(self):
+    async def test_creates_and_starts_client(self):
         agent = PostureIQAgent()
         mock_client = MagicMock()
+        mock_client.start = AsyncMock()
         mock_client.get_state.return_value = "connected"
 
         with patch("src.agent.main.CopilotClient", return_value=mock_client):
-            result = agent.start_client()
+            result = await agent.start_client()
 
         mock_client.start.assert_called_once()
         mock_client.get_state.assert_called_once()
@@ -334,20 +335,20 @@ class TestPostureIQAgentStartClient:
 class TestPostureIQAgentCreateSession:
     """Tests for create_session()."""
 
-    def test_raises_if_client_not_started(self):
+    async def test_raises_if_client_not_started(self):
         agent = PostureIQAgent()
         with pytest.raises(RuntimeError, match="CopilotClient not started"):
-            agent.create_session()
+            await agent.create_session()
 
-    def test_creates_session_with_config(self):
+    async def test_creates_session_with_config(self):
         agent = PostureIQAgent()
         mock_client = MagicMock()
         mock_session = MagicMock()
         mock_session.on.return_value = MagicMock()  # unsubscribe function
-        mock_client.create_session.return_value = mock_session
+        mock_client.create_session = AsyncMock(return_value=mock_session)
         agent._client = mock_client
 
-        result = agent.create_session()
+        result = await agent.create_session()
 
         # Verify create_session was called with a config dict
         mock_client.create_session.assert_called_once()
@@ -361,22 +362,22 @@ class TestPostureIQAgentCreateSession:
         assert result is mock_session
         assert agent._session is mock_session
 
-    def test_subscribes_to_session_events(self):
+    async def test_subscribes_to_session_events(self):
         agent = PostureIQAgent()
         mock_client = MagicMock()
         mock_session = MagicMock()
         unsub_fn = MagicMock()
         mock_session.on.return_value = unsub_fn
-        mock_client.create_session.return_value = mock_session
+        mock_client.create_session = AsyncMock(return_value=mock_session)
         agent._client = mock_client
 
-        agent.create_session()
+        await agent.create_session()
 
         mock_session.on.assert_called_once_with(agent._handle_session_event)
         assert agent._event_unsubscribe is unsub_fn
 
     @patch("src.agent.main.settings")
-    def test_wires_azure_provider_when_configured(self, mock_settings):
+    async def test_wires_azure_provider_when_configured(self, mock_settings):
         mock_settings.azure_openai_endpoint = "https://my-openai.openai.azure.com/"
         mock_settings.azure_openai_api_key = "test-key-123"
         mock_settings.azure_openai_api_version = "2024-02-01"
@@ -386,10 +387,10 @@ class TestPostureIQAgentCreateSession:
         mock_client = MagicMock()
         mock_session = MagicMock()
         mock_session.on.return_value = MagicMock()
-        mock_client.create_session.return_value = mock_session
+        mock_client.create_session = AsyncMock(return_value=mock_session)
         agent._client = mock_client
 
-        agent.create_session()
+        await agent.create_session()
 
         config_arg = mock_client.create_session.call_args[0][0]
         assert "provider" in config_arg
@@ -400,23 +401,23 @@ class TestPostureIQAgentCreateSession:
         assert config_arg["model"] == "gpt-4o"
 
     @patch("src.agent.main.settings")
-    def test_no_provider_when_endpoint_not_configured(self, mock_settings):
+    async def test_no_provider_when_endpoint_not_configured(self, mock_settings):
         mock_settings.azure_openai_endpoint = ""
 
         agent = PostureIQAgent()
         mock_client = MagicMock()
         mock_session = MagicMock()
         mock_session.on.return_value = MagicMock()
-        mock_client.create_session.return_value = mock_session
+        mock_client.create_session = AsyncMock(return_value=mock_session)
         agent._client = mock_client
 
-        agent.create_session()
+        await agent.create_session()
 
         config_arg = mock_client.create_session.call_args[0][0]
         assert "provider" not in config_arg
 
     @patch("src.agent.main.settings")
-    def test_azure_provider_without_api_key_uses_managed_identity(self, mock_settings):
+    async def test_azure_provider_without_api_key_uses_managed_identity(self, mock_settings):
         mock_settings.azure_openai_endpoint = "https://my-openai.openai.azure.com/"
         mock_settings.azure_openai_api_key = ""  # empty → managed identity
         mock_settings.azure_openai_api_version = "2024-02-01"
@@ -426,10 +427,10 @@ class TestPostureIQAgentCreateSession:
         mock_client = MagicMock()
         mock_session = MagicMock()
         mock_session.on.return_value = MagicMock()
-        mock_client.create_session.return_value = mock_session
+        mock_client.create_session = AsyncMock(return_value=mock_session)
         agent._client = mock_client
 
-        agent.create_session()
+        await agent.create_session()
 
         config_arg = mock_client.create_session.call_args[0][0]
         assert "provider" in config_arg
@@ -439,35 +440,35 @@ class TestPostureIQAgentCreateSession:
 class TestPostureIQAgentResumeSession:
     """Tests for resume_session()."""
 
-    def test_raises_if_client_not_started(self):
+    async def test_raises_if_client_not_started(self):
         agent = PostureIQAgent()
         with pytest.raises(RuntimeError, match="CopilotClient not started"):
-            agent.resume_session("some-session-id")
+            await agent.resume_session("some-session-id")
 
-    def test_resumes_session_by_id(self):
+    async def test_resumes_session_by_id(self):
         agent = PostureIQAgent()
         mock_client = MagicMock()
         mock_session = MagicMock()
         mock_session.on.return_value = MagicMock()
-        mock_client.resume_session.return_value = mock_session
+        mock_client.resume_session = AsyncMock(return_value=mock_session)
         agent._client = mock_client
 
-        result = agent.resume_session("session-abc")
+        result = await agent.resume_session("session-abc")
 
         mock_client.resume_session.assert_called_once_with("session-abc")
         assert result is mock_session
         assert agent._session is mock_session
 
-    def test_subscribes_events_on_resume(self):
+    async def test_subscribes_events_on_resume(self):
         agent = PostureIQAgent()
         mock_client = MagicMock()
         mock_session = MagicMock()
         unsub_fn = MagicMock()
         mock_session.on.return_value = unsub_fn
-        mock_client.resume_session.return_value = mock_session
+        mock_client.resume_session = AsyncMock(return_value=mock_session)
         agent._client = mock_client
 
-        agent.resume_session("session-abc")
+        await agent.resume_session("session-abc")
 
         mock_session.on.assert_called_once_with(agent._handle_session_event)
         assert agent._event_unsubscribe is unsub_fn
@@ -476,32 +477,33 @@ class TestPostureIQAgentResumeSession:
 class TestPostureIQAgentCloseSession:
     """Tests for close_session()."""
 
-    def test_unsubscribes_and_destroys(self):
+    async def test_unsubscribes_and_destroys(self):
         agent = PostureIQAgent()
         unsub_fn = MagicMock()
         mock_session = MagicMock()
+        mock_session.destroy = AsyncMock()
         agent._event_unsubscribe = unsub_fn
         agent._session = mock_session
 
-        agent.close_session()
+        await agent.close_session()
 
         unsub_fn.assert_called_once()
         mock_session.destroy.assert_called_once()
         assert agent._session is None
         assert agent._event_unsubscribe is None
 
-    def test_noop_when_no_session(self):
+    async def test_noop_when_no_session(self):
         agent = PostureIQAgent()
-        agent.close_session()  # should not raise
+        await agent.close_session()  # should not raise
         assert agent._session is None
 
-    def test_only_unsubscribe_when_no_session(self):
+    async def test_only_unsubscribe_when_no_session(self):
         agent = PostureIQAgent()
         unsub_fn = MagicMock()
         agent._event_unsubscribe = unsub_fn
         agent._session = None
 
-        agent.close_session()
+        await agent.close_session()
 
         unsub_fn.assert_called_once()
         assert agent._event_unsubscribe is None
@@ -510,18 +512,19 @@ class TestPostureIQAgentCloseSession:
 class TestPostureIQAgentStop:
     """Tests for stop()."""
 
-    def test_closes_session_then_stops_client(self):
+    async def test_closes_session_then_stops_client(self):
         agent = PostureIQAgent()
         mock_client = MagicMock()
-        mock_client.stop.return_value = []
+        mock_client.stop = AsyncMock(return_value=[])
         mock_session = MagicMock()
+        mock_session.destroy = AsyncMock()
         unsub_fn = MagicMock()
 
         agent._client = mock_client
         agent._session = mock_session
         agent._event_unsubscribe = unsub_fn
 
-        agent.stop()
+        await agent.stop()
 
         # Session closed first
         unsub_fn.assert_called_once()
@@ -531,17 +534,17 @@ class TestPostureIQAgentStop:
         assert agent._client is None
         assert agent._session is None
 
-    def test_noop_when_nothing_active(self):
+    async def test_noop_when_nothing_active(self):
         agent = PostureIQAgent()
-        agent.stop()  # should not raise
+        await agent.stop()  # should not raise
 
-    def test_handles_stop_errors(self):
+    async def test_handles_stop_errors(self):
         agent = PostureIQAgent()
         mock_client = MagicMock()
-        mock_client.stop.return_value = [RuntimeError("cleanup failed")]
+        mock_client.stop = AsyncMock(return_value=[RuntimeError("cleanup failed")])
         agent._client = mock_client
 
-        agent.stop()  # should log warning, not raise
+        await agent.stop()  # should log warning, not raise
 
         mock_client.stop.assert_called_once()
         assert agent._client is None
@@ -555,12 +558,12 @@ class TestPostureIQAgentStop:
 class TestSendMessage:
     """Tests for send_message()."""
 
-    def test_raises_if_no_session(self):
+    async def test_raises_if_no_session(self):
         agent = PostureIQAgent()
         with pytest.raises(RuntimeError, match="No active session"):
-            agent.send_message("hello")
+            await agent.send_message("hello")
 
-    def test_calls_send_and_wait(self):
+    async def test_calls_send_and_wait(self):
         agent = PostureIQAgent()
         mock_session = MagicMock()
         response_event = _make_session_event(
@@ -568,10 +571,10 @@ class TestSendMessage:
             content="Here is your secure score.",
             message=None,
         )
-        mock_session.send_and_wait.return_value = response_event
+        mock_session.send_and_wait = AsyncMock(return_value=response_event)
         agent._session = mock_session
 
-        result = agent.send_message("What is my secure score?")
+        result = await agent.send_message("What is my secure score?")
 
         mock_session.send_and_wait.assert_called_once_with(
             {"prompt": "What is my secure score?"},
@@ -579,17 +582,17 @@ class TestSendMessage:
         )
         assert result == "Here is your secure score."
 
-    def test_returns_none_on_timeout(self):
+    async def test_returns_none_on_timeout(self):
         agent = PostureIQAgent()
         mock_session = MagicMock()
-        mock_session.send_and_wait.return_value = None
+        mock_session.send_and_wait = AsyncMock(return_value=None)
         agent._session = mock_session
 
-        result = agent.send_message("hello")
+        result = await agent.send_message("hello")
 
         assert result is None
 
-    def test_falls_back_to_message_field(self):
+    async def test_falls_back_to_message_field(self):
         agent = PostureIQAgent()
         mock_session = MagicMock()
         response_event = _make_session_event(
@@ -597,14 +600,14 @@ class TestSendMessage:
             content=None,
             message="Fallback message content",
         )
-        mock_session.send_and_wait.return_value = response_event
+        mock_session.send_and_wait = AsyncMock(return_value=response_event)
         agent._session = mock_session
 
-        result = agent.send_message("test")
+        result = await agent.send_message("test")
 
         assert result == "Fallback message content"
 
-    def test_returns_none_when_no_content(self):
+    async def test_returns_none_when_no_content(self):
         agent = PostureIQAgent()
         mock_session = MagicMock()
         response_event = _make_session_event(
@@ -612,14 +615,14 @@ class TestSendMessage:
             content=None,
             message=None,
         )
-        mock_session.send_and_wait.return_value = response_event
+        mock_session.send_and_wait = AsyncMock(return_value=response_event)
         agent._session = mock_session
 
-        result = agent.send_message("test")
+        result = await agent.send_message("test")
 
         assert result is None
 
-    def test_logs_to_audit_trail(self):
+    async def test_logs_to_audit_trail(self):
         agent = PostureIQAgent()
         mock_session = MagicMock()
         response_event = _make_session_event(
@@ -627,18 +630,18 @@ class TestSendMessage:
             content="Agent response text",
             message=None,
         )
-        mock_session.send_and_wait.return_value = response_event
+        mock_session.send_and_wait = AsyncMock(return_value=response_event)
         agent._session = mock_session
 
         with patch.object(agent._audit, "log_interaction") as mock_audit:
-            agent.send_message("user question")
+            await agent.send_message("user question")
 
             mock_audit.assert_called_once_with(
                 user_input="user question",
                 agent_response="Agent response text",
             )
 
-    def test_audit_logs_no_response_placeholder(self):
+    async def test_audit_logs_no_response_placeholder(self):
         agent = PostureIQAgent()
         mock_session = MagicMock()
         response_event = _make_session_event(
@@ -646,11 +649,11 @@ class TestSendMessage:
             content=None,
             message=None,
         )
-        mock_session.send_and_wait.return_value = response_event
+        mock_session.send_and_wait = AsyncMock(return_value=response_event)
         agent._session = mock_session
 
         with patch.object(agent._audit, "log_interaction") as mock_audit:
-            agent.send_message("user question")
+            await agent.send_message("user question")
 
             mock_audit.assert_called_once_with(
                 user_input="user question",
@@ -661,17 +664,18 @@ class TestSendMessage:
 class TestSendMessageStreaming:
     """Tests for send_message_streaming()."""
 
-    def test_raises_if_no_session(self):
+    async def test_raises_if_no_session(self):
         agent = PostureIQAgent()
         with pytest.raises(RuntimeError, match="No active session"):
-            agent.send_message_streaming("hello")
+            await agent.send_message_streaming("hello")
 
-    def test_calls_session_send(self):
+    async def test_calls_session_send(self):
         agent = PostureIQAgent()
         mock_session = MagicMock()
+        mock_session.send = AsyncMock()
         agent._session = mock_session
 
-        agent.send_message_streaming("stream this")
+        await agent.send_message_streaming("stream this")
 
         mock_session.send.assert_called_once_with({"prompt": "stream this"})
 
@@ -930,16 +934,16 @@ class TestSystemPromptIntegration:
     def test_system_prompt_includes_persona(self):
         assert "PostureIQ" in SYSTEM_PROMPT
 
-    def test_session_config_uses_replace_mode(self):
+    async def test_session_config_uses_replace_mode(self):
         """Ensure we replace (not append to) the default system prompt."""
         agent = PostureIQAgent()
         mock_client = MagicMock()
         mock_session = MagicMock()
         mock_session.on.return_value = MagicMock()
-        mock_client.create_session.return_value = mock_session
+        mock_client.create_session = AsyncMock(return_value=mock_session)
         agent._client = mock_client
 
-        agent.create_session()
+        await agent.create_session()
 
         config = mock_client.create_session.call_args[0][0]
         assert config["system_message"]["mode"] == "replace"

@@ -66,7 +66,7 @@ YELLOW_THRESHOLD = 40.0
 # ── Graph client factory ───────────────────────────────────────────────
 
 
-def _create_graph_client():
+def _create_graph_client() -> Any:
     """Delegate to the shared Graph client factory."""
     return create_graph_client("purview_policies")
 
@@ -121,9 +121,9 @@ def _is_gap(profile: Any) -> bool:
 
 
 def _gap_description(profile: Any) -> str:
-    title = getattr(profile, "title", None) or getattr(profile, "id", "Unknown")
+    title = str(getattr(profile, "title", None) or getattr(profile, "id", "Unknown"))
     tier = getattr(profile, "tier", None)
-    parts = [title]
+    parts: list[str] = [title]
     if tier:
         parts.append(f"(tier: {tier})")
     return " ".join(parts)
@@ -177,7 +177,7 @@ def _build_component_result(profiles: list[Any]) -> dict[str, Any]:
     }
 
 
-def _aggregate_components(profiles: list[Any]) -> dict[str, dict]:
+def _aggregate_components(profiles: list[Any]) -> dict[str, dict[str, Any]]:
     buckets: dict[str, list[Any]] = {c: [] for c in ALL_COMPONENTS}
     for p in profiles:
         comp = _classify_component(p)
@@ -186,12 +186,12 @@ def _aggregate_components(profiles: list[Any]) -> dict[str, dict]:
     return {c: _build_component_result(profs) for c, profs in buckets.items()}
 
 
-def _compute_overall(components: dict[str, dict]) -> float:
+def _compute_overall(components: dict[str, dict[str, Any]]) -> float:
     total_max = sum(c["details"]["max_score"] for c in components.values())
     if total_max == 0:
         return 0.0
     total_achieved = sum(c["details"]["achieved_score"] for c in components.values())
-    return round((total_achieved / total_max) * 100, 1)
+    return round(float(total_achieved / total_max) * 100, 1)
 
 
 def _collect_critical_gaps(profiles: list[Any]) -> list[str]:

@@ -6,6 +6,8 @@ GraphServiceClient instances, used by all tool modules.
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 
 from src.agent.config import settings
@@ -13,7 +15,7 @@ from src.agent.config import settings
 logger = structlog.get_logger(__name__)
 
 
-def create_graph_client(tool_name: str = "unknown"):
+def create_graph_client(tool_name: str = "unknown") -> Any:
     """Create an authenticated Microsoft Graph client.
 
     Uses ClientSecretCredential when explicit credentials are configured,
@@ -34,12 +36,12 @@ def create_graph_client(tool_name: str = "unknown"):
         return None
 
     try:
-        from msgraph import GraphServiceClient
+        from msgraph import GraphServiceClient  # type: ignore[attr-defined]
 
         if settings.azure_client_secret:
             from azure.identity import ClientSecretCredential
 
-            credential = ClientSecretCredential(
+            credential: Any = ClientSecretCredential(
                 tenant_id=settings.azure_tenant_id,
                 client_id=settings.azure_client_id,
                 client_secret=settings.azure_client_secret,

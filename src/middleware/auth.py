@@ -292,7 +292,7 @@ async def require_scope(required: str, user: UserContext = Depends(get_current_u
     return user
 
 
-def scope_checker(scope: str):
+def scope_checker(scope: str) -> Any:
     """Factory for scope-checking dependencies.
 
     Example::
@@ -402,7 +402,8 @@ async def exchange_code_for_tokens(
                 detail=f"Token exchange failed: {error_body.get('error_description', 'unknown error')}",
             )
 
-        return resp.json()
+        result: dict[str, Any] = resp.json()
+        return result
     except httpx.HTTPError as exc:
         logger.error("auth.token_exchange.http_error", error=str(exc))
         raise HTTPException(

@@ -173,10 +173,10 @@ def create_redaction_map(text: str) -> tuple[str, dict[str, str]]:
     counters: dict[str, int] = {}
     result = text
 
-    def _replace_with_indexed(pattern: re.Pattern, placeholder_base: str, text_in: str) -> str:
+    def _replace_with_indexed(pattern: re.Pattern[str], placeholder_base: str, text_in: str) -> str:
         nonlocal counters
 
-        def _replacer(match: re.Match) -> str:
+        def _replacer(match: re.Match[str]) -> str:
             original = match.group(0)
             counters[placeholder_base] = counters.get(placeholder_base, 0) + 1
             idx = counters[placeholder_base]
@@ -184,7 +184,7 @@ def create_redaction_map(text: str) -> tuple[str, dict[str, str]]:
             redaction_map[key] = original
             return key
 
-        return pattern.sub(_replacer, text_in)
+        return str(pattern.sub(_replacer, text_in))
 
     result = _replace_with_indexed(_GUID_PATTERN, "TENANT_ID", result)
     result = _replace_with_indexed(_EMAIL_PATTERN, "USER_EMAIL", result)

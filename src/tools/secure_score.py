@@ -34,7 +34,7 @@ KNOWN_CATEGORIES = frozenset({"Identity", "Data", "Device", "Apps", "Infrastruct
 # ── Graph client factory ───────────────────────────────────────────────
 
 
-def _create_graph_client():
+def _create_graph_client() -> Any:
     """Create an authenticated Microsoft Graph client.
 
     Delegates to the shared factory in ``src.tools.graph_client``.

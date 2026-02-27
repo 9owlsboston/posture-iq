@@ -47,7 +47,7 @@ Output ONLY the JSON array, no markdown fences, no extra text.
 # ── Azure OpenAI client factory ────────────────────────────────────────
 
 
-def _create_openai_client():
+def _create_openai_client() -> Any:
     """Create an Azure OpenAI client.
 
     Returns None when endpoint is not configured (triggers mock fallback).
@@ -87,7 +87,7 @@ def _create_openai_client():
 # ── Helpers ────────────────────────────────────────────────────────────
 
 
-def _parse_llm_steps(raw_text: str) -> list[dict[str, Any]]:
+def _parse_llm_steps(raw_text: str) -> list[dict[str, Any]]:  # noqa: C901
     """Parse the LLM response into a list of remediation steps.
 
     Handles JSON wrapped in markdown code fences.
@@ -102,16 +102,16 @@ def _parse_llm_steps(raw_text: str) -> list[dict[str, Any]]:
     try:
         parsed = json.loads(text)
         if isinstance(parsed, list):
-            return parsed
+            return list(parsed)
         if isinstance(parsed, dict) and "steps" in parsed:
-            return parsed["steps"]
+            return list(parsed["steps"])
         return [parsed]
     except (json.JSONDecodeError, TypeError):
         logger.warning("tool.remediation_plan.parse_error", raw=text[:200])
         return []
 
 
-def _validate_step(step: dict) -> dict[str, Any]:
+def _validate_step(step: dict[str, Any]) -> dict[str, Any]:
     """Ensure a step dict has all required fields with sensible defaults."""
     return {
         "priority": step.get("priority", "P2"),
@@ -124,7 +124,7 @@ def _validate_step(step: dict) -> dict[str, Any]:
     }
 
 
-def _compute_estimated_days(steps: list[dict]) -> int:
+def _compute_estimated_days(steps: list[dict[str, Any]]) -> int:
     """Rough estimate of days-to-green based on step effort."""
     total_hours = 0.0
     for s in steps:
@@ -141,8 +141,8 @@ def _compute_estimated_days(steps: list[dict]) -> int:
     return max(1, round(total_hours / 4))
 
 
-def _compute_total_score_improvement(steps: list[dict]) -> float:
-    return round(sum(s.get("impact_on_score", 0.0) for s in steps), 1)
+def _compute_total_score_improvement(steps: list[dict[str, Any]]) -> float:
+    return round(float(sum(s.get("impact_on_score", 0.0) for s in steps)), 1)
 
 
 # ── Mock fallback ──────────────────────────────────────────────────────
