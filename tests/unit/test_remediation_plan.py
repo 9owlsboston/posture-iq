@@ -700,3 +700,132 @@ class TestRemediationEdgeCases:
         call_kwargs = mock_client.chat.completions.create.call_args[1]
         assert "model" in call_kwargs
         assert call_kwargs["temperature"] == 0.3
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 8. Foundry IQ (Project 479) Enrichment
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestFoundryIQEnrichment:
+    """Tests for _enrich_step_with_p479_offer and _enrich_steps_with_p479."""
+
+    def test_step_with_legacy_auth_maps_to_conditional_access(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Block legacy authentication", description="Block legacy auth protocols")
+        enriched = _enrich_step_with_p479_offer(step)
+        assert enriched["workload_area"] == "entra_conditional_access"
+        assert "project_479_offer" in enriched
+        assert enriched["project_479_offer"]["id"] == "P479-EID-001"
+
+    def test_step_with_safe_attachments_maps_to_defender_o365(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Enable Safe Attachments", description="Safe Attachments not enabled")
+        enriched = _enrich_step_with_p479_offer(step)
+        assert enriched["workload_area"] == "defender_office365"
+        assert enriched["project_479_offer"]["id"] == "P479-DEF-002"
+
+    def test_step_with_pim_maps_to_entra_pim(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Convert permanent role assignments to eligible (PIM)")
+        enriched = _enrich_step_with_p479_offer(step)
+        assert enriched["workload_area"] == "entra_pim"
+        assert enriched["project_479_offer"]["id"] == "P479-EID-002"
+
+    def test_step_with_dlp_maps_to_purview_dlp(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Extend DLP policies to SharePoint and Teams")
+        enriched = _enrich_step_with_p479_offer(step)
+        assert enriched["workload_area"] == "purview_dlp"
+        assert enriched["project_479_offer"]["id"] == "P479-PUR-001"
+
+    def test_step_with_mfa_maps_to_conditional_access(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Enforce MFA for all users via Conditional Access")
+        enriched = _enrich_step_with_p479_offer(step)
+        assert enriched["workload_area"] == "entra_conditional_access"
+
+    def test_step_with_identity_protection_maps_correctly(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Enable Identity Protection risk policies")
+        enriched = _enrich_step_with_p479_offer(step)
+        assert enriched["workload_area"] == "entra_identity_protection"
+        assert enriched["project_479_offer"]["id"] == "P479-EID-003"
+
+    def test_step_with_insider_risk_maps_correctly(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Enable Insider Risk Management")
+        enriched = _enrich_step_with_p479_offer(step)
+        assert enriched["workload_area"] == "purview_insider_risk"
+        assert enriched["project_479_offer"]["id"] == "P479-PUR-004"
+
+    def test_step_with_access_review_maps_correctly(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Configure Access Reviews for guest users")
+        enriched = _enrich_step_with_p479_offer(step)
+        assert enriched["workload_area"] == "entra_access_reviews"
+        assert enriched["project_479_offer"]["id"] == "P479-EID-004"
+
+    def test_unmatched_step_has_no_offer(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Something completely unrelated", description="No keywords here")
+        enriched = _enrich_step_with_p479_offer(step)
+        assert "project_479_offer" not in enriched
+        assert "workload_area" not in enriched
+
+    def test_offer_has_all_required_fields(self):
+        from src.tools.remediation_plan import _enrich_step_with_p479_offer
+
+        step = _make_step(title="Enable Safe Attachments")
+        enriched = _enrich_step_with_p479_offer(step)
+        offer = enriched["project_479_offer"]
+        assert "name" in offer
+        assert "id" in offer
+        assert "description" in offer
+        assert "duration" in offer
+        assert "delivery" in offer
+
+    def test_enrich_steps_batch(self):
+        from src.tools.remediation_plan import _enrich_steps_with_p479
+
+        steps = [
+            _make_step(title="Block legacy auth"),
+            _make_step(title="Enable Safe Attachments"),
+            _make_step(title="Something unknown"),
+        ]
+        enriched = _enrich_steps_with_p479(steps)
+        assert len(enriched) == 3
+        # First two should have offers, third should not
+        assert "project_479_offer" in enriched[0]
+        assert "project_479_offer" in enriched[1]
+        assert "project_479_offer" not in enriched[2]
+
+    def test_enrich_does_not_mutate_original(self):
+        from src.tools.remediation_plan import _enrich_steps_with_p479
+
+        original = _make_step(title="Block legacy auth")
+        enriched = _enrich_steps_with_p479([original])
+        # Original should not be mutated (we dict-copy inside)
+        assert "project_479_offer" not in original
+
+    @pytest.mark.asyncio
+    @patch("src.tools.remediation_plan._create_openai_client", return_value=None)
+    async def test_mock_response_has_p479_offers(self, _mock):
+        """The mock fallback path should also produce P479 offers on steps."""
+        from src.tools.remediation_plan import generate_remediation_plan
+
+        result = await generate_remediation_plan("{}")
+        steps_with_offer = [s for s in result["steps"] if "project_479_offer" in s]
+        # Most mock steps should match a workload area
+        assert len(steps_with_offer) >= 5, (
+            f"Expected >=5 steps with P479 offers, got {len(steps_with_offer)}"
+        )

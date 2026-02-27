@@ -20,6 +20,7 @@ from src.agent.config import settings
 from src.middleware.content_safety import check_content_safety
 from src.middleware.pii_redaction import redact_pii
 from src.middleware.tracing import trace_tool_call
+from src.tools.foundry_playbook import _GAP_KEYWORD_MAP, _PLAYBOOKS
 
 logger = structlog.get_logger(__name__)
 
@@ -143,6 +144,41 @@ def _compute_estimated_days(steps: list[dict[str, Any]]) -> int:
 
 def _compute_total_score_improvement(steps: list[dict[str, Any]]) -> float:
     return round(float(sum(s.get("impact_on_score", 0.0) for s in steps)), 1)
+
+
+def _enrich_step_with_p479_offer(step: dict[str, Any]) -> dict[str, Any]:
+    """Map a remediation step to a Project 479 offer from Foundry IQ.
+
+    Scans the step title and description for keywords that match a workload
+    area, then attaches the corresponding offer and workload_area to the step.
+    """
+    text = f"{step.get('title', '')} {step.get('description', '')}".lower()
+
+    # Find the best-matching workload area via keyword scan
+    matched_area: str | None = None
+    for keyword, area in _GAP_KEYWORD_MAP.items():
+        if keyword in text:
+            matched_area = area
+            break  # first match wins (keywords are ordered by specificity)
+
+    if matched_area and matched_area in _PLAYBOOKS:
+        playbook = _PLAYBOOKS[matched_area]
+        offer = playbook.get("offer")
+        step["workload_area"] = matched_area
+        if offer:
+            step["project_479_offer"] = {
+                "name": offer["name"],
+                "id": offer["id"],
+                "description": offer["description"],
+                "duration": offer["duration"],
+                "delivery": offer["delivery"],
+            }
+    return step
+
+
+def _enrich_steps_with_p479(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Enrich all remediation steps with Foundry IQ Project 479 offers."""
+    return [_enrich_step_with_p479_offer(dict(s)) for s in steps]
 
 
 # ── Mock fallback ──────────────────────────────────────────────────────
@@ -304,6 +340,9 @@ def _generate_mock_response() -> dict[str, Any]:
         },
     ]
 
+    # Enrich steps with Foundry IQ Project 479 offers
+    steps = _enrich_steps_with_p479(steps)
+
     return {
         "estimated_days_to_green": _compute_estimated_days(steps),
         "total_steps": len(steps),
@@ -370,7 +409,10 @@ async def generate_remediation_plan(assessment_context: str) -> dict[str, Any]:
             logger.warning("tool.remediation_plan.empty_llm_response")
             return _generate_mock_response()
 
-        # Step 3: Content safety check
+        # Step 3: Enrich with Foundry IQ offers
+        steps = _enrich_steps_with_p479(steps)
+
+        # Step 4: Content safety check
         plan_text = json.dumps(steps, indent=2)
         safety_result = await check_content_safety(plan_text)
 
