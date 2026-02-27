@@ -102,7 +102,21 @@ run_lint() {
     return
   fi
 
-  # Run ruff for real errors only (E = pycodestyle errors, F = pyflakes, W = warnings)
+  # 2a. Format check (matches CI: ruff format --check)
+  local fmt_output fmt_exit=0
+  fmt_output=$(ruff format --check src/ tests/ 2>&1) || fmt_exit=$?
+
+  if [[ $fmt_exit -eq 0 ]]; then
+    pass_check "Format — all files formatted"
+  else
+    local reformat_count
+    reformat_count=$(echo "$fmt_output" | grep -c 'Would reformat' || echo "0")
+    fail_check "Format — ${reformat_count} file(s) need formatting"
+    echo "$fmt_output"
+    info "Run 'ruff format src/ tests/' to auto-fix"
+  fi
+
+  # 2b. Lint rules (E = pycodestyle errors, F = pyflakes, W = warnings)
   local output exit_code=0
   output=$(ruff check --select E,F,W --statistics src/ tests/ 2>&1) || exit_code=$?
 

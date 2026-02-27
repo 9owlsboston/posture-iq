@@ -147,7 +147,7 @@ def _format_secure_score(data: dict[str, Any]) -> str:
     if isinstance(trend, list) and len(trend) >= 2:
         delta = round(trend[0].get("score", 0) - trend[-1].get("score", 0), 1)
         lines.append(f"**30-day Trend**: {'+' if delta > 0 else ''}{delta} points")
-    elif isinstance(trend, (int, float)) and trend:
+    elif isinstance(trend, int | float) and trend:
         lines.append(f"**30-day Trend**: {'+' if trend > 0 else ''}{trend} points")
     cats = data.get("categories", {})
     if cats:
@@ -161,7 +161,7 @@ def _format_secure_score(data: dict[str, Any]) -> str:
     if isinstance(comp, dict):
         avg = comp.get("industry_avg", "?")
         delta = comp.get("delta", "?")
-        sign = "+" if isinstance(delta, (int, float)) and delta > 0 else ""
+        sign = "+" if isinstance(delta, int | float) and delta > 0 else ""
         lines.append(f"\n**Industry Comparison**: avg {avg}, delta {sign}{delta}")
     elif isinstance(comp, str) and comp:
         lines.append(f"\n**Industry Comparison**: {comp}")
