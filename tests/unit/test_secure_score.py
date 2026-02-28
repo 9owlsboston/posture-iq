@@ -731,6 +731,33 @@ class TestQuerySecureScoreGraphPath:
         assert "request_configuration" in call_kwargs.kwargs
 
     @pytest.mark.asyncio
+    async def test_graph_api_works_without_generated_request_builder(self):
+        """Tool should still execute when request builder classes are unavailable."""
+        import builtins
+
+        original_import = builtins.__import__
+
+        def _fake_import(name, *args, **kwargs):
+            if name.startswith("msgraph.generated.security.secure_scores"):
+                raise ModuleNotFoundError("No module named 'msgraph.generated.security.secure_scores'")
+            return original_import(name, *args, **kwargs)
+
+        client = self._make_mock_client([_make_secure_score_snapshot(61.0, 100.0)])
+
+        with (
+            patch("src.tools.secure_score._create_graph_client", return_value=client),
+            patch("builtins.__import__", side_effect=_fake_import),
+        ):
+            from src.tools.secure_score import query_secure_score
+
+            result = await query_secure_score()
+
+        assert result["data_source"] == "graph_api"
+        assert result["current_score"] == 61.0
+        assert client.security.secure_scores.get.call_count == 1
+        assert "request_configuration" in client.security.secure_scores.get.call_args.kwargs
+
+    @pytest.mark.asyncio
     async def test_graph_api_control_scores_aggregation(self):
         """Verify controls are aggregated by category from real Graph data."""
         snapshots = [

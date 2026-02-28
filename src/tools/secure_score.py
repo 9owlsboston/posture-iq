@@ -11,6 +11,7 @@ Required scope: SecurityEvents.Read.All
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -29,6 +30,21 @@ GRAPH_TOP_N = 30  # Number of recent score snapshots to fetch (one per day)
 
 # Known Secure Score control categories (from Microsoft docs)
 KNOWN_CATEGORIES = frozenset({"Identity", "Data", "Device", "Apps", "Infrastructure"})
+
+
+@dataclass
+class _SecureScoresQueryParameters:
+    """Graph query parameters encoded for Kiota RequestInformation."""
+
+    top: int | None = None
+    orderby: list[str] | None = None
+
+    def get_query_parameter(self, original_name: str) -> str:
+        if original_name == "top":
+            return "%24top"
+        if original_name == "orderby":
+            return "%24orderby"
+        return original_name
 
 
 # ── Graph client factory ───────────────────────────────────────────────
@@ -292,18 +308,13 @@ async def query_secure_score(tenant_id: str = "") -> dict[str, Any]:
 
     # ── Real Graph API call ────────────────────────────────
     try:
-        from msgraph.generated.security.secure_scores.secure_scores_request_builder import (
-            SecureScoresRequestBuilder,
-        )
+        from kiota_abstractions.base_request_configuration import RequestConfiguration
 
-        query_params = SecureScoresRequestBuilder.SecureScoresRequestBuilderGetQueryParameters(
+        query_params = _SecureScoresQueryParameters(
             top=GRAPH_TOP_N,
             orderby=["createdDateTime desc"],
         )
-        request_config = SecureScoresRequestBuilder.SecureScoresRequestBuilderGetRequestConfiguration(
-            query_parameters=query_params,
-        )
-
+        request_config = RequestConfiguration(query_parameters=query_params)
         response = await client.security.secure_scores.get(
             request_configuration=request_config,
         )

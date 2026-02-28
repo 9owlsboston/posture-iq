@@ -817,6 +817,32 @@ class TestDefenderCoverageGraphPath:
         assert result["workloads"]["Defender for Endpoint"]["details"]["total_controls"] == 1
         assert result["overall_coverage_pct"] > 0
 
+    @pytest.mark.asyncio
+    @patch("src.tools.defender_coverage._create_graph_client")
+    async def test_graph_path_works_without_generated_request_builder(self, mock_factory):
+        import builtins
+
+        from src.tools.defender_coverage import assess_defender_coverage
+
+        original_import = builtins.__import__
+
+        def _fake_import(name, *args, **kwargs):
+            if name.startswith("msgraph.generated.security.secure_score_control_profiles"):
+                raise ModuleNotFoundError("No module named 'msgraph.generated.security.secure_score_control_profiles'")
+            return original_import(name, *args, **kwargs)
+
+        profiles = [_resolved_profile(service="MDE", max_score=10.0)]
+        mock_client = MagicMock()
+        mock_client.security.secure_score_control_profiles.get = AsyncMock(return_value=_build_graph_response(profiles))
+        mock_factory.return_value = mock_client
+
+        with patch("builtins.__import__", side_effect=_fake_import):
+            result = await assess_defender_coverage()
+
+        assert result["data_source"] == "graph_api"
+        assert mock_client.security.secure_score_control_profiles.get.call_count == 1
+        assert "request_configuration" in mock_client.security.secure_score_control_profiles.get.call_args.kwargs
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 13. Tracing

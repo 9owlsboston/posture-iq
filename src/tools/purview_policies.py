@@ -16,6 +16,7 @@ Required scope: SecurityEvents.Read.All, InformationProtection.Read.All
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -61,6 +62,18 @@ _COMPONENT_KEYWORDS: dict[str, list[str]] = {
 
 GREEN_THRESHOLD = 70.0
 YELLOW_THRESHOLD = 40.0
+
+
+@dataclass
+class _SecureScoreControlProfilesQueryParameters:
+    """Graph query parameters encoded for Kiota RequestInformation."""
+
+    top: int | None = None
+
+    def get_query_parameter(self, original_name: str) -> str:
+        if original_name == "top":
+            return "%24top"
+        return original_name
 
 
 # ── Graph client factory ───────────────────────────────────────────────
@@ -303,20 +316,10 @@ async def check_purview_policies() -> dict[str, Any]:
         return _generate_mock_response()
 
     try:
-        from msgraph.generated.security.secure_score_control_profiles.secure_score_control_profiles_request_builder import (  # noqa: E501
-            SecureScoreControlProfilesRequestBuilder,
-        )
+        from kiota_abstractions.base_request_configuration import RequestConfiguration
 
-        query = SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetQueryParameters(
-            top=200,
-        )
-        request_config_cls = (
-            SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetRequestConfiguration
-        )
-        config = request_config_cls(
-            query_parameters=query,
-        )
-
+        query = _SecureScoreControlProfilesQueryParameters(top=200)
+        config = RequestConfiguration(query_parameters=query)
         response = await client.security.secure_score_control_profiles.get(
             request_configuration=config,
         )

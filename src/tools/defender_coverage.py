@@ -15,6 +15,7 @@ Required scope: SecurityEvents.Read.All
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -53,6 +54,18 @@ ALL_WORKLOADS = (
 
 GREEN_THRESHOLD = 70.0  # ≥ 70% → green
 YELLOW_THRESHOLD = 40.0  # ≥ 40% → yellow, else red
+
+
+@dataclass
+class _SecureScoreControlProfilesQueryParameters:
+    """Graph query parameters encoded for Kiota RequestInformation."""
+
+    top: int | None = None
+
+    def get_query_parameter(self, original_name: str) -> str:
+        if original_name == "top":
+            return "%24top"
+        return original_name
 
 
 # ── Graph client factory ───────────────────────────────────────────────
@@ -329,20 +342,12 @@ async def assess_defender_coverage() -> dict[str, Any]:
 
     # ── Graph API path ─────────────────────────────────────────────
     try:
-        from msgraph.generated.security.secure_score_control_profiles.secure_score_control_profiles_request_builder import (  # noqa: E501
-            SecureScoreControlProfilesRequestBuilder,
-        )
+        from kiota_abstractions.base_request_configuration import RequestConfiguration
 
-        query = SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetQueryParameters(
+        query = _SecureScoreControlProfilesQueryParameters(
             top=200,  # Fetch all profiles in one page (typical tenants have < 100)
         )
-        request_config_cls = (
-            SecureScoreControlProfilesRequestBuilder.SecureScoreControlProfilesRequestBuilderGetRequestConfiguration
-        )
-        config = request_config_cls(
-            query_parameters=query,
-        )
-
+        config = RequestConfiguration(query_parameters=query)
         response = await client.security.secure_score_control_profiles.get(
             request_configuration=config,
         )
