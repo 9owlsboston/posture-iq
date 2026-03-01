@@ -566,7 +566,7 @@ class TestToolRegistration:
     def test_total_tool_count(self):
         from src.agent.main import TOOLS
 
-        assert len(TOOLS) == 7  # 6 original + 1 new
+        assert len(TOOLS) == 8  # 7 original + 1 fabric telemetry
 
 
 # ========================================================================

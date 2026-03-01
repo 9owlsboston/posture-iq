@@ -19,7 +19,7 @@ import structlog
 from pydantic import BaseModel
 
 from src.middleware.audit_logger import AuditLogger
-from src.middleware.tracing import trace_agent_invocation, trace_genai_tool_call
+from src.middleware.tracing import trace_agent_invocation
 
 logger = structlog.get_logger(__name__)
 
@@ -92,6 +92,20 @@ async def _run_tool(name: str, args: dict[str, Any] | None = None) -> dict[str, 
             workload_areas=args.get("workload_areas"),
         )
 
+    if name == "push_posture_snapshot":
+        from src.tools.fabric_telemetry import push_posture_snapshot
+
+        return await push_posture_snapshot(
+            tenant_id=args.get("tenant_id", ""),
+            secure_score_current=float(args.get("secure_score_current", 0)),
+            secure_score_max=float(args.get("secure_score_max", 100)),
+            workload_scores=args.get("workload_scores"),
+            gap_count=int(args.get("gap_count", 0)),
+            estimated_days_to_green=int(args.get("estimated_days_to_green", 0)),
+            top_gaps=args.get("top_gaps"),
+            assessment_summary=args.get("assessment_summary", ""),
+        )
+
     return {"error": f"Unknown tool: {name}"}
 
 
@@ -107,6 +121,10 @@ _TOOL_INTENTS: list[tuple[list[str], str]] = [
     (
         ["playbook", "project 479", "foundry", "get to green playbook", "onboarding checklist", "offer catalog"],
         "get_project479_playbook",
+    ),
+    (
+        ["fabric", "telemetry", "lakehouse", "snapshot", "push posture", "longitudinal"],
+        "push_posture_snapshot",
     ),
 ]
 
@@ -335,6 +353,23 @@ def _format_playbook(data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _format_fabric_snapshot(data: dict[str, Any]) -> str:
+    lines = ["## 📊 Fabric Posture Snapshot\n"]
+    success = data.get("write_success", False)
+    status = "✅ Written" if success else "❌ Failed"
+    lines.append(f"**Status**: {status}")
+    lines.append(f"**Destination**: {data.get('destination', 'N/A')}")
+    lines.append(f"**Snapshot ID**: `{data.get('snapshot_id', 'N/A')}`")
+    lines.append(f"**Schema Version**: {data.get('schema_version', 'N/A')}")
+    lines.append(f"**Secure Score**: {data.get('secure_score_percentage', 0):.0f}%")
+    lines.append(f"**Gap Count**: {data.get('gap_count', 0)}")
+    lines.append(f"**Est. Days to Green**: {data.get('estimated_days_to_green', 0)}")
+    errors = data.get("validation_errors", [])
+    if errors:
+        lines.append(f"\n⚠️ **Validation Errors**: {', '.join(errors)}")
+    return "\n".join(lines)
+
+
 _FORMATTERS = {
     "query_secure_score": _format_secure_score,
     "assess_defender_coverage": _format_defender,
@@ -343,6 +378,7 @@ _FORMATTERS = {
     "generate_remediation_plan": _format_remediation,
     "create_adoption_scorecard": _format_scorecard,
     "get_project479_playbook": _format_playbook,
+    "push_posture_snapshot": _format_fabric_snapshot,
 }
 
 
@@ -354,7 +390,8 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
 
     Each call creates an ``invoke_agent`` GenAI span so it appears in the
     App Insights Agent (preview) → Agent Runs panel.  Individual tool
-    invocations are wrapped in ``execute_tool`` spans for the Tool Calls panel.
+    functions carry ``@trace_tool_call`` decorators that emit ``execute_tool``
+    spans for the Tool Calls panel.
     """
     sid = request.session_id or str(uuid.uuid4())
 
@@ -398,9 +435,7 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
                     if tool_name in ("generate_remediation_plan", "create_adoption_scorecard"):
                         args["assessment_context"] = json.dumps(session["results"])
 
-                    # Wrap each tool in a GenAI "execute_tool" span
-                    with trace_genai_tool_call(tool_name):
-                        result = await _run_tool(tool_name, args)
+                    result = await _run_tool(tool_name, args)
 
                     session["results"][tool_name] = result
                     tools_called.append(tool_name)

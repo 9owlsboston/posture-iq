@@ -248,10 +248,11 @@ class TestToolsRegistry:
         "generate_remediation_plan",
         "create_adoption_scorecard",
         "get_project479_playbook",
+        "push_posture_snapshot",
     ]
 
-    def test_exactly_seven_tools(self):
-        assert len(TOOLS) == 7
+    def test_exactly_eight_tools(self):
+        assert len(TOOLS) == 8
 
     def test_all_expected_tools_present(self):
         tool_names = [t.name for t in TOOLS]

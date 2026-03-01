@@ -37,6 +37,7 @@ from src.middleware.tracing import setup_tracing
 from src.tools.adoption_scorecard import create_adoption_scorecard
 from src.tools.defender_coverage import assess_defender_coverage
 from src.tools.entra_config import get_entra_config
+from src.tools.fabric_telemetry import push_posture_snapshot
 from src.tools.foundry_playbook import get_project479_playbook
 from src.tools.purview_policies import check_purview_policies
 from src.tools.remediation_plan import generate_remediation_plan
@@ -104,6 +105,22 @@ async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
     result = await get_project479_playbook(
         gaps=gaps or None,
         workload_areas=workload_areas or None,
+    )
+    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+
+
+async def _handle_fabric_telemetry(invocation: ToolInvocation) -> ToolResult:
+    """Adapter: push_posture_snapshot → ToolResult."""
+    args = invocation.get("arguments") or {}
+    result = await push_posture_snapshot(
+        tenant_id=args.get("tenant_id", ""),
+        secure_score_current=float(args.get("secure_score_current", 0)),
+        secure_score_max=float(args.get("secure_score_max", 100)),
+        workload_scores=args.get("workload_scores"),
+        gap_count=int(args.get("gap_count", 0)),
+        estimated_days_to_green=int(args.get("estimated_days_to_green", 0)),
+        top_gaps=args.get("top_gaps"),
+        assessment_summary=args.get("assessment_summary", ""),
     )
     return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
 
@@ -253,6 +270,56 @@ TOOLS: list[Tool] = [
                 },
             },
             "required": [],
+        },
+    ),
+    Tool(
+        name="push_posture_snapshot",
+        description=(
+            "Push a security posture snapshot to the Fabric lakehouse for "
+            "longitudinal dashboarding. Call this AFTER completing an assessment "
+            "to persist the tenant's current secure score, workload coverage, "
+            "gap count, and estimated days-to-green. The tenant ID is hashed "
+            "and gap descriptions anonymised before storage."
+        ),
+        handler=_handle_fabric_telemetry,
+        parameters={
+            "type": "object",
+            "properties": {
+                "tenant_id": {
+                    "type": "string",
+                    "description": "Tenant identifier (will be hashed before storage)",
+                },
+                "secure_score_current": {
+                    "type": "number",
+                    "description": "Current secure score value",
+                },
+                "secure_score_max": {
+                    "type": "number",
+                    "description": "Maximum possible secure score",
+                },
+                "workload_scores": {
+                    "type": "object",
+                    "description": "Per-workload coverage percentages",
+                },
+                "gap_count": {
+                    "type": "integer",
+                    "description": "Total number of identified gaps",
+                },
+                "estimated_days_to_green": {
+                    "type": "integer",
+                    "description": "Estimated days to green status",
+                },
+                "top_gaps": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Top gap descriptions (will be anonymised)",
+                },
+                "assessment_summary": {
+                    "type": "string",
+                    "description": "Brief assessment summary text",
+                },
+            },
+            "required": ["tenant_id", "secure_score_current", "secure_score_max"],
         },
     ),
 ]

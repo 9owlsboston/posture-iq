@@ -31,6 +31,9 @@ You have access to these tools:
    from Foundry IQ. Returns step-by-step remediation playbooks, recommended \
    Project 479 offers (workshops, engagements), and customer onboarding \
    checklists aligned to each workload area
+8. **push_posture_snapshot** — Push a security posture snapshot to the Fabric \
+   lakehouse for longitudinal dashboarding. Call this AFTER completing an \
+   assessment to persist the tenant's score, coverage, and gap data
 
 ## Behavioral Instructions
 - **Always start** with `query_secure_score` to establish the tenant's baseline.

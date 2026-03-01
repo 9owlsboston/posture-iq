@@ -486,7 +486,7 @@ async def trace_agent_invocation(
     tracer = get_tracer()
     with tracer.start_as_current_span(
         name=f"invoke_agent {agent_name}",
-        kind=SpanKind.SERVER,
+        kind=SpanKind.CLIENT,
         attributes={
             # GenAI semantic conventions (Agent blade → Agent Runs)
             _GENAI_SYSTEM: "openai",
