@@ -5,41 +5,52 @@
 ```mermaid
 graph TB
     subgraph Agent["PostureIQ Agent"]
-        direction TB
+
         subgraph Core["Core Components"]
             direction LR
             FastAPI["FastAPI<br/>/health /ready /assess"]
-            SDK["Copilot SDK<br/>Registers 8 tools<br/>+ system prompt"]
-            Runtime["Agent Runtime<br/>Plans tool calls<br/>Multi-model route<br/>Context mgmt<br/>Safety boundaries"]
-            SDK -- "JSON-RPC (stdio)" --> Runtime
+            SDK["Copilot SDK<br/>8 tools + system prompt"]
+            Runtime["Agent Runtime<br/>Multi-model · Context mgmt"]
+            FastAPI --> SDK -- "JSON-RPC" --> Runtime
         end
 
-        subgraph Middleware["Middleware Layer"]
+        subgraph MiddleRow[" "]
             direction LR
-            ContentSafety["Content Safety<br/>(RAI)"]
-            PII["PII Redaction"]
-            Tracing["Distributed<br/>Tracing"]
-            AuditLog["Audit Logger"]
+
+            subgraph Middleware["Middleware Layer"]
+                ContentSafety["Content Safety (RAI)"] ~~~ PII["PII Redaction"] ~~~ Tracing["Distributed Tracing"] ~~~ AuditLog["Audit Logger"]
+            end
+
+            Middleware -- "intercepts" --> Tools
+
+            subgraph Tools["8 Assessment Tools"]
+                SecureScore["query_secure_score"]
+                Defender["assess_defender_coverage"]
+                Purview["check_purview_policies"]
+                Entra["get_entra_config"]
+                Remediation["generate_remediation_plan"]
+                Scorecard["create_adoption_scorecard"]
+                Playbook["get_project479_playbook"]
+            end
         end
 
-        subgraph Tools["8 Assessment Tools"]
-            direction LR
-            SecureScore["query_<br/>secure_score"]
-            Defender["assess_<br/>defender_coverage"]
-            Purview["check_purview_<br/>policies"]
-            Entra["get_entra_<br/>config"]
-            Remediation["generate_<br/>remediation_plan"]
-            Scorecard["create_adoption_<br/>scorecard"]
-            Playbook["get_project479_<br/>playbook"]
-        end
-
-        Core --> Middleware --> Tools
+        Core --> Middleware
     end
 
-    Tools --> Graph["Microsoft Graph<br/>Security API<br/>Secure Score · Defender<br/>Purview · Entra ID"]
-    Tools --> OpenAI["Azure OpenAI (GPT-4o)<br/>Reasoning &<br/>remediation plan gen"]
-    Middleware --> ContentSafetyAPI["Azure AI<br/>Content Safety<br/>RAI filter<br/>Prompt injection detection"]
-    Middleware --> AppInsights["Azure App Insights<br/>Traces & metrics"]
+    subgraph Azure["Azure Services"]
+        direction LR
+        ContentSafetyAPI["Azure AI Content Safety<br/>RAI · Prompt injection"]
+        AppInsights["App Insights<br/>Traces & metrics"]
+        Graph["Microsoft Graph Security API<br/>Secure Score · Defender · Purview · Entra"]
+        OpenAI["Azure OpenAI (GPT-4o)<br/>Reasoning & remediation"]
+    end
+
+    Middleware --> ContentSafetyAPI
+    Middleware --> AppInsights
+    Tools --> Graph
+    Tools --> OpenAI
+
+    style MiddleRow fill:none,stroke:none
 ```
 
 ## Deployment Architecture

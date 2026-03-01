@@ -1,576 +1,589 @@
-# PostureIQ — ME5 Security Posture Assessment Agent
+# Option A Implementation Plan — Multi-Tenant App Registration
 
-> **Project:** PostureIQ — an intelligent agent that assesses ME5 security posture and accelerates the Project 479 "Get to Green" motion
-> **Target:** GitHub Copilot SDK Enterprise Challenge — Submission by **Mar 7, 10 PM PST**
-> **Stack:** Copilot SDK (Python) + Microsoft Graph Security API + M365 Defender + Purview + Entra ID P2 + Azure OpenAI
-> **Deployment:** Azure Container Apps
-> **Scoring ceiling:** ~128 pts (98 base + 30 bonus)
-> **Repo:** `posture-iq`
-
----
-
-## Phase 0 — Project Setup & Scaffolding (Day 1)
-
-### 0.1 Repository & Dev Environment
-
-- [x] Create GitHub repo `posture-iq`
-- [x] Initialize Python project structure:
-  ```
-  posture-iq/
-  ├── src/
-  │   ├── agent/              # Agent host app
-  │   │   ├── __init__.py
-  │   │   ├── main.py         # Entry point — Copilot SDK session setup
-  │   │   ├── system_prompt.py # Agent persona & instructions
-  │   │   └── config.py       # Environment config loader
-  │   ├── tools/              # Tool implementations (Graph API calls)
-  │   │   ├── __init__.py
-  │   │   ├── secure_score.py
-  │   │   ├── defender_coverage.py
-  │   │   ├── purview_policies.py
-  │   │   ├── entra_config.py
-  │   │   ├── remediation_plan.py
-  │   │   └── adoption_scorecard.py
-  │   ├── middleware/          # Cross-cutting concerns
-  │   │   ├── __init__.py
-  │   │   ├── content_safety.py   # Azure AI Content Safety wrapper
-  │   │   ├── pii_redaction.py    # PII/tenant data redaction
-  │   │   ├── audit_logger.py     # Immutable audit trail
-  │   │   └── tracing.py          # App Insights distributed tracing
-  │   └── api/                # HTTP API layer (health probes + optional REST)
-  │       ├── __init__.py
-  │       └── app.py
-  ├── infra/                  # Bicep IaC templates
-  │   ├── main.bicep
-  │   ├── modules/
-  │   │   ├── container-app.bicep
-  │   │   ├── openai.bicep
-  │   │   ├── app-insights.bicep
-  │   │   ├── content-safety.bicep
-  │   │   └── keyvault.bicep
-  │   └── parameters/
-  │       ├── dev.bicepparam
-  │       └── prod.bicepparam
-  ├── .github/
-  │   └── workflows/
-  │       └── ci-cd.yml       # GitHub Actions pipeline
-  ├── tests/
-  │   ├── unit/
-  │   └── integration/
-  ├── docs/
-  │   ├── sdk-feedback.md     # Running log of SDK pain points (10 bonus pts)
-  │   ├── setup-guide.md      # Graph API permission setup script
-  │   └── architecture.md     # Architecture diagram for deck
-  ├── Dockerfile
-  ├── pyproject.toml
-  ├── requirements.txt
-  └── README.md
-  ```
-- [x] Set up Python virtual environment with dependencies:
-  - `copilot-sdk` (GitHub Copilot SDK)
-  - `azure-identity` (Entra ID auth)
-  - `msgraph-sdk` (Microsoft Graph API)
-  - `openai` / `azure-ai-openai` (Azure OpenAI)
-  - `azure-ai-contentsafety` (RAI content filtering)
-  - `azure-monitor-opentelemetry` (App Insights distributed tracing)
-  - `fastapi` + `uvicorn` (health probes API)
-  - `pytest`, `pytest-asyncio` (testing)
-- [x] Configure `.env.example` with required environment variables
-- [x] **Start `docs/sdk-feedback.md`** — log every friction point from day 1
-
-### 0.2 Azure Resource Provisioning (Manual or Bicep)
-
-- [x] Create Azure Resource Group: `rg-postureiq-dev`
-- [x] Provision Azure OpenAI (GPT-4o deployment) — for reasoning & summarization
-- [x] Provision Azure AI Content Safety — for RAI filtering
-- [x] Provision Azure Application Insights — for observability
-- [x] Provision Azure Key Vault — for Graph API secrets & credentials
-- [x] Register an Entra ID App Registration — for delegated Graph API access
-  - Required Graph API scopes (minimal, least-privilege):
-    - `SecurityEvents.Read.All` (Secure Score)
-    - `SecurityActions.Read.All` (Defender status)
-    - `InformationProtection.Read.All` (Purview policies) 
-    - `Policy.Read.All` (Conditional Access / Entra config)
-    - `Reports.Read.All` (Usage & adoption telemetry)
-  - Document admin consent requirements in `docs/setup-guide.md`
-- [x] Create a setup script (`scripts/setup-permissions.sh`) for Graph API permission grants
-- [x] Create a unified provisioning script (`scripts/provision-dev.sh`) that orchestrates all steps
+> **Status:** Proposal — pending review
+> **Date:** 2026-02-26
+> **Author:** PostureIQ Engineering
+> **Related:** [Multi-Tenant Strategy](multi-tenant-strategy.md) · [Scaling Strategy](scaling-strategy.md)
+> **Effort estimate:** ~5 developer-days across 4 phases
 
 ---
 
-## Phase 1 — Core Agent Implementation (Days 2–4)
+## Table of Contents
 
-### 1.1 Agent Host Setup (Copilot SDK)
-
-- [x] Implement `src/agent/main.py` — Copilot SDK client initialization:
-  - Import SDK, create `CopilotClient`
-  - Register all 8 tools (see 1.2)
-  - Set system prompt (see 1.3)
-  - Create session and handle multi-turn conversation loop
-- [x] Implement session lifecycle management (create, maintain, close)
-- [x] Wire up streaming responses for real-time UX
-- [x] **Tests** (`tests/unit/test_agent_host.py` — 75 tests):
-  - [x] Adapter handler tests (all 8 tools): valid args, missing args, empty args, error propagation
-  - [x] TOOLS registry validation: count, names, descriptions, handler callability, JSON Schema params
-  - [x] PostureIQAgent lifecycle: start/stop client, create/resume/close session, configuration
-  - [x] send_message: success, timeout, session errors, no-session guard
-  - [x] send_message_streaming: event subscription, no-session guard
-  - [x] Session event handler: message deltas, tool execution events, errors, unknown events
-  - [x] Response text extraction: content field, message fallback, empty/missing content
-  - [x] System prompt integration: content injected into session config, replace mode
-  - [x] TypedDict access patterns validated (dict access, not attribute access)
-
-### 1.2 Tool Implementations (8 tools — the agent's "hands")
-
-Each tool wraps Microsoft Graph Security API calls and returns structured data for the runtime to reason over.
-
-#### Tool 1: `query_secure_score`
-- [x] Call Graph API: `GET /security/secureScores`
-- [x] Parse and return:
-  - Current secure score (numerical)
-  - Score breakdown by category (Identity, Data, Device, Apps, Infrastructure)
-  - Trend data (last 30 days)
-  - Comparison to avg tenant in same industry
-- [x] Add App Insights trace span for this tool call
-- [x] **Tests** (68 tests in `tests/unit/test_secure_score.py`): Mock Graph API responses, verify parsed output structure, error handling, trace span creation
-
-#### Tool 2: `assess_defender_coverage`
-- [x] Query M365 Defender deployment status:
-  - Defender for Endpoint: onboarded device count vs total
-  - Defender for Office 365: enabled policies (Safe Links, Safe Attachments)
-  - Defender for Identity: sensor coverage
-  - Defender for Cloud Apps: connected apps count
-- [x] Return coverage percentage per workload + gap list
-- [x] Add App Insights trace span
-- [x] **Tests** (78 tests in `tests/unit/test_defender_coverage.py`): Mock Defender API responses, verify coverage calculations, gap detection, trace span creation
-
-#### Tool 3: `check_purview_policies`
-- [x] Query Information Protection & Compliance policies:
-  - DLP policies: count, status (active/test/disabled), scope
-  - Sensitivity labels: published labels, auto-labeling rules
-  - Retention policies: coverage across Exchange, SharePoint, OneDrive, Teams
-  - Insider Risk Management: policy status
-- [x] Return adoption status with specific gaps identified
-- [x] Add App Insights trace span
-- [x] **Tests** (85 tests in `tests/unit/test_purview_policies.py`): Mock Purview API responses, verify policy status parsing, gap identification, trace span creation
-
-#### Tool 4: `get_entra_config`
-- [x] Query Entra ID P2 security configuration:
-  - Conditional Access policies: count, named locations, MFA enforcement
-  - PIM (Privileged Identity Management): active assignments vs eligible
-  - Identity Protection: risk policies (sign-in risk, user risk) — enabled or not
-  - Access Reviews: configured or not
-  - SSO app registrations count
-- [x] Return config assessment with risk flags
-- [x] Add App Insights trace span
-- [x] **Tests** (54 tests in `tests/unit/test_entra_config.py`): Mock Entra ID API responses, verify config assessment, risk flag logic, trace span creation
-
-#### Tool 5: `generate_remediation_plan`
-- [x] Takes output from tools 1–4 as input context
-- [x] Uses Azure OpenAI (GPT-4o) to generate:
-  - Prioritized remediation steps (P0/P1/P2)
-  - For each step: description, impact on secure score, effort estimate, PowerShell/CLI config scripts
-  - Estimated time-to-green if all steps completed
-- [x] Route LLM output through **Azure AI Content Safety** before returning
-- [x] Add confidence scores to each recommendation
-- [x] Redact tenant-specific PII (tenant IDs, user emails) before sending to model
-- [x] Add App Insights trace span
-- [x] **Tests** (53 tests in `tests/unit/test_remediation_plan.py`): Mock LLM responses, verify prioritization logic, Content Safety integration, PII redaction, confidence scores, trace span creation
-
-#### Tool 6: `create_adoption_scorecard`
-- [x] Aggregates data from all tools into a structured scorecard:
-  - Overall ME5 adoption percentage
-  - Per-workload status (green/yellow/red): Defender XDR, Purview, Entra ID P2
-  - Top 5 gaps with remediation priority
-  - Estimated days to green
-  - Historical trend (if available)
-- [x] Output format: structured JSON (for programmatic consumption) + markdown (for human reading)
-- [x] Add App Insights trace span
-- [x] **Tests** (60 tests in `tests/unit/test_adoption_scorecard.py`): Verify aggregation logic, scorecard structure (JSON + markdown), workload status thresholds (green/yellow/red), trace span creation
-
-### 1.3 System Prompt Engineering
-
-- [x] Write system prompt in `src/agent/system_prompt.py`:
-  - Persona: "You are an ME5 Security Posture Assessment specialist..."
-  - Context: Project 479 "Get to Green" campaign objectives
-  - Behavioral instructions:
-    - Always start with `query_secure_score` to establish baseline
-    - Assess all workloads before generating remediation
-    - Prioritize by impact on secure score
-    - Be specific — include PowerShell scripts, not just descriptions
-    - Never expose raw tenant IDs or user data in responses
-  - Guardrails:
-    - Do not make changes to customer tenants — assessment only
-    - Flag when admin consent is needed for deeper assessment
-    - Include disclaimers on AI-generated recommendations
-- [x] **Tests**: Verify prompt contains all required sections (persona, tools, behavioral instructions, guardrails), validate no PII leaks in prompt, test prompt injection resistance instructions
-
-### 1.4 Unit Tests
-
-- [x] Test agent host setup with mocked SDK (75 tests in `tests/unit/test_agent_host.py`)
-- [x] Test each tool with mocked Graph API responses (all 8 tools — 398 tool tests total)
-- [x] Test system prompt produces expected agent behavior patterns
-- [x] Test PII redaction catches tenant IDs, emails, UPNs (11 tests in `tests/unit/test_pii_redaction.py`)
-- [x] Test content safety integration rejects harmful outputs (8 tests in `tests/unit/test_content_safety.py`)
-- [x] Test secure score tool output structure (68 tests in `tests/unit/test_secure_score.py`)
-- [x] Integration tests: end-to-end agent flow with mocked Graph API + mocked LLM (41 tests in `tests/integration/test_e2e_smoke.py`)
-
-> **Total: 1134 tests passing** (75 agent host + 68 secure score + 78 defender + 85 purview + 54 entra + 53 remediation + 60 scorecard + 8 content safety + 11 PII redaction + 76 Foundry IQ + 81 Fabric + 147 RAI + 64 auth + 74 audit + 42 observability + 32 health probes + 51 deployment + 35 Bicep + 41 integration = 1134 passing)
+1. [Phase 1 — Entra ID App Registration + Auth Layer](#phase-1--entra-id-app-registration--auth-layer)
+2. [Phase 2 — Graph Client + Tool Plumbing](#phase-2--graph-client--tool-plumbing)
+3. [Phase 3 — Tenant Onboarding + Admin Consent](#phase-3--tenant-onboarding--admin-consent)
+4. [Phase 4 — Tests, CI/CD, and Documentation](#phase-4--tests-cicd-and-documentation)
+5. [Dependency Graph](#dependency-graph)
+6. [Rollback Plan](#rollback-plan)
 
 ---
 
-## Phase 2 — Cross-Cutting: Operational Readiness (Days 3–5)
+## Phase 1 — Entra ID App Registration + Auth Layer
 
-> **Target: 15 pts → capture all 15** (currently at 5 = −10 pts gap)
+**Goal:** Accept JWT tokens from any Entra ID tenant while preserving
+existing single-tenant functionality behind a feature flag.
 
-### 2.1 CI/CD Pipeline (GitHub Actions)
+**Effort:** ~1 day
 
-- [x] Create `.github/workflows/ci-cd.yml`:
-  ```yaml
-  # Trigger on push to main
-  # Stages: lint → test → bicep-validate → build → deploy
-  ```
-  - **Lint**: `ruff` + `mypy` type checking
-  - **Test**: `pytest` with coverage report, fail if < 80%
-  - **Bicep Validate**: lint, build, and parameter file validation
-  - **Build**: Docker image build, push to Azure Container Registry (ACR)
-  - **Deploy**: Bicep deployment to Azure Container Apps with tagged image from ACR
-- [x] ACR push fully wired — CI/CD pushes `latest` + git-SHA-tagged images on every push to `main`
-- [x] Deploy stage passes `containerImage` parameter to Bicep, rolling update on Container Apps
-- [x] **OIDC Workload Identity Federation** — zero stored secrets:
-  - Federated credentials on App Registration trust GitHub Actions OIDC issuer
-  - 3 subjects: `refs/heads/main`, `pull_request`, `environment:production`
-  - Only non-sensitive IDs stored as GitHub secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`)
-  - ACR admin account disabled — CI pushes via `az acr login` with OIDC token
-  - Setup script: `scripts/setup-oidc.sh`
-- [x] Add branch protection rules on `main` (require passing CI) — `scripts/setup-branch-protection.sh`
-- [x] Add a `dev` environment for PR deployments — `.github/workflows/pr-deploy.yml` (deploy preview, teardown on close, PR comments)
-- [x] **Tests**: CI pipeline validates lint + test + bicep-validate + build stages, 80% coverage threshold enforced
+### Task 1.1 — Add `multi_tenant_enabled` feature flag to config
 
-### 2.2 Infrastructure as Code (Bicep)
+| Detail | Value |
+|--------|-------|
+| File | `src/agent/config.py` |
+| Change | Add `multi_tenant_enabled: bool = False` field to `Settings` |
+| Why | Allows gradual rollout; existing deployments stay single-tenant until the flag is set |
+| Acceptance | `settings.multi_tenant_enabled` returns `False` by default and `True` when env var `MULTI_TENANT_ENABLED=true` |
 
-- [x] `infra/main.bicep` — orchestrator that calls modules:
-  - Azure Container Registry (image store — ACR, OIDC push via AcrPush role, managed identity pull via AcrPull role, admin disabled)
-  - Azure Container Apps Environment + Container App (ACR registry pull via managed identity)
-  - Azure OpenAI account + GPT-4o deployment
-  - Azure Application Insights + Log Analytics workspace
-  - Azure AI Content Safety instance
-  - Azure Key Vault (for Graph API credentials)
-  - Managed Identity assignments (RBAC roles for Key Vault, OpenAI, Content Safety, ACR)
-- [x] `infra/modules/container-app.bicep`:
-  - Scales 0–5 replicas (emphasize scale-to-zero for cost)
-  - Health probe configuration (`/health`, `/ready`)
-  - Managed Identity enabled
-  - Environment variables from Key Vault references
-- [x] `infra/parameters/dev.bicepparam` and `prod.bicepparam`
-- [x] Validate Bicep linting passes in CI
-- [x] **Tests** (35 tests in `tests/unit/test_bicep_templates.py`): Validate Bicep templates compile without errors, verify parameter files match expected schema, content validation, RBAC role assignments
-
-### 2.3 Observability (Azure Application Insights)
-
-- [x] Integrate `azure-monitor-opentelemetry` SDK in `src/middleware/tracing.py`:
-  - Every tool call = a distributed trace **span** with:
-    - Tool name
-    - Duration
-    - Input parameters (redacted)
-    - Output summary (token count, status)
-    - Graph API call latency
-  - Every LLM call = a span with:
-    - Model name
-    - Token usage (prompt + completion)
-    - Content Safety filter result
-  - Every session = a trace with correlation across all tool calls
-- [x] Structured JSON logging (`structlog`) in `src/middleware/logging_config.py`:
-  - Log format: `{"timestamp", "level", "tool", "session_id", "duration_ms", "status"}`
-  - No PII in logs (redaction middleware applied via `_redact_pii_processor`)
-- [x] Custom App Insights metrics:
-  - `postureiq.secure_score.current` — observable gauge
-  - `postureiq.assessment.duration_seconds` — histogram
-  - `postureiq.remediation.steps_generated` — counter
-  - `postureiq.content_safety.blocked_count` — counter
-- [x] Create an App Insights dashboard (`infra/dashboards/postureiq-dashboard.json` — 13-panel workbook with KQL queries)
-- [x] **Tests** (42 tests in `tests/unit/test_observability.py`): Verify trace spans for tool calls, LLM calls, and sessions; validate structured JSON log format; test custom metric emission; test PII exclusion from logs and traces; validate dashboard JSON structure
-
-### 2.4 Health Probes
-
-- [x] Implement in `src/api/app.py` (FastAPI):
-  - `GET /health` — returns 200 if the process is alive
-  - `GET /ready` — returns 200 only if all dependency checks pass:
-    - Copilot SDK can be imported
-    - Azure OpenAI endpoint is reachable (HTTP ping)
-    - Graph API auth token can be obtained (credential validation)
-    - Key Vault is accessible (HTTP ping)
-    - Returns `"ready"` or `"not_ready"` with per-check detail; `"skipped"` for unconfigured services
-  - `GET /version` — returns build info (git SHA, build time, environment)
-- [x] **Tests** (32 tests in `tests/unit/test_health_probes.py`): Test `/health` returns 200, test `/ready` returns `not_ready` when dependencies unavailable, test `/version` returns expected fields, test individual readiness probe helpers (Copilot SDK, Azure OpenAI, Graph API, Key Vault)
-
-### 2.5 Deployment Target: Azure Container Apps
-
-- [x] Write `Dockerfile`:
-  - Python 3.11-slim base image (multi-stage: builder + runtime)
-  - Install GitHub CLI (required for Copilot SDK runtime)
-  - Copy app code, install dependencies via pip
-  - HEALTHCHECK on `/health`, EXPOSE 8000
-  - Non-root user (`postureiq`), GIT_SHA/BUILD_TIME build args
-  - Entrypoint: `uvicorn src.api.app:app`
-- [x] Configure Container Apps (`infra/modules/container-app.bicep`):
-  - Ingress: external on port 8000
-  - Scale: min 0, max 5 replicas (HTTP concurrency rule)
-  - Health probes: Liveness (`/health`), Readiness (`/ready`) defined in Bicep
-  - User-Assigned Managed Identity with AZURE_CLIENT_ID env var
-  - All service endpoints wired via env vars (OpenAI, Content Safety, Key Vault, App Insights)
-- [x] **Tests** (51 tests in `tests/unit/test_deployment.py`): Validate Dockerfile structure (multi-stage, GitHub CLI, healthcheck, non-root, uvicorn), Container App Bicep (probes, scaling, identity, env vars, ingress), managed identity wiring in main.bicep, Dockerfile syntax validation
-
----
-
-## Phase 3 — Cross-Cutting: Security, Governance & RAI (Days 4–5)
-
-> **Target: 15 pts → capture 14–15** (currently at 14 = −1 pt gap)
-
-### 3.1 Authentication & Authorization
-
-- [x] **User auth**: Entra ID with OAuth2 authorization code flow
-  - Users authenticate to the agent via Entra ID
-  - The agent uses **delegated permissions** (acts on behalf of the user)
-  - Ensures the agent only sees data the user is authorized to see
-  - Implemented in `src/middleware/auth.py`: JWT validation against Entra ID JWKS keys, `UserContext` extraction, `OAuth2AuthorizationCodeBearer` scheme
-  - Endpoints: `/auth/login` (initiates OAuth2 flow), `/auth/callback` (exchanges code for tokens), `/auth/me` (returns user identity)
-  - Protected endpoints: `/assess` and `/auth/me` require valid Bearer token
-- [x] **Service auth**: Managed Identity for service-to-service
-  - Container App → Azure OpenAI (Managed Identity, no API keys)
-  - Container App → Key Vault (Managed Identity)
-  - Container App → App Insights (Managed Identity)
-  - Container App → ACR (AcrPull role via Managed Identity — no admin credentials)
-  - Wired via `DefaultAzureCredential` in `graph_client.py` and Bicep RBAC role assignments
-- [x] **CI/CD auth**: OIDC Workload Identity Federation (zero secrets)
-  - GitHub Actions authenticates to Azure via short-lived OIDC tokens
-  - No stored credentials — only non-sensitive IDs (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`)
-  - ACR admin account disabled — CI pushes via `az acr login` with OIDC token (AcrPush role)
-  - See Section 2.1 for federated credential subjects
-- [x] **Graph API auth**: 
-  - Use `azure-identity` `InteractiveBrowserCredential` (for dev) / `ClientSecretCredential` (for Graph API OAuth2 token exchange)  
-  - Client secret stored in Key Vault, accessed via Managed Identity in production (not in env vars)
-  - This is separate from CI/CD auth — Graph API requires a client secret for the OAuth2 authorization code flow
-  - Document least-privilege scopes in `docs/setup-guide.md`
-  - Provide `scripts/setup-permissions.sh` for admin consent
-- [x] **Tests** (64 tests in `tests/unit/test_auth.py`): JWT validation (valid/expired/wrong-audience/wrong-issuer/malformed tokens), JWKS key caching & refresh, OAuth2 authorization code flow (login redirect, callback, token exchange), scope checking (5 delegated permissions + custom), FastAPI endpoint integration (401/403 for unauthenticated/unauthorized), Managed Identity service auth patterns, UserContext extraction
-
-### 3.2 Responsible AI (RAI)
-
-- [x] **Azure AI Content Safety integration** (`src/middleware/content_safety.py`):
-  - Filter all LLM inputs (prevent prompt injection in user queries)
-  - Filter all LLM outputs (ensure remediation plans don't contain harmful content)
-  - Log filter results to App Insights
-  - Block responses that fail safety checks; return safe fallback
-- [x] **PII Redaction** (`src/middleware/pii_redaction.py`):
-  - Before sending any data to Azure OpenAI:
-    - Redact tenant GUIDs → `[TENANT_ID]`
-    - Redact user emails/UPNs → `[USER_EMAIL]`
-    - Redact IP addresses → `[IP_ADDRESS]`
-    - Redact user display names → `[USER_NAME]`
-  - After receiving model output, re-hydrate if needed for customer-facing display
-- [x] **Confidence scores** (`src/middleware/rai.py`):
-  - Every remediation recommendation includes a confidence score (high/medium/low)
-  - Based on: how much data was available, how standard the remediation is
-- [x] **Disclaimer watermarks** (`src/middleware/rai.py`):
-  - All AI-generated scorecards include: "Generated by AI — review with your security team before implementing"
-  - Three variants: default, markdown, scripts
-- [x] **Prompt injection guardrails**:
-  - System prompt includes explicit instructions to ignore override attempts
-  - Input validation on user queries (length, character set) via `src/middleware/input_validation.py`
-  - 20 injection patterns detected in `check_prompt_injection()`
-- [x] **Tests** (147 tests in `tests/unit/test_rai.py`): Test Content Safety blocks harmful content (local heuristics for hate/violence), test PII redaction patterns (GUIDs, emails, IPs, names), test display name redaction, test redaction map & re-hydration round-trip, test confidence score assignment (mock/live/openai sources, boundary values), test apply_confidence_to_steps (never raises, only lowers), test disclaimer watermark inclusion (3 variants, has_disclaimer validation), test prompt injection rejection (all 20 patterns parametrized), test input validation rules (empty, too short/long, line count, blocked chars, whitespace normalization), test RAI pipeline integration (end-to-end validate→filter→redact→post-process)
-
-### 3.3 Audit Trail
-
-- [x] **Immutable audit log** (`src/middleware/audit_logger.py`):
-  - Every agent action logged with:
-    - Timestamp (UTC)
-    - Session ID
-    - User identity (from Entra ID token)
-    - Tool called
-    - Input summary (redacted)
-    - Output summary (redacted)
-    - Reasoning chain (why the agent chose this tool)
-  - Stored in App Insights `customEvents` table (queryable via KQL)
-  - Retention policy: 90 days (configurable)
-- [x] RBAC on audit log access (only security admins can query)
-- [x] **Tests**: Test audit log entries contain required fields (timestamp, session ID, user, tool, redacted I/O), test immutability guarantees, test RBAC enforcement on audit access (74 tests)
-
----
-
-## Phase 4 — Bonus: Foundry IQ / Fabric Integration (Days 5–6)
-
-> **Target: 15 bonus pts → capture 12** (currently at 12 est.)
-
-### 4.1 Foundry IQ Integration (Agent Context)
-
-- [x] Pull **Project 479 playbooks** from Foundry IQ as agent context:
-  - ME5 Get to Green standard playbook
-  - Offer catalog (which Project 479 offers to recommend based on gaps)
-  - Customer onboarding checklists
-- [x] Inject playbook summaries into the system prompt or as tool context
-- [x] Tool: `get_project479_playbook` — retrieves relevant playbook section based on identified gaps
-- [x] **Tests**: Test playbook retrieval with mocked Foundry IQ responses, verify context injection into system prompt, test gap-to-playbook mapping (76 tests)
-
-### 4.2 Fabric Integration (Telemetry Push)
-
-- [x] Push security posture snapshots to a **Fabric lakehouse**:
-  - After each assessment, write a row to the lakehouse:
-    - Tenant ID (hashed), assessment timestamp, secure score, per-workload scores, gap count, estimated days to green
-  - Enables longitudinal dashboards showing posture improvement over time
-- [x] Create a simple Power BI dashboard template showing:
-  - Secure score trend across assessed tenants
-  - Most common gaps (aggregated, anonymized)
-  - Average time-to-green
-- [x] **Tests**: Test lakehouse write with mocked Fabric API, verify snapshot schema (hashed tenant ID, scores, gaps), test data anonymization (81 tests)
-
----
-
-## Phase 5 — Demo, Deck & Submission (Days 6–7)
-
-### 5.1 Demo Video (3 min max)
-
-- [ ] Script the demo flow:
-  1. **Hook** (15s): "ME5 account teams spend weeks assessing security posture. This agent does it in minutes."
-  2. **Auth** (15s): Show Entra ID login, delegated permissions
-  3. **Assessment run** (60s): User asks "Assess this tenant's ME5 security posture"
-     - Agent calls `query_secure_score` → shows score
-     - Agent calls `assess_defender_coverage` → shows gaps
-     - Agent calls `check_purview_policies` → shows missing DLP
-     - Agent calls `get_entra_config` → shows weak Conditional Access
-  4. **Remediation** (45s): Agent generates prioritized plan with PowerShell scripts
-  5. **Scorecard** (20s): Agent creates adoption scorecard (green/yellow/red per workload)
-  6. **Ops & security** (15s): Quick flash of App Insights traces, Content Safety filtering, audit log
-  7. **Close** (10s): "This agent accelerates the Project 479 Get-to-Green motion for thousands of ME5 accounts."
-- [ ] Record with screen capture + voiceover
-- [ ] Keep under 3 minutes
-
-### 5.2 Presentation Deck (1–2 slides)
-
-- [ ] **Slide 1**: Architecture diagram showing:
-  - Copilot SDK → Agent Runtime → 8 Tools → Graph Security API
-  - Azure services: OpenAI, Content Safety, Container Apps, App Insights, Key Vault, Entra ID
-  - Foundry IQ / Fabric integration arrows
-- [ ] **Slide 2**: Impact & scoring alignment:
-  - "Accelerates Project 479 — a live campaign with thousands of ME5 accounts"
-  - Key metrics: time-to-assessment reduced from weeks to minutes
-  - Enterprise value: reusable across all ME5 customers
-  - Security: inherent — security IS the product
-
-### 5.3 Submission Package
-
-- [ ] Clean up repo README with:
-  - Project description
-  - Architecture diagram
-  - Setup instructions (prerequisites, environment variables, Graph API permissions)
-  - Demo video link
-  - SDK feedback summary
-- [ ] Ensure all code passes CI (lint + test)
-- [ ] Final review: check all scoring criteria are addressed
-
-### 5.4 SDK Feedback Document (10 bonus pts)
-
-- [ ] Compile `docs/sdk-feedback.md` throughout development:
-  - Pain points encountered
-  - API gaps or missing features
-  - Documentation quality feedback
-  - Suggestions for improvement
-  - What worked well
-- [ ] Format as actionable product feedback
-
-### 5.5 Customer Validation (10 bonus pts)
-
-- [ ] Identify a Project 479 account team contact
-- [ ] Demo the agent to them
-- [ ] Collect written endorsement/feedback
-- [ ] Include in submission
-
----
-
-## Task Dependency Map
-
+```python
+# src/agent/config.py — add under App Settings section
+multi_tenant_enabled: bool = False
 ```
-Phase 0 (Setup)
-  ├── 0.1 Repo & Dev Env
-  └── 0.2 Azure Provisioning
-        │
-        ▼
-Phase 1 (Core Agent) ◄── depends on Phase 0
-  ├── 1.1 Agent Host (SDK)
-  ├── 1.2 Tools 1–6 (parallel)
-  ├── 1.3 System Prompt
-  └── 1.4 Unit Tests
-        │
-        ▼
-Phase 2 (Ops) ◄── can start in parallel with Phase 1
-  ├── 2.1 CI/CD
-  ├── 2.2 Bicep IaC
-  ├── 2.3 Observability
-  ├── 2.4 Health Probes
-  └── 2.5 Container Apps Deploy
-        │
-        ▼
-Phase 3 (Security/RAI) ◄── depends on Phase 1 (tools exist)
-  ├── 3.1 Auth (Entra ID + MI)
-  ├── 3.2 RAI (Content Safety, PII, guardrails)
-  └── 3.3 Audit Trail
-        │
-        ▼
-Phase 4 (Bonus) ◄── depends on core working
-  ├── 4.1 Foundry IQ
-  └── 4.2 Fabric
-        │
-        ▼
-Phase 5 (Submission) ◄── depends on everything
-  ├── 5.1 Demo Video
-  ├── 5.2 Deck
-  ├── 5.3 Submission Package
-  ├── 5.4 SDK Feedback
-  └── 5.5 Customer Validation
+
+### Task 1.2 — Add tenant allowlist to config
+
+| Detail | Value |
+|--------|-------|
+| File | `src/agent/config.py` |
+| Change | Add `allowed_tenants: str = ""` field (comma-separated tenant IDs, empty = accept all consented tenants) |
+| Why | Security control — restrict which tenants can authenticate even when multi-tenant is enabled |
+| Acceptance | `settings.allowed_tenant_list` returns `list[str]`; empty list means unrestricted |
+
+```python
+# src/agent/config.py
+allowed_tenants: str = ""
+
+@property
+def allowed_tenant_list(self) -> list[str]:
+    """Parse comma-separated tenant allowlist."""
+    return [t.strip() for t in self.allowed_tenants.split(",") if t.strip()]
+```
+
+### Task 1.3 — Update OAuth2 endpoints to use `organizations` authority
+
+| Detail | Value |
+|--------|-------|
+| File | `src/middleware/auth.py` |
+| Lines | ~134–135 (OAuth2AuthorizationCodeBearer instantiation) |
+| Change | When `multi_tenant_enabled`, use `/organizations/` instead of `/{tenant_id}/` in `authorizationUrl` and `tokenUrl` |
+| Why | The `organizations` endpoint accepts login from any Entra ID tenant |
+| Risk | Existing single-tenant OAuth2 flow must remain unchanged when flag is off |
+
+**Current code:**
+```python
+oauth2_scheme = OAuth2AuthorizationCodeBearer(
+    authorizationUrl=f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/authorize",
+    tokenUrl=f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/token",
+    auto_error=False,
+)
+```
+
+**Proposed code:**
+```python
+_authority_segment = "organizations" if settings.multi_tenant_enabled else settings.azure_tenant_id
+
+oauth2_scheme = OAuth2AuthorizationCodeBearer(
+    authorizationUrl=f"{ENTRA_AUTHORITY}/{_authority_segment}/oauth2/v2.0/authorize",
+    tokenUrl=f"{ENTRA_AUTHORITY}/{_authority_segment}/oauth2/v2.0/token",
+    auto_error=False,
+)
+```
+
+### Task 1.4 — Update `validate_token()` for dynamic issuer validation
+
+| Detail | Value |
+|--------|-------|
+| File | `src/middleware/auth.py` |
+| Function | `validate_token()` (~line 143) |
+| Change | When `multi_tenant_enabled`: (1) decode token once without verification to extract `tid`, (2) validate issuer matches `tid`, (3) check `tid` against allowlist |
+| Why | Currently validates issuer against hardcoded `settings.azure_tenant_id`; must accept any tenant's issuer |
+| Risk | **Cross-tenant token confusion** — highest security risk in Option A. Requires careful implementation. |
+
+**Proposed logic (pseudo-code):**
+```python
+async def validate_token(token: str) -> UserContext:
+    client_id = settings.azure_client_id
+
+    if settings.multi_tenant_enabled:
+        # Step 1: Pre-decode to extract tenant ID from token claims
+        unverified_claims = jwt.decode(token, options={"verify_signature": False})
+        token_tid = unverified_claims.get("tid", "")
+
+        if not token_tid:
+            raise HTTPException(401, "Token missing tid claim")
+
+        # Step 2: Check tenant allowlist (if configured)
+        if settings.allowed_tenant_list and token_tid not in settings.allowed_tenant_list:
+            raise HTTPException(403, "Tenant not authorized")
+
+        tenant_id = token_tid
+    else:
+        tenant_id = settings.azure_tenant_id
+
+    # ... rest of validation uses tenant_id for JWKS + issuer check
+    valid_issuers = [
+        f"https://login.microsoftonline.com/{tenant_id}/v2.0",
+        f"https://sts.windows.net/{tenant_id}/",
+    ]
+    signing_key = await _jwks_cache.get_signing_key(kid, tenant_id)
+    # ... jwt.decode(... issuer=valid_issuers ...)
+```
+
+### Task 1.5 — Update `build_auth_url()` and `exchange_code_for_tokens()`
+
+| Detail | Value |
+|--------|-------|
+| File | `src/middleware/auth.py` |
+| Functions | `build_auth_url()`, `exchange_code_for_tokens()` |
+| Change | When `multi_tenant_enabled`, use `/organizations/` in the token endpoint URLs |
+| Why | These functions construct OAuth2 flow URLs; must match the authority used by `oauth2_scheme` |
+
+### Task 1.6 — Extend `UserContext` with `access_token` field
+
+| Detail | Value |
+|--------|-------|
+| File | `src/middleware/auth.py` |
+| Dataclass | `UserContext` |
+| Change | Add `access_token: str = ""` field to carry the user's bearer token through the request lifecycle |
+| Why | Tools need the user's token to call Graph API in OBO / delegated mode |
+| Note | The token is already validated at this point; storing it in `UserContext` avoids re-parsing |
+
+```python
+@dataclass
+class UserContext:
+    user_id: str
+    email: str = ""
+    name: str = ""
+    tenant_id: str = ""
+    access_token: str = ""  # ← NEW: carry the bearer token for Graph OBO
+    roles: list[str] = field(default_factory=list)
+    scopes: list[str] = field(default_factory=list)
+    raw_claims: dict[str, Any] = field(default_factory=dict)
 ```
 
 ---
 
-## Scoring Projection (with all mitigations applied)
+## Phase 2 — Graph Client + Tool Plumbing
 
-| Criteria | Max | Current | With Plan | Delta | How |
-| --- | --- | --- | --- | --- | --- |
-| Enterprise value & reusability | 35 | 33 | 33 | — | Already strong — Project 479 anchoring |
-| Azure / Microsoft integration | 25 | 22 | 24 | +2 | Add Content Safety, Key Vault, Container Apps, App Insights |
-| Operational readiness | 15 | **5** | **14** | **+9** | CI/CD + Bicep + App Insights + health probes + Container Apps |
-| Security, governance & RAI | 15 | 14 | 15 | +1 | Content Safety, PII redaction, confidence scores, audit trail |
-| Storytelling & amplification | 15 | 14 | 14 | — | Strong narrative already; demo will cement this |
-| **Base total** | **100** | **88** | **~100** | **+12** | |
-| Bonus: Foundry/Fabric/Work IQ | 15 | 12 | 12 | — | Playbook pull + telemetry push |
-| Bonus: Customer validation | 10 | 8 | 8 | — | Demo to Project 479 account team |
-| Bonus: SDK feedback | 10 | 0 | 8 | +8 | Running feedback log throughout dev |
-| **Total ceiling** | **135** | **108** | **~128** | **+20** | |
+**Goal:** All Graph-calling tools use the authenticated user's delegated
+token instead of a shared app credential.
+
+**Effort:** ~2 days
+
+### Task 2.1 — Create `create_graph_client_for_user()` in graph_client.py
+
+| Detail | Value |
+|--------|-------|
+| File | `src/tools/graph_client.py` |
+| Change | Add a new function that creates a `GraphServiceClient` using the user's access token (OBO or direct delegation) |
+| Why | Multi-tenant Graph calls must use the requesting user's token, not the app's credential |
+| Fallback | If the user has no token (demo mode), fall back to existing `create_graph_client()` |
+
+```python
+def create_graph_client_for_user(
+    user_access_token: str,
+    tenant_id: str = "",
+    tool_name: str = "unknown",
+) -> "GraphServiceClient | None":
+    """Create a Graph client authenticated as the requesting user.
+
+    Uses On-Behalf-Of (OBO) flow: exchanges the user's access token
+    for a Graph-scoped token using the app's managed identity or
+    client certificate.
+    """
+    if not user_access_token:
+        logger.info(f"tool.{tool_name}.graph_client.no_user_token",
+                     reason="No user token — falling back to app credential")
+        return create_graph_client(tool_name=tool_name)
+
+    try:
+        from azure.identity import OnBehalfOfCredential
+        from msgraph import GraphServiceClient
+
+        credential = OnBehalfOfCredential(
+            tenant_id=tenant_id or settings.azure_tenant_id,
+            client_id=settings.azure_client_id,
+            # Prefer managed-identity-backed OBO; fall back to client secret
+            client_secret=settings.azure_client_secret or None,
+            user_assertion=user_access_token,
+        )
+        return GraphServiceClient(
+            credential,
+            scopes=["https://graph.microsoft.com/.default"],
+        )
+    except Exception as e:
+        logger.error(f"tool.{tool_name}.graph_client_for_user.error", error=str(e))
+        # Fall back to app-level client for resilience
+        return create_graph_client(tool_name=tool_name)
+```
+
+### Task 2.2 — Add `user_context` parameter to Graph-calling tools
+
+Each Graph-calling tool needs an optional `user_context` parameter. When
+provided, it uses `create_graph_client_for_user()`. When `None`, it falls back
+to the existing behaviour (demo / single-tenant mode).
+
+| Tool Function | File | Current Signature | New Parameter |
+|--------------|------|-------------------|---------------|
+| `query_secure_score()` | `src/tools/secure_score.py` | `(tenant_id: str = "")` | `(tenant_id: str = "", user_context: UserContext \| None = None)` |
+| `assess_defender_coverage()` | `src/tools/defender_coverage.py` | `()` | `(user_context: UserContext \| None = None)` |
+| `get_entra_config()` | `src/tools/entra_config.py` | `()` | `(user_context: UserContext \| None = None)` |
+| `check_purview_policies()` | `src/tools/purview_policies.py` | `()` | `(user_context: UserContext \| None = None)` |
+
+**Pattern for each tool:**
+```python
+async def query_secure_score(
+    tenant_id: str = "",
+    user_context: UserContext | None = None,
+) -> dict[str, Any]:
+    if user_context and user_context.access_token:
+        client = create_graph_client_for_user(
+            user_access_token=user_context.access_token,
+            tenant_id=user_context.tenant_id,
+            tool_name="secure_score",
+        )
+    else:
+        client = create_graph_client(tool_name="secure_score")
+    # ... rest of tool logic unchanged
+```
+
+### Task 2.3 — Update non-Graph tools for tenant awareness
+
+These tools don't call Graph but may need `tenant_id` for audit/telemetry:
+
+| Tool Function | File | Change |
+|--------------|------|--------|
+| `generate_remediation_plan()` | `src/tools/remediation_plan.py` | Add `tenant_id: str = ""` parameter; include in audit context |
+| `create_adoption_scorecard()` | `src/tools/adoption_scorecard.py` | Add `tenant_id: str = ""` parameter; include in output metadata |
+| `get_project479_playbook()` | `src/tools/foundry_playbook.py` | No change needed (tenant-agnostic playbook content) |
+| `push_snapshot()` | `src/tools/fabric_telemetry.py` | Already accepts `tenant_id` — no change needed |
+
+### Task 2.4 — Thread `UserContext` through `_run_tool()` in chat.py
+
+| Detail | Value |
+|--------|-------|
+| File | `src/api/chat.py` |
+| Function | `_run_tool()` (~line 48) |
+| Change | Add `user_context: UserContext | None = None` parameter; pass it to each tool call |
+
+```python
+async def _run_tool(
+    name: str,
+    args: dict[str, Any] | None = None,
+    user_context: UserContext | None = None,
+) -> dict[str, Any]:
+    args = args or {}
+
+    if name == "query_secure_score":
+        from src.tools.secure_score import query_secure_score
+        return await query_secure_score(
+            tenant_id=args.get("tenant_id", ""),
+            user_context=user_context,
+        )
+
+    if name == "assess_defender_coverage":
+        from src.tools.defender_coverage import assess_defender_coverage
+        return await assess_defender_coverage(user_context=user_context)
+
+    # ... same pattern for all other tools
+```
+
+### Task 2.5 — Thread `UserContext` through `handle_chat()` in chat.py
+
+| Detail | Value |
+|--------|-------|
+| File | `src/api/chat.py` |
+| Function | `handle_chat()` |
+| Change | Accept `user_context` parameter; pass to `_run_tool()` calls |
+
+### Task 2.6 — Update session key to include tenant and user
+
+| Detail | Value |
+|--------|-------|
+| File | `src/api/chat.py` |
+| Change | Key `_sessions` dict by `(tenant_id, user_id, session_id)` instead of `session_id` alone |
+| Why | Prevents session cross-contamination between tenants / users |
+
+**Current:**
+```python
+session = _sessions.get(session_id, {"messages": []})
+```
+
+**Proposed:**
+```python
+if user_context:
+    session_key = f"{user_context.tenant_id}:{user_context.user_id}:{session_id}"
+else:
+    session_key = session_id  # demo mode fallback
+session = _sessions.get(session_key, {"messages": []})
+```
+
+### Task 2.7 — Update Copilot SDK tool adapters in main.py
+
+| Detail | Value |
+|--------|-------|
+| File | `src/agent/main.py` |
+| Functions | `_handle_secure_score()`, `_handle_defender_coverage()`, `_handle_purview_policies()`, `_handle_entra_config()`, `_handle_remediation_plan()`, `_handle_adoption_scorecard()`, `_handle_fabric_telemetry()`, `_handle_foundry_playbook()` |
+| Change | Extract `user_context` from invocation arguments (Copilot SDK passes it as serialized JSON); pass to tool functions |
+| Note | This depends on how the Copilot SDK exposes the calling user's context. May need a custom middleware or session-level injection. |
+
+### Task 2.8 — Update `/chat` endpoint in app.py to pass UserContext
+
+| Detail | Value |
+|--------|-------|
+| File | `src/api/app.py` |
+| Change | The `/chat` route handler should inject the authenticated `UserContext` (from `get_current_user` dependency) and pass it to `handle_chat()` |
 
 ---
 
-## Risk Register
+## Phase 3 — Tenant Onboarding + Admin Consent
 
-| Risk | Likelihood | Impact | Mitigation |
-| --- | --- | --- | --- |
-| Graph Security API requires tenant-level admin consent — may not get access to a test tenant in time | Medium | High | Use Microsoft's demo tenants (CDX tenant) for development. Mock Graph responses for demo if needed |
-| Copilot SDK is in preview — APIs may break or behave unexpectedly | Medium | Medium | Start SDK integration early. Log all issues in feedback doc (turns risk into bonus points) |
-| Azure OpenAI quota limits during development | Low | Medium | Use S0 tier. Have fallback to direct OpenAI API if Azure quota is exhausted |
-| Foundry IQ / Fabric access may require internal approvals | Medium | Low | These are bonus points — prioritize base score first. Can fake the integration for demo with mock data |
-| Timeline is tight (Feb 9 – Mar 7) | High | High | Strict phase gates. Cut Foundry/Fabric (Phase 4) if behind. Core agent + ops layer is the priority |
+**Goal:** Provide a self-service admin consent flow so customer tenant admins
+can authorize PostureIQ with one click.
+
+**Effort:** ~1 day
+
+### Task 3.1 — Switch app registration to multi-tenant
+
+| Detail | Value |
+|--------|-------|
+| File | `scripts/provision-dev.sh` (line 181) |
+| Change | Change `--sign-in-audience "AzureADMyOrg"` to `--sign-in-audience "AzureADMultipleOrgs"` |
+| Also | `scripts/setup-permissions.sh` (line 31) — same change |
+| Why | Required for Entra ID to issue tokens for users from any tenant |
+
+```bash
+# Before
+--sign-in-audience "AzureADMyOrg" \
+# After
+--sign-in-audience "AzureADMultipleOrgs" \
+```
+
+### Task 3.2 — Add `/admin/consent` redirect endpoint
+
+| Detail | Value |
+|--------|-------|
+| File | `src/api/app.py` |
+| Change | Add `GET /admin/consent` that redirects to the Entra ID admin consent URL |
+| Why | Customer admins navigate here to grant PostureIQ permissions to their tenant |
+
+```python
+@app.get("/admin/consent")
+async def admin_consent_redirect(tenant_id: str = "organizations"):
+    """Redirect a customer admin to the Entra ID admin consent flow."""
+    params = urlencode({
+        "client_id": settings.azure_client_id,
+        "redirect_uri": f"{settings.app_base_url}/admin/consent/callback",
+        "scope": settings.graph_scopes.replace(",", " "),
+        "response_type": "code",
+    })
+    consent_url = (
+        f"{ENTRA_AUTHORITY}/{tenant_id}/v2.0/adminconsent?{params}"
+    )
+    return RedirectResponse(consent_url)
+```
+
+### Task 3.3 — Add `/admin/consent/callback` handler
+
+| Detail | Value |
+|--------|-------|
+| File | `src/api/app.py` |
+| Change | Add `GET /admin/consent/callback` to handle the redirect after admin consent |
+| Behaviour | Log the consenting tenant ID; show a success page; record in audit log |
+
+### Task 3.4 — Add `app_base_url` setting to config
+
+| Detail | Value |
+|--------|-------|
+| File | `src/agent/config.py` |
+| Change | Add `app_base_url: str = "http://localhost:8000"` |
+| Why | Used to construct the `redirect_uri` for the admin consent callback |
+
+### Task 3.5 — Document tenant onboarding runbook
+
+| Detail | Value |
+|--------|-------|
+| File | `docs/tenant-onboarding-runbook.md` (new file) |
+| Contents | Step-by-step instructions for customer admins: consent URL, required permissions, verification checklist |
 
 ---
 
-## Daily Schedule (Suggested)
+## Phase 4 — Tests, CI/CD, and Documentation
 
-| Day | Focus | Deliverable |
-| --- | --- | --- |
-| Day 1 | Phase 0: Setup | Repo, project structure, Azure resources provisioned, dev env working |
-| Day 2 | Phase 1: Tools 1–3 | `query_secure_score`, `assess_defender_coverage`, `check_purview_policies` implemented with mocks |
-| Day 3 | Phase 1: Tools 4–6 + Agent Host | `get_entra_config`, `generate_remediation_plan`, `create_adoption_scorecard` + Copilot SDK wired up |
-| Day 4 | Phase 2: Ops Layer | CI/CD pipeline, Bicep templates, App Insights tracing, health probes, Dockerfile |
-| Day 5 | Phase 3: Security/RAI | Entra ID auth, Content Safety, PII redaction, audit trail, unit tests passing |
-| Day 6 | Phase 4: Bonus + Polish | Foundry IQ / Fabric integration (if time). End-to-end testing. Fix bugs |
-| Day 7 | Phase 5: Submission | Record demo video, build deck, write README, compile SDK feedback, submit |
+**Goal:** Full test coverage for multi-tenant paths; CI/CD pipeline validates
+multi-tenant configuration.
 
-> **Critical path:** Phase 0 → Phase 1 (tools + SDK) → Phase 2 (ops) → Phase 5 (submit). Phases 3 and 4 are parallel/optional but high-value.
+**Effort:** ~1 day
+
+### Task 4.1 — Unit tests: multi-tenant token validation
+
+| Detail | Value |
+|--------|-------|
+| File | `tests/unit/test_auth.py` |
+| New tests | |
+| | `test_multi_tenant_accepts_token_from_allowed_tenant` |
+| | `test_multi_tenant_rejects_token_from_disallowed_tenant` |
+| | `test_multi_tenant_rejects_token_without_tid_claim` |
+| | `test_multi_tenant_validates_issuer_matches_tid` |
+| | `test_multi_tenant_cross_tenant_token_rejected` — critical: craft a token with `tid=A` but issuer from `tid=B` |
+| | `test_single_tenant_mode_unchanged_when_flag_off` |
+| | `test_organizations_authority_used_when_multi_tenant` |
+
+### Task 4.2 — Unit tests: Graph client OBO flow
+
+| Detail | Value |
+|--------|-------|
+| File | `tests/unit/test_secure_score.py` (and other tool test files) |
+| New tests | |
+| | `test_tool_uses_user_token_when_user_context_provided` |
+| | `test_tool_falls_back_to_app_credential_when_no_user_context` |
+| | `test_tool_falls_back_to_mock_when_obo_fails` |
+
+### Task 4.3 — Unit tests: session isolation
+
+| Detail | Value |
+|--------|-------|
+| File | `tests/unit/test_chat.py` |
+| New tests | |
+| | `test_session_key_includes_tenant_and_user` |
+| | `test_sessions_isolated_across_tenants` — create sessions from two different tenant contexts, verify no cross-access |
+| | `test_demo_mode_session_key_unchanged` |
+
+### Task 4.4 — Unit tests: admin consent endpoint
+
+| Detail | Value |
+|--------|-------|
+| File | `tests/unit/test_auth.py` or new `tests/unit/test_admin_consent.py` |
+| New tests | |
+| | `test_admin_consent_redirects_to_entra` |
+| | `test_admin_consent_callback_logs_tenant` |
+| | `test_admin_consent_callback_rejects_error_response` |
+
+### Task 4.5 — Integration test: multi-tenant smoke test
+
+| Detail | Value |
+|--------|-------|
+| File | `tests/integration/test_e2e_smoke.py` |
+| New test | `test_multi_tenant_e2e_two_tenants` — mock tokens from two tenants, verify each gets its own Graph data |
+
+### Task 4.6 — Update CI/CD: add `MULTI_TENANT_ENABLED` env var
+
+| Detail | Value |
+|--------|-------|
+| File | `infra/modules/container-app.bicep` |
+| Change | Add `multiTenantEnabled` parameter (default `false`); wire to env var in container config |
+| Also | `infra/parameters/dev.json` — set to `true` for dev environment |
+| Also | `infra/parameters/prod.json` — set to `false` initially; flip after validation |
+
+### Task 4.7 — Update CI/CD: add `ALLOWED_TENANTS` env var
+
+| Detail | Value |
+|--------|-------|
+| File | `infra/modules/container-app.bicep` |
+| Change | Add `allowedTenants` parameter; wire to env var |
+| Also | Populate in dev params with test tenant IDs |
+
+### Task 4.8 — Update docs/multi-tenant-strategy.md status
+
+| Detail | Value |
+|--------|-------|
+| File | `docs/multi-tenant-strategy.md` |
+| Change | Update status from "Proposal — pending review" to "In progress" → "Implemented" as phases complete |
+
+### Task 4.9 — Update README.md
+
+| Detail | Value |
+|--------|-------|
+| File | `README.md` |
+| Change | Add "Multi-Tenant Configuration" section documenting the `MULTI_TENANT_ENABLED`, `ALLOWED_TENANTS`, and `APP_BASE_URL` env vars |
+
+---
+
+## Dependency Graph
+
+```
+Phase 1 (Auth layer)
+├── 1.1 Feature flag in config
+├── 1.2 Tenant allowlist in config
+├── 1.3 OAuth2 organizations endpoint ────────────────┐
+├── 1.4 Dynamic issuer validation ────────────────────┤
+├── 1.5 build_auth_url / exchange_code update ────────┤
+└── 1.6 UserContext.access_token ──┐                  │
+                                   │                  │
+Phase 2 (Tool plumbing)            │                  │
+├── 2.1 create_graph_client_for_user() ◄──────────────┘
+├── 2.2 Add user_context to Graph tools ◄── 2.1
+├── 2.3 Tenant awareness for non-Graph tools
+├── 2.4 Thread UserContext through _run_tool() ◄── 1.6, 2.2
+├── 2.5 Thread UserContext through handle_chat() ◄── 2.4
+├── 2.6 Session key includes tenant+user ◄── 1.6
+├── 2.7 Update Copilot SDK adapters ◄── 2.2
+└── 2.8 /chat endpoint passes UserContext ◄── 2.5
+                                   │
+Phase 3 (Onboarding)               │
+├── 3.1 App reg → AzureADMultipleOrgs ◄── Phase 1
+├── 3.2 /admin/consent endpoint ◄── 3.4
+├── 3.3 /admin/consent/callback ◄── 3.2
+├── 3.4 app_base_url config ◄── 1.1
+└── 3.5 Onboarding runbook doc
+                                   │
+Phase 4 (Tests + CI/CD)            │
+├── 4.1 Auth multi-tenant tests ◄── 1.3, 1.4
+├── 4.2 Graph OBO tests ◄── 2.1, 2.2
+├── 4.3 Session isolation tests ◄── 2.6
+├── 4.4 Admin consent tests ◄── 3.2, 3.3
+├── 4.5 Integration smoke test ◄── Phase 2
+├── 4.6 Bicep: MULTI_TENANT_ENABLED ◄── 1.1
+├── 4.7 Bicep: ALLOWED_TENANTS ◄── 1.2
+├── 4.8 Update strategy doc status
+└── 4.9 Update README
+```
+
+---
+
+## Rollback Plan
+
+All changes are gated behind `MULTI_TENANT_ENABLED=false` (default). If any
+issue is discovered post-deployment:
+
+| Step | Action | Impact |
+|------|--------|--------|
+| 1 | Set `MULTI_TENANT_ENABLED=false` in Container App env vars | Immediately reverts to single-tenant mode. No code deployment needed. |
+| 2 | Clear `ALLOWED_TENANTS` | Removes tenant allowlist filter |
+| 3 | App reg: change `signInAudience` back to `AzureADMyOrg` | Prevents any cross-tenant login attempts at the Entra ID level |
+
+**Zero-downtime rollback:** Step 1 alone is sufficient. The feature flag
+disables all multi-tenant code paths. The `organizations` endpoint still
+works for single-tenant when the issuer validation falls back to
+`settings.azure_tenant_id`.
+
+---
+
+## Files Modified (Complete List)
+
+| File | Phase | Type of Change |
+|------|-------|---------------|
+| `src/agent/config.py` | 1, 3 | Add `multi_tenant_enabled`, `allowed_tenants`, `app_base_url` fields |
+| `src/middleware/auth.py` | 1 | Dynamic authority, dynamic issuer validation, `UserContext.access_token` |
+| `src/tools/graph_client.py` | 2 | Add `create_graph_client_for_user()` |
+| `src/tools/secure_score.py` | 2 | Add `user_context` parameter |
+| `src/tools/defender_coverage.py` | 2 | Add `user_context` parameter |
+| `src/tools/entra_config.py` | 2 | Add `user_context` parameter |
+| `src/tools/purview_policies.py` | 2 | Add `user_context` parameter |
+| `src/tools/remediation_plan.py` | 2 | Add `tenant_id` parameter |
+| `src/tools/adoption_scorecard.py` | 2 | Add `tenant_id` parameter |
+| `src/api/chat.py` | 2 | Thread `user_context` through `_run_tool()` and `handle_chat()`; update session key |
+| `src/agent/main.py` | 2 | Update Copilot SDK adapters to pass `user_context` |
+| `src/api/app.py` | 2, 3 | Pass `UserContext` to chat; add admin consent endpoints |
+| `scripts/provision-dev.sh` | 3 | `AzureADMyOrg` → `AzureADMultipleOrgs` |
+| `scripts/setup-permissions.sh` | 3 | `AzureADMyOrg` → `AzureADMultipleOrgs` |
+| `infra/modules/container-app.bicep` | 4 | Add `multiTenantEnabled`, `allowedTenants` params + env vars |
+| `infra/parameters/dev.json` | 4 | Set multi-tenant params for dev |
+| `infra/parameters/prod.json` | 4 | Set multi-tenant params for prod (default off) |
+| `tests/unit/test_auth.py` | 4 | Multi-tenant token validation tests |
+| `tests/unit/test_chat.py` | 4 | Session isolation tests |
+| `tests/unit/test_secure_score.py` | 4 | OBO Graph client tests |
+| `tests/integration/test_e2e_smoke.py` | 4 | Multi-tenant smoke test |
+| `docs/multi-tenant-strategy.md` | 4 | Status update |
+| `docs/tenant-onboarding-runbook.md` | 3 | New — onboarding instructions |
+| `README.md` | 4 | Multi-tenant config section |
