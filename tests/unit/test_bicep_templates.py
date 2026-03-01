@@ -18,6 +18,7 @@ PARAMS_DIR = INFRA_DIR / "parameters"
 # All expected module files
 EXPECTED_MODULES = [
     "app-insights.bicep",
+    "availability-test.bicep",
     "container-app.bicep",
     "container-registry.bicep",
     "content-safety.bicep",
