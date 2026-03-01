@@ -40,8 +40,14 @@ from src.middleware.auth import (
     exchange_code_for_tokens,
     get_current_user,
 )
+from src.middleware.tracing import setup_tracing
 
 logger = structlog.get_logger(__name__)
+
+# ── Initialize OpenTelemetry / Azure Monitor tracing at import time ────────
+# This must run before the FastAPI app is created so that the
+# azure-monitor-opentelemetry instrumentor can patch FastAPI automatically.
+setup_tracing()
 
 app = FastAPI(
     title="PostureIQ",
