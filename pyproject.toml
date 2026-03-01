@@ -30,6 +30,9 @@ dependencies = [
     "opentelemetry-api>=1.22.0",
     "opentelemetry-sdk>=1.22.0",
 
+    # GenAI auto-instrumentation (populates App Insights "Agent" blade)
+    "opentelemetry-instrumentation-openai-v2>=2.0b0",
+
     # API framework (health probes)
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",

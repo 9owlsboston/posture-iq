@@ -76,6 +76,23 @@ def setup_tracing() -> None:
             )
         except Exception as e:
             logger.warning("tracing.setup.failed", error=str(e))
+
+        # ── GenAI auto-instrumentation ─────────────────────────────
+        # Patches the openai SDK so every chat.completions.create() call
+        # emits spans with gen_ai.* semantic-convention attributes.
+        # This populates the App Insights "Agent (preview)" blade.
+        try:
+            from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
+
+            OpenAIInstrumentor().instrument()
+            logger.info("tracing.genai_instrumentor.complete", instrumentor="openai_v2")
+        except ImportError:
+            logger.debug(
+                "tracing.genai_instrumentor.skipped",
+                reason="opentelemetry-instrumentation-openai-v2 not installed",
+            )
+        except Exception as e:
+            logger.warning("tracing.genai_instrumentor.failed", error=str(e))
     else:
         logger.info(
             "tracing.setup.skipped",
