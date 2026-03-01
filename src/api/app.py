@@ -55,6 +55,18 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# ── Explicitly instrument the FastAPI app for server-side request spans ────
+# configure_azure_monitor() patches FastAPI.__init__ via instrument(), but
+# that only captures apps created *after* the patch.  Since our `app` is
+# created in the same module-load, we must also call instrument_app() to
+# retroactively add the ASGI tracing middleware to this instance.
+try:
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    FastAPIInstrumentor.instrument_app(app)
+except Exception:
+    logger.debug("fastapi_instrumentor.skipped", reason="instrument_app failed or not available")
+
 # ── Static files ───────────────────────────────────────────────────────────
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
