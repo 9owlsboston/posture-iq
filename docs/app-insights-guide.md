@@ -11,6 +11,7 @@ how to simulate traffic to generate data, and how to troubleshoot common issues.
 - [Where Telemetry Lives](#where-telemetry-lives)
 - [Viewing Telemetry in the Portal](#viewing-telemetry-in-the-portal)
 - [Kusto Queries (KQL)](#kusto-queries-kql)
+- [GenAI / Agent (preview) Blade](#genai--agent-preview-blade)
 - [Querying from the CLI](#querying-from-the-cli)
 - [Simulating Traffic](#simulating-traffic)
 - [Troubleshooting](#troubleshooting)
@@ -24,10 +25,16 @@ how to simulate traffic to generate data, and how to troubleshoot common issues.
 │  Client / Load   │────▶│  Azure Container App (FastAPI)       │
 │  Simulator       │     │                                      │
 └──────────────────┘     │  setup_tracing()                     │
-                         │    └─ configure_azure_monitor()       │
-                         │         └─ OpenTelemetry SDK          │
-                         │              ├─ auto-instruments HTTP │
-                         │              └─ exports spans/metrics │
+                         │    ├─ configure_azure_monitor()       │
+                         │    │    └─ OpenTelemetry SDK          │
+                         │    │         ├─ auto-instruments HTTP │
+                         │    │         └─ exports spans/metrics │
+                         │    └─ OpenAIInstrumentor().instrument()│
+                         │         └─ patches openai SDK         │
+                         │              └─ gen_ai.* spans        │
+                         │                                      │
+                         │  FastAPIInstrumentor.instrument_app() │
+                         │    └─ server request spans (requests)│
                          │                                      │
                          │  @trace_tool_call decorators          │
                          │    └─ tool.* spans with attributes   │
@@ -45,14 +52,19 @@ how to simulate traffic to generate data, and how to troubleshoot common issues.
                          │  (backed by Log Analytics workspace) │
                          │                                      │
                          │  Tables:                              │
+                         │    requests      ← server HTTP spans │
                          │    dependencies  ← tool spans, HTTP  │
+                         │                    + gen_ai.* LLM    │
                          │    traces        ← structlog messages│
                          │    customMetrics ← gauges, counters  │
-                         │    requests      ← server spans *    │
                          │    exceptions    ← errors            │
+                         │                                      │
+                         │  Portal blades:                       │
+                         │    Metrics       ← charts over time  │
+                         │    Live metrics  ← real-time stream  │
+                         │    Agent (prev.) ← GenAI LLM usage   │
+                         │    Availability  ← web test pings    │
                          └──────────────────────────────────────┘
-
-* Note: requests table may be empty for Container Apps — see Troubleshooting.
 ```
 
 ### How Tracing is Initialized
@@ -60,8 +72,13 @@ how to simulate traffic to generate data, and how to troubleshoot common issues.
 1. `src/api/app.py` calls `setup_tracing()` at import time (before FastAPI app creation)
 2. `setup_tracing()` in `src/middleware/tracing.py` calls `configure_azure_monitor()`
 3. This registers the Azure Monitor exporter + auto-instruments FastAPI, httpx, etc.
-4. Each tool function is decorated with `@trace_tool_call("tool_name")` which creates child spans
-5. The exporter batches and ships telemetry to App Insights via the connection string
+4. `setup_tracing()` then calls `OpenAIInstrumentor().instrument()` — patches the `openai`
+   SDK so every `chat.completions.create()` call emits `gen_ai.*` spans (model, tokens,
+   finish reasons). These feed the **Agent (preview)** blade in App Insights.
+5. After the `FastAPI(...)` app object is created, `FastAPIInstrumentor.instrument_app(app)`
+   is called explicitly to ensure server-side HTTP spans populate the `requests` table.
+6. Each tool function is decorated with `@trace_tool_call("tool_name")` which creates child spans
+7. The exporter batches and ships telemetry to App Insights via the connection string
 
 **Critical:** If `setup_tracing()` never runs, OpenTelemetry returns a no-op tracer. Spans are
 "created" silently but never exported. There are no errors — just silent data loss.
@@ -74,14 +91,17 @@ PostureIQ telemetry lands in **four** App Insights tables:
 
 | Table | What's in it | Example data |
 |---|---|---|
-| `dependencies` | Tool-call spans, HTTP calls, audit spans | `tool.query_secure_score`, `POST //contentsafety/text:analyze`, `GET /msi/token` |
+| `requests` | Server-side HTTP spans (FastAPI endpoints) | `GET /health`, `POST /chat`, `GET /ready` |
+| `dependencies` | Tool-call spans, HTTP calls, audit spans, GenAI LLM calls | `tool.query_secure_score`, `POST //contentsafety/text:analyze`, `chat gpt-4o` |
 | `traces` | Structured log messages (via structlog) | `tool.secure_score.complete`, `chat.tool.invoking` |
 | `customMetrics` | Custom gauges, histograms, counters | `postureiq.secure_score.current`, `postureiq.assessment.duration_seconds` |
 | `exceptions` | Unhandled errors and recorded exceptions | Stack traces from failed tool calls |
 
-> **Important:** The `requests` table (server-side HTTP spans) may be empty for Azure Container
-> Apps deployments. This is a known behavior with `configure_azure_monitor()` when running behind
-> the Container Apps reverse proxy. Tool spans and dependency data land in `dependencies` instead.
+> **GenAI spans:** The `opentelemetry-instrumentation-openai-v2` package auto-instruments every
+> `openai.AzureOpenAI.chat.completions.create()` call. These spans carry `gen_ai.*` semantic
+> convention attributes and appear in the `dependencies` table as well as the **Agent (preview)**
+> blade. Currently only `generate_remediation_plan` calls Azure OpenAI directly — the other
+> tools use Graph API / deterministic logic and don't produce GenAI spans.
 
 ---
 
@@ -106,6 +126,13 @@ PostureIQ telemetry lands in **four** App Insights tables:
 | **Performance** | Request duration distribution, drill into waterfall |
 | **Failures** | Failed requests and exceptions |
 | **Application map** | Visual dependency graph |
+| **Agent (preview)** | GenAI / LLM usage — model calls, token consumption, latency (requires `gen_ai.*` spans) |
+
+4. In the left sidebar under **Monitoring**:
+
+| Blade | What it shows |
+|---|---|
+| **Availability** | Web test ping results (requires a Web Test resource — see [Troubleshooting §8](#8-availability-metric-shows-zeros)) |
 
 > If a blade name doesn't match, look under **Investigate** or **Monitoring** sections —
 > the Portal UI changes across versions.
@@ -209,6 +236,58 @@ customMetrics
 | render timechart
 ```
 
+### GenAI (LLM) spans — Agent blade data
+
+These queries surface the same data shown in the **Agent (preview)** blade.
+
+```kusto
+// All GenAI LLM calls (emitted by opentelemetry-instrumentation-openai-v2)
+dependencies
+| where timestamp > ago(2h)
+| where customDimensions has "gen_ai.system"
+| project
+    timestamp,
+    name,
+    duration,
+    model = tostring(customDimensions["gen_ai.response.model"]),
+    inputTokens = toint(customDimensions["gen_ai.usage.input_tokens"]),
+    outputTokens = toint(customDimensions["gen_ai.usage.output_tokens"]),
+    finishReason = tostring(customDimensions["gen_ai.response.finish_reasons"]),
+    system = tostring(customDimensions["gen_ai.system"])
+| order by timestamp desc
+```
+
+```kusto
+// Token consumption summary by model (last 24h)
+dependencies
+| where timestamp > ago(24h)
+| where customDimensions has "gen_ai.usage.input_tokens"
+| summarize
+    calls = count(),
+    totalInputTokens = sum(toint(customDimensions["gen_ai.usage.input_tokens"])),
+    totalOutputTokens = sum(toint(customDimensions["gen_ai.usage.output_tokens"])),
+    avgDurationMs = avg(duration),
+    p95DurationMs = percentile(duration, 95)
+  by model = tostring(customDimensions["gen_ai.response.model"])
+```
+
+```kusto
+// GenAI call latency over time (for timechart)
+dependencies
+| where timestamp > ago(6h)
+| where customDimensions has "gen_ai.system"
+| summarize
+    avgDuration = avg(duration),
+    p95Duration = percentile(duration, 95),
+    calls = count()
+  by bin(timestamp, 5m)
+| render timechart
+```
+
+> **Note:** Only tools that call `openai.AzureOpenAI.chat.completions.create()` produce GenAI
+> spans. Currently this is limited to `generate_remediation_plan`. Other tools use Graph API
+> or deterministic logic and do not make LLM calls.
+
 ### Error investigation
 
 ```kusto
@@ -236,6 +315,96 @@ union dependencies, traces, requests
 | project timestamp, itemType, name, duration, message
 | order by timestamp asc
 ```
+
+---
+
+## GenAI / Agent (preview) Blade
+
+The **Agent (preview)** blade (under **Investigate** in the App Insights sidebar) provides a
+purpose-built view for monitoring AI/GenAI agent applications. It shows LLM call volume, token
+consumption, model latency, and error rates — but **only** for spans that carry
+[OpenTelemetry GenAI semantic convention](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
+attributes.
+
+### How it Works
+
+The `opentelemetry-instrumentation-openai-v2` package (added to `pyproject.toml`) auto-patches
+the `openai` Python SDK. When the app calls `openai.AzureOpenAI.chat.completions.create()`, the
+instrumentor creates a span with these attributes:
+
+| Attribute | Example Value | Purpose |
+|-----------|---------------|---------|
+| `gen_ai.system` | `"openai"` | Identifies the LLM provider |
+| `gen_ai.operation.name` | `"chat"` | Operation type |
+| `gen_ai.request.model` | `"gpt-4o"` | Requested model name |
+| `gen_ai.response.model` | `"gpt-4o-2024-08-06"` | Actual model used |
+| `gen_ai.usage.input_tokens` | `1842` | Prompt token count |
+| `gen_ai.usage.output_tokens` | `356` | Completion token count |
+| `gen_ai.response.finish_reasons` | `["stop"]` | Why generation stopped |
+
+These spans land in the `dependencies` table and the Agent blade reads them automatically.
+
+### What Produces GenAI Spans
+
+| Tool | Makes LLM Call? | GenAI Spans? |
+|------|----------------|--------------|
+| `generate_remediation_plan` | Yes — `AzureOpenAI.chat.completions.create()` | Yes |
+| `query_secure_score` | No — Graph API | No |
+| `assess_defender_coverage` | No — Graph API | No |
+| `check_purview_policies` | No — Graph API | No |
+| `get_entra_config` | No — Graph API | No |
+| `create_adoption_scorecard` | No — deterministic | No |
+| `get_project479_playbook` | No — deterministic | No |
+
+To see data in the Agent blade, send prompts that trigger `generate_remediation_plan`:
+
+```bash
+python scripts/simulate_traffic.py \
+  --tools remediation \
+  --burst-size 10 \
+  --duration 5
+```
+
+### Initialization
+
+The instrumentor is wired in `src/middleware/tracing.py` inside `setup_tracing()`:
+
+```python
+from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
+OpenAIInstrumentor().instrument()
+```
+
+This runs after `configure_azure_monitor()` and patches the `openai` module globally.
+No changes to individual tool files are needed — the existing `oai_client.chat.completions.create()`
+call in `src/tools/remediation_plan.py` is automatically instrumented.
+
+### Capturing Prompt/Completion Content (Optional)
+
+By default, message content is **not** captured (privacy). To enable it for debugging:
+
+```python
+# In setup_tracing():
+OpenAIInstrumentor().instrument(capture_content=True)
+```
+
+Or via environment variable on the Container App:
+
+```bash
+az containerapp update \
+  -n postureiq-dev-app \
+  -g rg-postureiq-dev \
+  --set-env-vars "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true"
+```
+
+### Scope & Limitations
+
+- **Direct `openai` SDK calls only.** The instrumentor patches the Python `openai` package
+  within the app process. LLM calls made by external systems (e.g., the Copilot SDK runtime
+  process) are not captured.
+- **No GenAI spans for Graph API tools.** Most PostureIQ tools call Microsoft Graph, not an
+  LLM. These appear as regular HTTP dependency spans, not GenAI spans.
+- **Agent blade is in preview.** The UI and required attributes may evolve. The
+  `opentelemetry-instrumentation-openai-v2` package tracks the latest GenAI semantic conventions.
 
 ---
 
