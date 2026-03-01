@@ -19,6 +19,7 @@ import structlog
 from pydantic import BaseModel
 
 from src.middleware.audit_logger import AuditLogger
+from src.middleware.tracing import trace_agent_invocation, trace_genai_tool_call
 
 logger = structlog.get_logger(__name__)
 
@@ -349,7 +350,12 @@ _FORMATTERS = {
 
 
 async def handle_chat(request: ChatRequest) -> ChatResponse:
-    """Process a chat message by classifying intent → running tools → formatting response."""
+    """Process a chat message by classifying intent → running tools → formatting response.
+
+    Each call creates an ``invoke_agent`` GenAI span so it appears in the
+    App Insights Agent (preview) → Agent Runs panel.  Individual tool
+    invocations are wrapped in ``execute_tool`` spans for the Tool Calls panel.
+    """
     sid = request.session_id or str(uuid.uuid4())
 
     # Store session history
@@ -366,59 +372,67 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
     # Classify which tools to call
     intended_tools = _classify_intent(request.message)
 
-    if not intended_tools:
-        # No tools matched — provide a helpful response
-        response_text = (
-            "I can help you assess your tenant's ME5 security posture. "
-            "Here are some things I can do:\n\n"
-            "- **📊 Secure Score** — Check your current Microsoft Secure Score\n"
-            "- **🛡️ Defender Coverage** — Assess M365 Defender deployment across workloads\n"
-            "- **📋 Purview Policies** — Review DLP, sensitivity labels, and retention policies\n"
-            "- **🔐 Entra ID Config** — Evaluate Conditional Access, PIM, and Identity Protection\n"
-            "- **📝 Remediation Plan** — Generate a prioritized Get-to-Green plan\n"
-            "- **📈 Adoption Scorecard** — Create an overall ME5 adoption scorecard\n\n"
-            'Try asking: *"Assess this tenant\'s ME5 security posture"* for a full assessment.'
-        )
-    else:
-        # Run tools and format results
-        for tool_name in intended_tools:
-            try:
-                logger.info("chat.tool.invoking", tool=tool_name, session_id=sid)
+    # Wrap the entire turn in a GenAI "invoke_agent" span
+    async with trace_agent_invocation(session_id=sid) as agent_span:
+        if not intended_tools:
+            # No tools matched — provide a helpful response
+            response_text = (
+                "I can help you assess your tenant's ME5 security posture. "
+                "Here are some things I can do:\n\n"
+                "- **📊 Secure Score** — Check your current Microsoft Secure Score\n"
+                "- **🛡️ Defender Coverage** — Assess M365 Defender deployment across workloads\n"
+                "- **📋 Purview Policies** — Review DLP, sensitivity labels, and retention policies\n"
+                "- **🔐 Entra ID Config** — Evaluate Conditional Access, PIM, and Identity Protection\n"
+                "- **📝 Remediation Plan** — Generate a prioritized Get-to-Green plan\n"
+                "- **📈 Adoption Scorecard** — Create an overall ME5 adoption scorecard\n\n"
+                'Try asking: *"Assess this tenant\'s ME5 security posture"* for a full assessment.'
+            )
+        else:
+            # Run tools and format results
+            for tool_name in intended_tools:
+                try:
+                    logger.info("chat.tool.invoking", tool=tool_name, session_id=sid)
 
-                # For remediation/scorecard, pass prior results as context
-                args: dict[str, Any] = {}
-                if tool_name in ("generate_remediation_plan", "create_adoption_scorecard"):
-                    args["assessment_context"] = json.dumps(session["results"])
+                    # For remediation/scorecard, pass prior results as context
+                    args: dict[str, Any] = {}
+                    if tool_name in ("generate_remediation_plan", "create_adoption_scorecard"):
+                        args["assessment_context"] = json.dumps(session["results"])
 
-                result = await _run_tool(tool_name, args)
-                session["results"][tool_name] = result
-                tools_called.append(tool_name)
+                    # Wrap each tool in a GenAI "execute_tool" span
+                    with trace_genai_tool_call(tool_name):
+                        result = await _run_tool(tool_name, args)
 
-                # Format for display
-                formatter = _FORMATTERS.get(tool_name)
-                if formatter:
-                    sections.append(formatter(result))
-                else:
-                    sections.append(f"### {tool_name}\n```json\n{json.dumps(result, indent=2, default=str)}\n```")
+                    session["results"][tool_name] = result
+                    tools_called.append(tool_name)
 
-                audit.log_tool_call(
-                    tool_name=tool_name,
-                    input_params=args,
-                    output_summary=f"{len(json.dumps(result))} bytes",
+                    # Format for display
+                    formatter = _FORMATTERS.get(tool_name)
+                    if formatter:
+                        sections.append(formatter(result))
+                    else:
+                        sections.append(f"### {tool_name}\n```json\n{json.dumps(result, indent=2, default=str)}\n```")
+
+                    audit.log_tool_call(
+                        tool_name=tool_name,
+                        input_params=args,
+                        output_summary=f"{len(json.dumps(result))} bytes",
+                    )
+
+                except Exception as e:
+                    logger.error("chat.tool.error", tool=tool_name, error=str(e))
+                    sections.append(f"### ⚠️ {tool_name}\nError: {e}")
+
+            response_text = "\n\n---\n\n".join(sections)
+
+            # Add a summary intro for multi-tool calls
+            if len(tools_called) > 1:
+                response_text = (
+                    f"I've completed the assessment using **{len(tools_called)} tools**. "
+                    "Here are the results:\n\n---\n\n" + response_text
                 )
 
-            except Exception as e:
-                logger.error("chat.tool.error", tool=tool_name, error=str(e))
-                sections.append(f"### ⚠️ {tool_name}\nError: {e}")
-
-        response_text = "\n\n---\n\n".join(sections)
-
-        # Add a summary intro for multi-tool calls
-        if len(tools_called) > 1:
-            response_text = (
-                f"I've completed the assessment using **{len(tools_called)} tools**. "
-                "Here are the results:\n\n---\n\n" + response_text
-            )
+        # Record tool count on the agent span
+        agent_span.set_attribute("postureiq.tools_called", len(tools_called))
 
     session["history"].append({"role": "assistant", "content": response_text})
 

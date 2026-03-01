@@ -829,7 +829,7 @@ class TestSecureScoreTracing:
 
             mock_tracer.start_as_current_span.assert_called_once()
             call_kwargs = mock_tracer.start_as_current_span.call_args
-            assert "tool.query_secure_score" in str(call_kwargs)
+            assert "execute_tool query_secure_score" in str(call_kwargs)
 
     @pytest.mark.asyncio
     async def test_trace_span_records_error(self):

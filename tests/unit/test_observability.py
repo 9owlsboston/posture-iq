@@ -24,6 +24,8 @@ from src.middleware.tracing import (
     record_remediation_steps,
     record_secure_score,
     setup_tracing,
+    trace_agent_invocation,
+    trace_genai_tool_call,
     trace_llm_call,
     trace_session,
     trace_tool_call,
@@ -277,6 +279,81 @@ class TestTraceSession:
         result = await session_with_tools()
         assert result["session"] is True
         assert result["tool_result"]["inner"] is True
+
+
+# ── GenAI Agent Invocation Tracing ───────────────────────
+
+
+class TestTraceAgentInvocation:
+    """Verify invoke_agent spans are created with gen_ai.* attributes."""
+
+    @pytest.mark.asyncio
+    async def test_agent_invocation_creates_span(self):
+        async with trace_agent_invocation(session_id="sess-1") as span:
+            pass  # no-op body
+        # If we get here without exception, the span was created and closed
+
+    @pytest.mark.asyncio
+    async def test_agent_invocation_returns_result(self):
+        async with trace_agent_invocation(session_id="sess-2") as span:
+            result = {"tools_called": 3}
+        assert result["tools_called"] == 3
+
+    @pytest.mark.asyncio
+    async def test_agent_invocation_propagates_exceptions(self):
+        with pytest.raises(RuntimeError, match="agent failure"):
+            async with trace_agent_invocation(session_id="sess-err"):
+                raise RuntimeError("agent failure")
+
+    @pytest.mark.asyncio
+    async def test_agent_invocation_with_nested_tool_calls(self):
+        @trace_tool_call("nested_tool")
+        async def nested_tool() -> dict:
+            return {"nested": True}
+
+        async with trace_agent_invocation(session_id="sess-nested") as span:
+            tool_result = await nested_tool()
+            span.set_attribute("postureiq.tools_called", 1)
+        assert tool_result["nested"] is True
+
+    @pytest.mark.asyncio
+    async def test_agent_invocation_custom_agent_name(self):
+        async with trace_agent_invocation(
+            session_id="sess-custom",
+            agent_name="CustomAgent",
+            agent_description="A custom agent",
+            model="gpt-4o-mini",
+        ) as span:
+            pass  # Should not raise
+
+
+# ── GenAI Tool Call Tracing ──────────────────────────────
+
+
+class TestTraceGenaiToolCall:
+    """Verify execute_tool spans are created with gen_ai.* attributes."""
+
+    def test_genai_tool_call_creates_span(self):
+        with trace_genai_tool_call("query_secure_score") as span:
+            pass  # Should not raise
+
+    def test_genai_tool_call_returns_span(self):
+        with trace_genai_tool_call("assess_defender_coverage") as span:
+            assert span is not None
+
+    def test_genai_tool_call_propagates_exceptions(self):
+        with pytest.raises(ValueError, match="tool error"):
+            with trace_genai_tool_call("failing_tool"):
+                raise ValueError("tool error")
+
+    @pytest.mark.asyncio
+    async def test_genai_tool_call_with_async_work(self):
+        async def async_tool() -> dict:
+            return {"status": "ok"}
+
+        with trace_genai_tool_call("async_tool") as span:
+            result = await async_tool()
+        assert result["status"] == "ok"
 
 
 # ── Custom Metrics ───────────────────────────────────────

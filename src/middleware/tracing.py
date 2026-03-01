@@ -3,6 +3,11 @@
 Integrates OpenTelemetry for distributed tracing. Every tool call, LLM call,
 and session becomes a trace span, enabling end-to-end visibility in App Insights.
 
+GenAI semantic conventions (populates the App Insights "Agent (preview)" blade):
+  - Agent Runs  → ``gen_ai.operation.name = "invoke_agent"``
+  - Tool Calls  → ``gen_ai.operation.name = "execute_tool"``
+  - Token Usage → auto-instrumented by ``opentelemetry-instrumentation-openai-v2``
+
 Custom metrics emitted:
   - postureiq.secure_score.current          (gauge)
   - postureiq.assessment.duration_seconds   (histogram)
@@ -12,17 +17,31 @@ Custom metrics emitted:
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import time
-from collections.abc import Callable
+import uuid
+from collections.abc import AsyncIterator, Callable
 from typing import Any, TypeVar
 
 import structlog
 from opentelemetry import metrics, trace
-from opentelemetry.trace import StatusCode
+from opentelemetry.trace import SpanKind, StatusCode
 
 from src.agent.config import settings
 from src.middleware.pii_redaction import redact_dict
+
+# ── GenAI semantic-convention attribute keys ──────────────
+# These are the attribute names the App Insights "Agent (preview)" blade
+# queries to populate Agent Runs, Tool Calls, and Token Consumption panels.
+_GENAI_SYSTEM = "gen_ai.system"
+_GENAI_OPERATION_NAME = "gen_ai.operation.name"
+_GENAI_AGENT_NAME = "gen_ai.agent.name"
+_GENAI_AGENT_DESCRIPTION = "gen_ai.agent.description"
+_GENAI_TOOL_NAME = "gen_ai.tool.name"
+_GENAI_TOOL_CALL_ID = "gen_ai.tool.call.id"
+_GENAI_CONVERSATION_ID = "gen_ai.conversation.id"
+_GENAI_REQUEST_MODEL = "gen_ai.request.model"
 
 logger = structlog.get_logger(__name__)
 
@@ -184,10 +203,17 @@ def record_content_safety_block(category: str = "unknown") -> None:
 def trace_tool_call(tool_name: str) -> Callable[[F], F]:
     """Decorator that wraps a tool function in an OpenTelemetry span.
 
-    Records: tool name, duration, input parameters (redacted), output summary,
-    status, Graph API call latency, and any errors.
+    Records both PostureIQ-specific and GenAI semantic-convention attributes
+    so the span appears in the App Insights "Agent (preview)" → Tool Calls panel.
 
-    Usage:
+    GenAI attributes emitted:
+      - ``gen_ai.system``          = ``"openai"``
+      - ``gen_ai.operation.name``  = ``"execute_tool"``
+      - ``gen_ai.tool.name``       = *tool_name*
+      - ``gen_ai.tool.call.id``    = unique UUID per invocation
+
+    Usage::
+
         @trace_tool_call("query_secure_score")
         async def query_secure_score(...) -> dict:
             ...
@@ -197,9 +223,17 @@ def trace_tool_call(tool_name: str) -> Callable[[F], F]:
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             tracer = get_tracer()
+            tool_call_id = str(uuid.uuid4())
             with tracer.start_as_current_span(
-                name=f"tool.{tool_name}",
+                name=f"execute_tool {tool_name}",
+                kind=SpanKind.INTERNAL,
                 attributes={
+                    # GenAI semantic conventions (Agent blade)
+                    _GENAI_SYSTEM: "openai",
+                    _GENAI_OPERATION_NAME: "execute_tool",
+                    _GENAI_TOOL_NAME: tool_name,
+                    _GENAI_TOOL_CALL_ID: tool_call_id,
+                    # PostureIQ-specific (custom dashboards)
                     "postureiq.tool.name": tool_name,
                     "postureiq.tool.type": "assessment",
                 },
@@ -417,3 +451,98 @@ def trace_session(session_id: str) -> Callable[[F], F]:
         return wrapper  # type: ignore[return-value]
 
     return decorator
+
+
+# ── GenAI Agent-invocation span ───────────────────────────
+
+
+@contextlib.asynccontextmanager
+async def trace_agent_invocation(
+    session_id: str,
+    *,
+    agent_name: str = "PostureIQ",
+    agent_description: str = "ME5 Security Posture Assessment Agent",
+    model: str = "gpt-4o",
+) -> AsyncIterator[trace.Span]:
+    """Async context manager that creates an ``invoke_agent`` span.
+
+    Wraps one user-turn through the agent so it appears in the
+    App Insights **Agent (preview)** → *Agent Runs* panel.
+
+    GenAI attributes emitted:
+      - ``gen_ai.system``              = ``"openai"``
+      - ``gen_ai.operation.name``      = ``"invoke_agent"``
+      - ``gen_ai.agent.name``          = *agent_name*
+      - ``gen_ai.agent.description``   = *agent_description*
+      - ``gen_ai.conversation.id``     = *session_id*
+      - ``gen_ai.request.model``       = *model*
+
+    Usage::
+
+        async with trace_agent_invocation(session_id="sess-1") as span:
+            result = await run_tools(message)
+            span.set_attribute("postureiq.tools_called", len(tools))
+    """
+    tracer = get_tracer()
+    with tracer.start_as_current_span(
+        name=f"invoke_agent {agent_name}",
+        kind=SpanKind.SERVER,
+        attributes={
+            # GenAI semantic conventions (Agent blade → Agent Runs)
+            _GENAI_SYSTEM: "openai",
+            _GENAI_OPERATION_NAME: "invoke_agent",
+            _GENAI_AGENT_NAME: agent_name,
+            _GENAI_AGENT_DESCRIPTION: agent_description,
+            _GENAI_CONVERSATION_ID: session_id,
+            _GENAI_REQUEST_MODEL: model,
+            # PostureIQ-specific
+            "postureiq.session.id": session_id,
+            "postureiq.session.type": "assessment",
+        },
+    ) as span:
+        start_time = time.monotonic()
+        try:
+            yield span
+            duration_ms = (time.monotonic() - start_time) * 1000
+            span.set_attribute("postureiq.session.duration_ms", duration_ms)
+            span.set_status(StatusCode.OK)
+            logger.info(
+                "agent.invocation.completed",
+                session_id=session_id,
+                duration_ms=round(duration_ms, 2),
+            )
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            span.set_attribute("postureiq.session.duration_ms", duration_ms)
+            span.set_status(StatusCode.ERROR, str(e))
+            span.record_exception(e)
+            logger.error(
+                "agent.invocation.error",
+                session_id=session_id,
+                duration_ms=round(duration_ms, 2),
+                error=str(e),
+            )
+            raise
+
+
+@contextlib.contextmanager
+def trace_genai_tool_call(tool_name: str):
+    """Synchronous context manager for a lightweight ``execute_tool`` span.
+
+    Use this when you call a tool *outside* the ``@trace_tool_call`` decorator
+    path (e.g. in the chat HTTP handler's direct-mode dispatcher).
+    """
+    tracer = get_tracer()
+    tool_call_id = str(uuid.uuid4())
+    with tracer.start_as_current_span(
+        name=f"execute_tool {tool_name}",
+        kind=SpanKind.INTERNAL,
+        attributes={
+            _GENAI_SYSTEM: "openai",
+            _GENAI_OPERATION_NAME: "execute_tool",
+            _GENAI_TOOL_NAME: tool_name,
+            _GENAI_TOOL_CALL_ID: tool_call_id,
+            "postureiq.tool.name": tool_name,
+        },
+    ) as span:
+        yield span
