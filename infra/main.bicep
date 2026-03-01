@@ -103,6 +103,19 @@ module containerApp 'modules/container-app.bicep' = {
   }
 }
 
+// NOTE: The App Insights "Availability" metric is fed exclusively by Web Test
+// resources — regular HTTP traffic does NOT count.  Without this module the
+// Availability chart in the portal will always show zero.
+module availabilityTest 'modules/availability-test.bicep' = {
+  name: 'availabilityTestDeployment'
+  params: {
+    name: '${resourcePrefix}-health-ping'
+    location: location
+    appInsightsId: appInsights.outputs.id
+    targetUrl: 'https://${containerApp.outputs.fqdn}/health'
+  }
+}
+
 // ── Outputs ───────────────────────────────────────────────
 output containerAppUrl string = containerApp.outputs.fqdn
 output appInsightsName string = appInsights.outputs.name
@@ -111,3 +124,4 @@ output managedIdentityName string = managedIdentity.name
 output managedIdentityClientId string = managedIdentity.properties.clientId
 output acrLoginServer string = containerRegistry.outputs.loginServer
 output acrName string = containerRegistry.outputs.name
+output availabilityTestName string = availabilityTest.outputs.name

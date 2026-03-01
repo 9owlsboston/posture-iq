@@ -148,12 +148,14 @@ if [[ "$SKIP_INFRA" != true ]]; then
   CONTAINER_APP_URL=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('containerAppUrl',{}).get('value','N/A'))" 2>/dev/null || echo "N/A")
   APP_INSIGHTS_NAME=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('appInsightsName',{}).get('value','N/A'))" 2>/dev/null || echo "N/A")
   KEY_VAULT_NAME=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('keyVaultName',{}).get('value','N/A'))" 2>/dev/null || echo "N/A")
+  AVAILABILITY_TEST=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('availabilityTestName',{}).get('value','N/A'))" 2>/dev/null || echo "N/A")
 
   echo ""
   echo "   Deployed resources:"
-  echo "   ├── Container App:   https://$CONTAINER_APP_URL"
-  echo "   ├── App Insights:    $APP_INSIGHTS_NAME"
-  echo "   └── Key Vault:       $KEY_VAULT_NAME"
+  echo "   ├── Container App:          https://$CONTAINER_APP_URL"
+  echo "   ├── App Insights:           $APP_INSIGHTS_NAME"
+  echo "   ├── Availability Web Test:  $AVAILABILITY_TEST"
+  echo "   └── Key Vault:              $KEY_VAULT_NAME"
   echo ""
 
 else
@@ -274,6 +276,7 @@ if [[ "$SKIP_INFRA" != true ]]; then
   echo "  ✅ Azure OpenAI:         GPT-4o deployment"
   echo "  ✅ Azure Content Safety: RAI filtering"
   echo "  ✅ App Insights:         Observability (distributed tracing)"
+  echo "  ✅ Availability Test:    Health-ping from 5 US locations (every 5 min)"
   echo "  ✅ Key Vault:            Secrets management"
   echo "  ✅ Container App:        Deployment target (scale 0–5)"
 fi
