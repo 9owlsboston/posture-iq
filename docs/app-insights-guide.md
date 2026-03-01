@@ -20,51 +20,43 @@ how to simulate traffic to generate data, and how to troubleshoot common issues.
 
 ## Architecture Overview
 
-```
-┌──────────────────┐     ┌──────────────────────────────────────┐
-│  Client / Load   │────▶│  Azure Container App (FastAPI)       │
-│  Simulator       │     │                                      │
-└──────────────────┘     │  setup_tracing()                     │
-                         │    ├─ configure_azure_monitor()       │
-                         │    │    └─ OpenTelemetry SDK          │
-                         │    │         ├─ auto-instruments HTTP │
-                         │    │         └─ exports spans/metrics │
-                         │    └─ OpenAIInstrumentor().instrument()│
-                         │         └─ patches openai SDK         │
-                         │              └─ gen_ai.* spans        │
-                         │                                      │
-                         │  FastAPIInstrumentor.instrument_app() │
-                         │    └─ server request spans (requests)│
-                         │                                      │
-                         │  @trace_tool_call decorators          │
-                         │    └─ tool.* spans with attributes   │
-                         │                                      │
-                         │  Custom metrics:                      │
-                         │    postureiq.secure_score.current     │
-                         │    postureiq.assessment.duration_s    │
-                         │    postureiq.remediation.steps        │
-                         │    postureiq.content_safety.blocked   │
-                         └───────────────┬──────────────────────┘
-                                         │ OTLP/HTTP
-                                         ▼
-                         ┌──────────────────────────────────────┐
-                         │  Azure Application Insights          │
-                         │  (backed by Log Analytics workspace) │
-                         │                                      │
-                         │  Tables:                              │
-                         │    requests      ← server HTTP spans │
-                         │    dependencies  ← tool spans, HTTP  │
-                         │                    + gen_ai.* LLM    │
-                         │    traces        ← structlog messages│
-                         │    customMetrics ← gauges, counters  │
-                         │    exceptions    ← errors            │
-                         │                                      │
-                         │  Portal blades:                       │
-                         │    Metrics       ← charts over time  │
-                         │    Live metrics  ← real-time stream  │
-                         │    Agent (prev.) ← GenAI LLM usage   │
-                         │    Availability  ← web test pings    │
-                         └──────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Client["Client / Load Simulator"]
+
+    subgraph ACA["Azure Container App — FastAPI"]
+        direction TB
+        subgraph Init["setup_tracing()"]
+            CAM["configure_azure_monitor()"]
+            OTel["OpenTelemetry SDK<br/><i>auto-instruments HTTP · exports spans/metrics</i>"]
+            GenAI["OpenAIInstrumentor().instrument()<br/><i>patches openai SDK → gen_ai.* spans</i>"]
+            CAM --> OTel
+            CAM --> GenAI
+        end
+        FAPI["FastAPIInstrumentor.instrument_app()<br/><i>server request spans → requests table</i>"]
+        Tools["@trace_tool_call decorators<br/><i>tool.* spans with attributes</i>"]
+        Metrics["Custom metrics<br/><code>postureiq.secure_score.current</code><br/><code>postureiq.assessment.duration_s</code><br/><code>postureiq.remediation.steps</code><br/><code>postureiq.content_safety.blocked</code>"]
+    end
+
+    subgraph AI["Azure Application Insights<br/><i>backed by Log Analytics workspace</i>"]
+        direction TB
+        subgraph Tables["Tables"]
+            Req["requests — server HTTP spans"]
+            Dep["dependencies — tool spans · HTTP · gen_ai.* LLM"]
+            Tr["traces — structlog messages"]
+            CM["customMetrics — gauges · counters"]
+            Ex["exceptions — errors"]
+        end
+        subgraph Blades["Portal Blades"]
+            BMetrics["Metrics — charts over time"]
+            BLive["Live metrics — real-time stream"]
+            BAgent["Agent &#40;preview&#41; — GenAI LLM usage"]
+            BAvail["Availability — web test pings"]
+        end
+    end
+
+    Client -->|HTTP| ACA
+    ACA -->|OTLP / HTTP| AI
 ```
 
 ### How Tracing is Initialized
