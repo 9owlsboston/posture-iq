@@ -3,54 +3,49 @@
 ## High-Level Architecture
 
 ```mermaid
-graph TB
-    subgraph Agent["PostureIQ Agent"]
+flowchart TB
+    User(["👤 User / Account Team"])
 
-        subgraph Core["Core Components"]
+    subgraph AGENT ["PostureIQ Agent"]
+        direction TB
+        API["🖥️ FastAPI — /health  /ready  /assess"]
+        SDK["🤖 Copilot SDK — 8 tools · system prompt"]
+        RT["🧠 Agent Runtime — multi-model · context mgmt"]
+
+        API --> SDK --> RT
+
+        subgraph MW ["Middleware"]
             direction LR
-            FastAPI["FastAPI<br/>/health /ready /assess"]
-            SDK["Copilot SDK<br/>8 tools + system prompt"]
-            Runtime["Agent Runtime<br/>Multi-model · Context mgmt"]
-            FastAPI --> SDK -- "JSON-RPC" --> Runtime
+            CS_MW["Content Safety\n(RAI)"]
+            PII["PII\nRedaction"]
+            TR["Distributed\nTracing"]
+            AL["Audit\nLogger"]
         end
 
-        subgraph MiddleRow[" "]
+        subgraph TOOLS ["Assessment Tools"]
             direction LR
-
-            subgraph Middleware["Middleware Layer"]
-                ContentSafety["Content Safety (RAI)"] ~~~ PII["PII Redaction"] ~~~ Tracing["Distributed Tracing"] ~~~ AuditLog["Audit Logger"]
-            end
-
-            Middleware -- "intercepts" --> Tools
-
-            subgraph Tools["8 Assessment Tools"]
-                SecureScore["query_secure_score"]
-                Defender["assess_defender_coverage"]
-                Purview["check_purview_policies"]
-                Entra["get_entra_config"]
-                Remediation["generate_remediation_plan"]
-                Scorecard["create_adoption_scorecard"]
-                Playbook["get_project479_playbook"]
-            end
+            T1["secure_score"] --- T2["defender_coverage"]
+            T3["purview_policies"] --- T4["entra_config"]
+            T5["remediation_plan"] --- T6["adoption_scorecard"]
+            T7["project479_playbook"]
         end
 
-        Core --> Middleware
+        RT --> MW --> TOOLS
     end
 
-    subgraph Azure["Azure Services"]
+    subgraph AZURE ["Azure Services"]
         direction LR
-        ContentSafetyAPI["Azure AI Content Safety<br/>RAI · Prompt injection"]
-        AppInsights["App Insights<br/>Traces & metrics"]
-        Graph["Microsoft Graph Security API<br/>Secure Score · Defender · Purview · Entra"]
-        OpenAI["Azure OpenAI (GPT-4o)<br/>Reasoning & remediation"]
+        CSAPI["🛡️ Content Safety"]
+        APPINS["📊 App Insights"]
+        GRAPH["🔐 Graph Security API"]
+        OPENAI["💬 Azure OpenAI\nGPT-4o"]
     end
 
-    Middleware --> ContentSafetyAPI
-    Middleware --> AppInsights
-    Tools --> Graph
-    Tools --> OpenAI
-
-    style MiddleRow fill:none,stroke:none
+    User --> API
+    MW -.->|"RAI filter"| CSAPI
+    MW -.->|"telemetry"| APPINS
+    TOOLS -->|"Secure Score · Defender\nPurview · Entra"| GRAPH
+    TOOLS -->|"reasoning &\nremediation"| OPENAI
 ```
 
 ## Deployment Architecture

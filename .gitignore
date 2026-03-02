@@ -45,3 +45,6 @@ Thumbs.db
 # Ruff
 .ruff_cache/
 infra/parameters/*.json
+
+# Challenge submission (private working docs)
+docs/ghcp_challenge_submission/

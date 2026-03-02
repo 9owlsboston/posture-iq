@@ -1,0 +1,43 @@
+flowchart TB
+    User(["👤 User / Account Team"])
+
+    subgraph AGENT ["PostureIQ Agent"]
+        direction TB
+        API["🖥️ FastAPI — /health  /ready  /assess"]
+        SDK["🤖 Copilot SDK — 8 tools · system prompt"]
+        RT["🧠 Agent Runtime — multi-model · context mgmt"]
+
+        API --> SDK --> RT
+
+        subgraph MW ["Middleware"]
+            direction LR
+            CS_MW["Content Safety\n(RAI)"]
+            PII["PII\nRedaction"]
+            TR["Distributed\nTracing"]
+            AL["Audit\nLogger"]
+        end
+
+        subgraph TOOLS ["Assessment Tools"]
+            direction LR
+            T1["secure_score"] --- T2["defender_coverage"]
+            T3["purview_policies"] --- T4["entra_config"]
+            T5["remediation_plan"] --- T6["adoption_scorecard"]
+            T7["project479_playbook"]
+        end
+
+        RT --> MW --> TOOLS
+    end
+
+    subgraph AZURE ["Azure Services"]
+        direction LR
+        CSAPI["🛡️ Content Safety"]
+        APPINS["📊 App Insights"]
+        GRAPH["🔐 Graph Security API"]
+        OPENAI["💬 Azure OpenAI\nGPT-4o"]
+    end
+
+    User --> API
+    MW -.->|"RAI filter"| CSAPI
+    MW -.->|"telemetry"| APPINS
+    TOOLS -->|"Secure Score · Defender\nPurview · Entra"| GRAPH
+    TOOLS -->|"reasoning &\nremediation"| OPENAI

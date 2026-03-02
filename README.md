@@ -183,3 +183,13 @@ posture-iq/
 ## License
 
 Internal Microsoft use only — GitHub Copilot SDK Enterprise Challenge submission.
+
+---
+
+## GitHub Copilot SDK Challenge — Demo Submission
+
+| Asset | Description |
+|-------|-------------|
+| [PostureIQ.mp4](PostureIQ.mp4) | 3-minute demo video — live assessment, remediation plan, adoption scorecard |
+| [PostureIQ.pptx](PostureIQ.pptx) | Slide deck — architecture, enterprise value, scoring alignment |
+| [sdk-feedback.md.pdf](sdk-feedback.md.pdf) | SDK feedback log — issues, suggestions, workarounds discovered during development |
