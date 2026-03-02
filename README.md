@@ -16,6 +16,7 @@ PostureIQ is a conversational AI agent that assesses an organization's Microsoft
 | `get_entra_config` | Assess Conditional Access, PIM, Identity Protection, access reviews |
 | `generate_remediation_plan` | AI-generated prioritized remediation with PowerShell scripts |
 | `create_adoption_scorecard` | Executive summary scorecard with RAG status per workload |
+| `push_fabric_telemetry` | Push posture snapshots to Fabric lakehouse for trend analysis & Power BI |
 | `get_project479_playbook` | Foundry IQ playbook retrieval for gap-to-remediation mapping |
 
 ## Architecture
@@ -39,7 +40,7 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture diagr
 
 ```bash
 # Clone and install
-git clone https://github.com/velen-msft/posture-iq.git
+git clone https://github.com/9owlsboston/posture-iq.git
 cd posture-iq
 python3.11 -m venv .venv
 source .venv/bin/activate
@@ -148,11 +149,11 @@ ruff format src/ tests/
 posture-iq/
 ├── src/
 │   ├── agent/          # Agent host, config, system prompt
-│   ├── tools/          # 8 assessment tools (Graph API + Foundry IQ wrappers)
+│   ├── tools/          # 8 assessment tools (Graph API, Fabric, Foundry IQ)
 │   ├── middleware/      # Tracing, content safety, PII redaction, audit, auth
 │   └── api/            # FastAPI health probes and HTTP endpoints
 ├── infra/              # Bicep IaC templates (ACR, Container Apps, OpenAI, etc.)
-├── tests/              # Unit (1093) and integration (41) tests
+├── tests/              # Unit (1151) and integration (41) tests — 1192 total
 ├── docs/               # Architecture, setup guide, SDK feedback
 ├── scripts/            # Setup (permissions, OIDC, provisioning), cleanup, pre-flight
 ├── Dockerfile          # Multi-stage container build
