@@ -1,4 +1,4 @@
-"""PostureIQ — Chat endpoint that bridges HTTP to the Copilot SDK agent.
+"""SecPostureIQ — Chat endpoint that bridges HTTP to the Copilot SDK agent.
 
 Provides a ``POST /chat`` endpoint that:
   1. Manages agent sessions (create on first message, reuse on subsequent)
@@ -467,7 +467,7 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
                 )
 
         # Record tool count on the agent span
-        agent_span.set_attribute("postureiq.tools_called", len(tools_called))
+        agent_span.set_attribute("secpostureiq.tools_called", len(tools_called))
 
     session["history"].append({"role": "assistant", "content": response_text})
 

@@ -1,4 +1,4 @@
-// PostureIQ — Azure OpenAI module
+// SecPostureIQ — Azure OpenAI module
 
 @description('Azure OpenAI resource name')
 param name string

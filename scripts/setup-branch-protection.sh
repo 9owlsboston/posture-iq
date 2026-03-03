@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# PostureIQ — Configure Branch Protection Rules
+# SecPostureIQ — Configure Branch Protection Rules
 #
 # Sets up branch protection on 'main' to require:
 #   - Passing CI checks (lint, test, bicep-validate) before merge
@@ -24,7 +24,7 @@ REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null) || {
   exit 1
 }
 
-echo "🛡️  PostureIQ — Branch Protection Setup"
+echo "🛡️  SecPostureIQ — Branch Protection Setup"
 echo "========================================"
 echo "  Repository: $REPO"
 echo "  Branch:     $BRANCH"

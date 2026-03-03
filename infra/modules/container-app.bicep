@@ -1,6 +1,6 @@
-// PostureIQ — Azure Container Apps module
+// SecPostureIQ — Azure Container Apps module
 //
-// Deploys the PostureIQ agent as a serverless container on Azure Container Apps.
+// Deploys the SecPostureIQ agent as a serverless container on Azure Container Apps.
 // Features: scale-to-zero, health probes, managed identity, env vars from Key Vault.
 
 @description('Container App resource name')
@@ -33,7 +33,7 @@ param managedIdentityId string
 @description('User-Assigned Managed Identity client ID (for AZURE_CLIENT_ID env var)')
 param managedIdentityClientId string
 
-@description('ACR login server (e.g., postureiqdevacrabcdef.azurecr.io)')
+@description('ACR login server (e.g., secpostureiqdevacrabcdef.azurecr.io)')
 param acrLoginServer string = ''
 
 // ── Container Apps Environment ────────────────────────────
@@ -73,7 +73,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     template: {
       containers: [
         {
-          name: 'postureiq'
+          name: 'secpostureiq'
           image: !empty(containerImage) ? containerImage : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
           resources: {
             cpu: json('0.5')

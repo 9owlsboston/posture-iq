@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# PostureIQ — Cleanup Script
+# SecPostureIQ — Cleanup Script
 #
 # Deletes all Azure development resources provisioned by the Bicep templates.
 # Supports deleting the entire resource group or individual resources.
@@ -13,8 +13,8 @@
 
 set -euo pipefail
 
-RESOURCE_GROUP="rg-postureiq-dev"
-APP_NAME="PostureIQ - ME5 Security Assessment"
+RESOURCE_GROUP="rg-secpostureiq-dev"
+APP_NAME="SecPostureIQ - ME5 Security Assessment"
 AUTO_CONFIRM=false
 APP_ONLY=false
 RG_ONLY=false
@@ -50,7 +50,7 @@ confirm() {
   [[ "$response" =~ ^[Yy]$ ]]
 }
 
-echo "🧹 PostureIQ — Development Resource Cleanup"
+echo "🧹 SecPostureIQ — Development Resource Cleanup"
 echo "============================================="
 
 # ── Show what exists ──────────────────────────────────────
@@ -109,7 +109,7 @@ fi
 # ── Purge soft-deleted Key Vaults (optional) ──────────────
 if [[ "$APP_ONLY" != true ]]; then
   echo ""
-  DELETED_VAULTS=$(az keyvault list-deleted --query "[?contains(name, 'postureiq')].name" -o tsv 2>/dev/null || echo "")
+  DELETED_VAULTS=$(az keyvault list-deleted --query "[?contains(name, 'secpostureiq')].name" -o tsv 2>/dev/null || echo "")
   if [[ -n "$DELETED_VAULTS" ]]; then
     echo "📦 Soft-deleted Key Vaults found:"
     echo "   $DELETED_VAULTS"

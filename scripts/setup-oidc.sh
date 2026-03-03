@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# PostureIQ — OIDC Workload Identity Federation Setup
+# SecPostureIQ — OIDC Workload Identity Federation Setup
 #
 # Configures the existing Entra ID App Registration with:
 #   1. A service principal (if not already created)
@@ -27,8 +27,8 @@
 
 set -euo pipefail
 
-RESOURCE_GROUP="rg-postureiq-dev"
-APP_NAME="PostureIQ - ME5 Security Assessment"
+RESOURCE_GROUP="rg-secpostureiq-dev"
+APP_NAME="SecPostureIQ - ME5 Security Assessment"
 GITHUB_REPO="${1:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo '')}"
 if [[ -z "$GITHUB_REPO" ]]; then
   echo "❌ Could not detect GitHub repo. Pass it as first argument: $0 <org/repo>"
@@ -48,7 +48,7 @@ for arg in "$@"; do
   esac
 done
 
-echo "🔐 PostureIQ — OIDC Workload Identity Federation Setup"
+echo "🔐 SecPostureIQ — OIDC Workload Identity Federation Setup"
 echo "======================================================="
 echo ""
 
@@ -94,7 +94,7 @@ else
     "name": "github-actions-main",
     "issuer": "https://token.actions.githubusercontent.com",
     "subject": "repo:'"$GITHUB_REPO"':ref:refs/heads/main",
-    "description": "GitHub Actions OIDC for PostureIQ main branch deployments",
+    "description": "GitHub Actions OIDC for SecPostureIQ main branch deployments",
     "audiences": ["api://AzureADTokenExchange"]
   }' > /dev/null
   echo "   ✅ Federated credential created for: repo:${GITHUB_REPO}:ref:refs/heads/main"
@@ -111,7 +111,7 @@ else
     "name": "github-actions-pr",
     "issuer": "https://token.actions.githubusercontent.com",
     "subject": "repo:'"$GITHUB_REPO"':pull_request",
-    "description": "GitHub Actions OIDC for PostureIQ PR preview deployments",
+    "description": "GitHub Actions OIDC for SecPostureIQ PR preview deployments",
     "audiences": ["api://AzureADTokenExchange"]
   }' > /dev/null
   echo "   ✅ Federated credential created for: repo:${GITHUB_REPO}:pull_request"
@@ -128,7 +128,7 @@ else
     "name": "github-actions-production",
     "issuer": "https://token.actions.githubusercontent.com",
     "subject": "repo:'"$GITHUB_REPO"':environment:production",
-    "description": "GitHub Actions OIDC for PostureIQ production deployments",
+    "description": "GitHub Actions OIDC for SecPostureIQ production deployments",
     "audiences": ["api://AzureADTokenExchange"]
   }' > /dev/null
   echo "   ✅ Federated credential created for: repo:${GITHUB_REPO}:environment:production"

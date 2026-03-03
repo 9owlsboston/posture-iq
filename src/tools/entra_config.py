@@ -1,4 +1,4 @@
-"""PostureIQ Tool — get_entra_config
+"""SecPostureIQ Tool — get_entra_config
 
 Reviews Entra ID P2 security configuration by querying:
   - Conditional Access policies   (GET /identity/conditionalAccess/policies)

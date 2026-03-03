@@ -1,4 +1,4 @@
-// PostureIQ — Azure Application Insights + Log Analytics module
+// SecPostureIQ — Azure Application Insights + Log Analytics module
 
 @description('Application Insights resource name')
 param name string

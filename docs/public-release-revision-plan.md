@@ -1,6 +1,6 @@
-# PostureIQ — Public Release Revision Plan
+# SecPostureIQ — Public Release Revision Plan
 
-> **Purpose:** This document outlines every change required before PostureIQ can be
+> **Purpose:** This document outlines every change required before SecPostureIQ can be
 > safely and cleanly published for customers to clone and deploy to their own Azure
 > tenants. It is organized by severity and includes the exact files and lines that
 > need attention.
@@ -13,7 +13,7 @@
 ## Executive Summary
 
 The codebase was originally built for single-tenant development under the
-`9owlsboston` GitHub org, deploying to a known `rg-postureiq-dev` resource group.
+`9owlsboston` GitHub org, deploying to a known `rg-secpostureiq-dev` resource group.
 Making it public requires three categories of work:
 
 | Category | Items | Effort |
@@ -33,12 +33,12 @@ Azure environment name and FQDN.
 
 | File | Line | Current Value |
 |------|------|---------------|
-| `scripts/load_test.py` | 16 | `BASE_URL = "https://postureiq-dev-app.redrock-8f5cd3d2.centralus.azurecontainerapps.io"` |
-| `scripts/simulate_traffic.py` | 84 | `DEFAULT_URL = "https://postureiq-dev-app.redrock-8f5cd3d2.centralus.azurecontainerapps.io"` |
+| `scripts/load_test.py` | 16 | `BASE_URL = "https://secpostureiq-dev-app.redrock-8f5cd3d2.centralus.azurecontainerapps.io"` |
+| `scripts/simulate_traffic.py` | 84 | `DEFAULT_URL = "https://secpostureiq-dev-app.redrock-8f5cd3d2.centralus.azurecontainerapps.io"` |
 
 **Fix:** Replace with environment variable or a placeholder:
 ```python
-BASE_URL = os.environ.get("POSTUREIQ_URL", "http://localhost:8000")
+BASE_URL = os.environ.get("SECPOSTUREIQ_URL", "http://localhost:8000")
 ```
 
 ---
@@ -62,7 +62,7 @@ who clone will see URLs pointing to your private org.
 |------|-------------|------|
 | `scripts/setup-oidc.sh` | 1 | **Script logic** — `GITHUB_REPO="9owlsboston/posture-iq"` (line 32) |
 | `README.md` | 3 | Clone URLs, Deploy-to-Azure button URL |
-| `docs/ghcp_challenge_submission/postureiq-customer-deployment-guide.md` | 5 | Clone URLs, Deploy-to-Azure button, source repo link |
+| `docs/ghcp_challenge_submission/secpostureiq-customer-deployment-guide.md` | 5 | Clone URLs, Deploy-to-Azure button, source repo link |
 | `scripts/deploy-customer.sh` | 1 | Comment with clone URL |
 | `docs/app-insights-guide.md` | 1 | `gh auth switch --user 9owlsboston` |
 | `docs/setup-guide.md` | 2 | OIDC federation subjects with `repo:9owlsboston/posture-iq:...` |
@@ -95,13 +95,13 @@ deploy to the wrong place unless the customer edits YAML source files.
 
 | File | Line | Current Value |
 |------|------|---------------|
-| `.github/workflows/ci-cd.yml` | 30 | `RESOURCE_GROUP: "rg-postureiq-dev"` |
-| `.github/workflows/pr-deploy.yml` | 82 | `az acr list --resource-group rg-postureiq-dev` (hardcoded string, not even using the env var) |
+| `.github/workflows/ci-cd.yml` | 30 | `RESOURCE_GROUP: "rg-secpostureiq-dev"` |
+| `.github/workflows/pr-deploy.yml` | 82 | `az acr list --resource-group rg-secpostureiq-dev` (hardcoded string, not even using the env var) |
 
 **Fix:** Move to GitHub repository variables (`vars.*`):
 ```yaml
 env:
-  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'rg-postureiq-dev' }}
+  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'rg-secpostureiq-dev' }}
   ACR_NAME: ${{ vars.ACR_NAME }}
 ```
 Add a `SETUP.md` or section in README explaining which repo variables to configure.
@@ -150,7 +150,7 @@ env var won't be caught.
 
 ### 8. PR preview depends on dev resource group
 
-`pr-deploy.yml` line 82 runs `az acr list --resource-group rg-postureiq-dev` to
+`pr-deploy.yml` line 82 runs `az acr list --resource-group rg-secpostureiq-dev` to
 discover the ACR. If a customer hasn't deployed dev first, PR previews break.
 
 **Fix:** Use `vars.ACR_NAME` directly:
@@ -360,5 +360,5 @@ Week 3 (P2 — polish):
 | **Scripts** | `scripts/setup-oidc.sh`, `scripts/setup-permissions.sh`, `scripts/load_test.py`, `scripts/simulate_traffic.py`, `scripts/deploy-customer.sh` |
 | **Source code** | `src/api/app.py` |
 | **Infrastructure** | None (Bicep is already parameterized) |
-| **Docs** | `README.md`, `docs/app-insights-guide.md`, `docs/setup-guide.md`, `docs/how-to-assess-me5-tenant.md`, `docs/ghcp_challenge_submission/postureiq-customer-deployment-guide.md` |
+| **Docs** | `README.md`, `docs/app-insights-guide.md`, `docs/setup-guide.md`, `docs/how-to-assess-me5-tenant.md`, `docs/ghcp_challenge_submission/secpostureiq-customer-deployment-guide.md` |
 | **New files** | `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `SETUP.md`, `.github/workflows/rollback.yml` |

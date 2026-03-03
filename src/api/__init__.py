@@ -1,1 +1,1 @@
-"""PostureIQ — API package."""
+"""SecPostureIQ — API package."""

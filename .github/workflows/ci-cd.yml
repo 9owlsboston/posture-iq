@@ -1,4 +1,4 @@
-# PostureIQ — CI/CD Pipeline
+# SecPostureIQ — CI/CD Pipeline
 #
 # GitHub Actions workflow: lint → test → bicep-validate → build → deploy
 # Triggers on push to main and PRs.
@@ -11,7 +11,7 @@
 #   AZURE_TENANT_ID        — Entra ID tenant ID
 #   AZURE_SUBSCRIPTION_ID  — Azure subscription ID
 
-name: PostureIQ CI/CD
+name: SecPostureIQ CI/CD
 
 on:
   push:
@@ -30,8 +30,8 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.11"
-  CONTAINER_IMAGE_NAME: "postureiq"
-  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'rg-postureiq-dev' }}
+  CONTAINER_IMAGE_NAME: "secpostureiq"
+  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'rg-secpostureiq-dev' }}
   DEPLOY_ENV: ${{ vars.DEPLOY_ENV || 'dev' }}
 
 jobs:

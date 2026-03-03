@@ -1,4 +1,4 @@
-"""PostureIQ — Shared Microsoft Graph client factory.
+"""SecPostureIQ — Shared Microsoft Graph client factory.
 
 Provides a single factory function for creating authenticated
 GraphServiceClient instances, used by all tool modules.

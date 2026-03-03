@@ -1,4 +1,4 @@
-"""Tests for PostureIQ Authentication & Authorization (Task 3.1).
+"""Tests for SecPostureIQ Authentication & Authorization (Task 3.1).
 
 Validates:
   - JWT token validation against Entra ID

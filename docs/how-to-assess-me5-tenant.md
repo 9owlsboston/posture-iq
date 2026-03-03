@@ -1,6 +1,6 @@
-# PostureIQ — How to Assess an ME5 Tenant
+# SecPostureIQ — How to Assess an ME5 Tenant
 
-> This document explains the end-to-end flow for using PostureIQ to assess
+> This document explains the end-to-end flow for using SecPostureIQ to assess
 > a Microsoft 365 E5 (ME5) tenant's security posture.
 >
 > All environment-specific values (tenant IDs, endpoints, secrets) are defined in
@@ -27,7 +27,7 @@
                                      └──────────────────┘
 ```
 
-PostureIQ is a containerized FastAPI application deployed to **Azure Container Apps**.
+SecPostureIQ is a containerized FastAPI application deployed to **Azure Container Apps**.
 It exposes a chat UI at `/` and a `POST /chat` endpoint. When a user asks a security
 question, the app classifies intent, dispatches to the appropriate tool, and that tool
 calls the **Microsoft Graph Security API** to retrieve real tenant data.
@@ -45,21 +45,21 @@ An **ME5 tenant** is not a special type of Azure tenant. It's a standard **Entra
 | **M365 E5 license** | The top-tier Microsoft 365 subscription bundle purchased *within* that tenant. |
 | **ME5 tenant** | Shorthand for a tenant whose users have M365 E5 licenses — unlocking the full security stack. |
 
-### What M365 E5 Includes (What PostureIQ Assesses)
+### What M365 E5 Includes (What SecPostureIQ Assesses)
 
 - **Defender XDR** — Defender for Endpoint, Identity, Cloud Apps, Office 365
 - **Purview** — DLP policies, sensitivity labels, insider risk management, retention policies
 - **Entra ID P2** — Conditional Access, PIM, Identity Protection, Access Reviews
 - **Compliance** — eDiscovery, communication compliance, audit (premium)
 
-### The Problem PostureIQ Solves
+### The Problem SecPostureIQ Solves
 
 Many customers *buy* ME5 licenses but don't *deploy* all the security features — they're
 paying for Defender, Purview, and Entra ID P2 but haven't turned them on.
 **Get to Green ("Get to Green")** is Microsoft's internal campaign to help these
 customers actually adopt what they've paid for.
 
-PostureIQ assesses this adoption by calling the **Microsoft Graph Security API**:
+SecPostureIQ assesses this adoption by calling the **Microsoft Graph Security API**:
 - `/security/secureScores` → Are they using Defender?
 - `/policies/conditionalAccessPolicies` → Is Entra ID P2 configured?
 - `/informationProtection/policy/labels` → Are Purview policies active?
@@ -113,7 +113,7 @@ Plus a standalone Entra ID P2 license.
 
 ## Configuration: `.env` File
 
-All PostureIQ settings are managed through a single `.env` file at the project root,
+All SecPostureIQ settings are managed through a single `.env` file at the project root,
 loaded by `pydantic-settings` in `src/agent/config.py`.
 
 ```bash
@@ -132,7 +132,7 @@ Key variables for Graph API assessment:
 | `AZURE_KEYVAULT_URL` | Key Vault for production secrets | `https://<vault>.vault.azure.net/` |
 | `CONTAINER_APP_URL` | Deployed app URL | `https://<app>.<region>.azurecontainerapps.io` |
 | `ACR_LOGIN_SERVER` | Container Registry | `<acr>.azurecr.io` |
-| `RESOURCE_GROUP` | Azure resource group | `rg-postureiq-dev` |
+| `RESOURCE_GROUP` | Azure resource group | `rg-secpostureiq-dev` |
 
 > **Security:** `.env` is in `.gitignore` and is never committed. Only `.env.example`
 > (with placeholders) is tracked in source control.
@@ -165,14 +165,14 @@ The App Registration (identified by `AZURE_CLIENT_ID` in `.env`) needs
 
 > **⚠️ Critical: Application vs Delegated Permissions**
 >
-> PostureIQ uses `ClientSecretCredential` (client credentials grant flow), which
+> SecPostureIQ uses `ClientSecretCredential` (client credentials grant flow), which
 > requires **Application** permissions (`type: Role`). Delegated permissions
 > (`type: Scope`) will result in 403 errors even after admin consent.
 > See [Lessons Learned](#lessons-learned) for details.
 
 > **Important:** The `az ad app permission admin-consent` command operates on
 > **whichever tenant you're currently signed into** with `az login`. It does not
-> reference an external tenant by name. Since PostureIQ is a single-tenant app
+> reference an external tenant by name. Since SecPostureIQ is a single-tenant app
 > (`--sign-in-audience "AzureADMyOrg"`), you must be logged into the same tenant
 > where the App Registration lives (`AZURE_TENANT_ID` in `.env`).
 
@@ -336,7 +336,7 @@ az containerapp update \
 
 ### Current Design: Assess Your Own Tenant
 
-PostureIQ is currently configured as a **single-tenant** application:
+SecPostureIQ is currently configured as a **single-tenant** application:
 
 | Setting | Value | Implication |
 |---|---|---|
@@ -344,7 +344,7 @@ PostureIQ is currently configured as a **single-tenant** application:
 | `ClientSecretCredential` | Uses `$AZURE_TENANT_ID` | Graph API calls target our tenant's data |
 | Application permissions | App-context (Role) | Agent sees all tenant data the app roles allow |
 
-This means PostureIQ assesses **your own tenant's ME5 posture** — verifying whether
+This means SecPostureIQ assesses **your own tenant's ME5 posture** — verifying whether
 Defender, Purview, and Entra ID P2 features are actually deployed and configured.
 
 ### To Assess a Different Customer's Tenant (Future)
@@ -365,7 +365,7 @@ To assess external customer tenants, the app would need to become **multi-tenant
    ```
    The customer's admin clicks this link, signs in, sees the 5 permissions, and clicks "Accept."
 
-3. **PostureIQ then calls Graph API against the customer's tenant** — the OAuth2 flow
+3. **SecPostureIQ then calls Graph API against the customer's tenant** — the OAuth2 flow
    gets a token scoped to their tenant based on the signed-in user's identity.
 
 ---
@@ -389,7 +389,7 @@ This gives you real Graph API data without touching production.
 
 ## Authentication Layers — Summary
 
-PostureIQ has **4 separate authentication mechanisms** (don't confuse them):
+SecPostureIQ has **4 separate authentication mechanisms** (don't confuse them):
 
 | Auth Layer | Purpose | Mechanism | Secrets |
 |---|---|---|---|
@@ -435,7 +435,7 @@ don't repeat them.
 **Symptom:** All Graph API calls return `403 — Auth token does not contain valid
 permissions or user does not have valid roles`, even after admin consent.
 
-**Root Cause:** PostureIQ uses `ClientSecretCredential` (OAuth2 client credentials
+**Root Cause:** SecPostureIQ uses `ClientSecretCredential` (OAuth2 client credentials
 grant), which authenticates as the **application**, not a user. This flow only
 recognizes **Application** permissions (`type: Role`). Delegated permissions
 (`type: Scope`) are ignored — they only work with user-context flows

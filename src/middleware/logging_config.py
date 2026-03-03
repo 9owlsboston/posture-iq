@@ -1,4 +1,4 @@
-"""PostureIQ — Structured JSON logging configuration.
+"""SecPostureIQ — Structured JSON logging configuration.
 
 Configures structlog for production-ready JSON logging with the required fields:
   {"timestamp", "level", "tool", "session_id", "duration_ms", "status"}
@@ -19,7 +19,7 @@ def setup_logging(
     log_level: str = "INFO",
     json_format: bool = True,
 ) -> None:
-    """Configure structured JSON logging for PostureIQ.
+    """Configure structured JSON logging for SecPostureIQ.
 
     Args:
         log_level: Minimum log level (DEBUG, INFO, WARNING, ERROR, CRITICAL).

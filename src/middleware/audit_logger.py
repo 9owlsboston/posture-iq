@@ -1,4 +1,4 @@
-"""PostureIQ — Immutable audit logger.
+"""SecPostureIQ — Immutable audit logger.
 
 Every agent action is logged as an immutable :class:`AuditEntry` with:
   - Timestamp (UTC, ISO-8601)
@@ -184,21 +184,21 @@ def _emit_to_app_insights(entry: AuditEntry) -> None:
     try:
         from opentelemetry import trace
 
-        tracer = trace.get_tracer("postureiq.audit", "0.1.0")
+        tracer = trace.get_tracer("secpostureiq.audit", "0.1.0")
         with tracer.start_as_current_span(
             name=f"audit.{entry.event_type}",
             attributes={
-                "postureiq.audit.entry_id": entry.entry_id,
-                "postureiq.audit.session_id": entry.session_id,
-                "postureiq.audit.event_type": entry.event_type,
-                "postureiq.audit.user_identity": entry.user_identity,
-                "postureiq.audit.tool_name": entry.tool_name,
-                "postureiq.audit.input_summary": entry.input_summary,
-                "postureiq.audit.output_summary": entry.output_summary,
-                "postureiq.audit.reasoning": entry.reasoning,
-                "postureiq.audit.duration_ms": entry.duration_ms,
-                "postureiq.audit.integrity_hash": entry.integrity_hash,
-                "postureiq.audit.retention_days": AUDIT_RETENTION_DAYS,
+                "secpostureiq.audit.entry_id": entry.entry_id,
+                "secpostureiq.audit.session_id": entry.session_id,
+                "secpostureiq.audit.event_type": entry.event_type,
+                "secpostureiq.audit.user_identity": entry.user_identity,
+                "secpostureiq.audit.tool_name": entry.tool_name,
+                "secpostureiq.audit.input_summary": entry.input_summary,
+                "secpostureiq.audit.output_summary": entry.output_summary,
+                "secpostureiq.audit.reasoning": entry.reasoning,
+                "secpostureiq.audit.duration_ms": entry.duration_ms,
+                "secpostureiq.audit.integrity_hash": entry.integrity_hash,
+                "secpostureiq.audit.retention_days": AUDIT_RETENTION_DAYS,
             },
         ):
             pass  # zero-duration span → customEvent
@@ -231,7 +231,7 @@ def check_audit_access(user_roles: list[str]) -> bool:
 
 
 class AuditLogger:
-    """Immutable audit trail for all PostureIQ agent actions.
+    """Immutable audit trail for all SecPostureIQ agent actions.
 
     Every call produces a frozen :class:`AuditEntry` that is:
       1. Logged via structlog (JSON-structured, for stdout/file)
@@ -243,7 +243,7 @@ class AuditLogger:
 
     def __init__(self, session_id: str = "dev-session") -> None:
         self._session_id = session_id
-        self._audit_log = structlog.get_logger("postureiq.audit")
+        self._audit_log = structlog.get_logger("secpostureiq.audit")
         self._entries: list[AuditEntry] = []
 
     @property

@@ -1,4 +1,4 @@
-// PostureIQ — Azure Key Vault module
+// SecPostureIQ — Azure Key Vault module
 
 @description('Key Vault resource name')
 param name string

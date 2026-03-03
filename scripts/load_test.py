@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mild load test for PostureIQ agent — exercises all tools via /chat.
+"""Mild load test for SecPostureIQ agent — exercises all tools via /chat.
 
 Sends ~50 requests over ~60 seconds with randomised delays to simulate
 realistic multi-user traffic.  Prints a summary table at the end.
@@ -14,7 +14,7 @@ import time
 
 import httpx
 
-BASE_URL = os.environ.get("POSTUREIQ_URL", "http://localhost:8000")
+BASE_URL = os.environ.get("SECPOSTUREIQ_URL", "http://localhost:8000")
 
 # Messages designed to trigger each tool via the keyword-based intent classifier
 PROMPTS: list[dict[str, str]] = [
@@ -170,7 +170,7 @@ async def main() -> None:
             all_tools[t] = all_tools.get(t, 0) + 1
 
     print("=" * 72)
-    print("  PostureIQ Load-Test Summary")
+    print("  SecPostureIQ Load-Test Summary")
     print("=" * 72)
     print(f"  Total requests : {len(results)}")
     print(f"  Successes (200): {ok}")

@@ -1,1 +1,1 @@
-"""PostureIQ — Middleware package."""
+"""SecPostureIQ — Middleware package."""

@@ -1,6 +1,6 @@
 # App Insights — Viewing Telemetry & Troubleshooting
 
-This guide covers how to view PostureIQ telemetry in Azure Application Insights,
+This guide covers how to view SecPostureIQ telemetry in Azure Application Insights,
 how to simulate traffic to generate data, and how to troubleshoot common issues.
 
 ---
@@ -35,7 +35,7 @@ flowchart TB
         end
         FAPI["FastAPIInstrumentor.instrument_app()<br/><i>server request spans → requests table</i>"]
         Tools["@trace_tool_call decorators<br/><i>tool.* spans with attributes</i>"]
-        Metrics["Custom metrics<br/><code>postureiq.secure_score.current</code><br/><code>postureiq.assessment.duration_s</code><br/><code>postureiq.remediation.steps</code><br/><code>postureiq.content_safety.blocked</code>"]
+        Metrics["Custom metrics<br/><code>secpostureiq.secure_score.current</code><br/><code>secpostureiq.assessment.duration_s</code><br/><code>secpostureiq.remediation.steps</code><br/><code>secpostureiq.content_safety.blocked</code>"]
     end
 
     subgraph AI["Azure Application Insights<br/><i>backed by Log Analytics workspace</i>"]
@@ -79,14 +79,14 @@ flowchart TB
 
 ## Where Telemetry Lives
 
-PostureIQ telemetry lands in **four** App Insights tables:
+SecPostureIQ telemetry lands in **four** App Insights tables:
 
 | Table | What's in it | Example data |
 |---|---|---|
 | `requests` | Server-side HTTP spans (FastAPI endpoints) | `GET /health`, `POST /chat`, `GET /ready` |
 | `dependencies` | Tool-call spans, HTTP calls, audit spans, GenAI LLM calls | `tool.query_secure_score`, `POST //contentsafety/text:analyze`, `chat gpt-4o` |
 | `traces` | Structured log messages (via structlog) | `tool.secure_score.complete`, `chat.tool.invoking` |
-| `customMetrics` | Custom gauges, histograms, counters | `postureiq.secure_score.current`, `postureiq.assessment.duration_seconds` |
+| `customMetrics` | Custom gauges, histograms, counters | `secpostureiq.secure_score.current`, `secpostureiq.assessment.duration_seconds` |
 | `exceptions` | Unhandled errors and recorded exceptions | Stack traces from failed tool calls |
 
 > **GenAI spans:** The `opentelemetry-instrumentation-openai-v2` package auto-instruments every
@@ -101,7 +101,7 @@ PostureIQ telemetry lands in **four** App Insights tables:
 
 ### Quick Navigation
 
-1. **Azure Portal** → search for your App Insights resource (e.g., `postureiq-dev-ai`)
+1. **Azure Portal** → search for your App Insights resource (e.g., `secpostureiq-dev-ai`)
 2. In the left sidebar under **Monitoring**:
 
 | Blade | What it shows |
@@ -148,9 +148,9 @@ dependencies
 | where timestamp > ago(1h)
 | where name startswith "tool."
 | project timestamp, name, duration, success,
-          toolName = tostring(customDimensions["postureiq.tool.name"]),
-          status = tostring(customDimensions["postureiq.tool.status"]),
-          durationMs = todouble(customDimensions["postureiq.tool.duration_ms"])
+          toolName = tostring(customDimensions["secpostureiq.tool.name"]),
+          status = tostring(customDimensions["secpostureiq.tool.status"]),
+          durationMs = todouble(customDimensions["secpostureiq.tool.duration_ms"])
 | order by timestamp desc
 ```
 
@@ -202,7 +202,7 @@ dependencies
 ```kusto
 traces
 | where timestamp > ago(1h)
-| where message has "postureiq" or message has "tool."
+| where message has "secpostureiq" or message has "tool."
 | project timestamp, message, severityLevel, customDimensions
 | order by timestamp desc
 | take 50
@@ -213,7 +213,7 @@ traces
 ```kusto
 customMetrics
 | where timestamp > ago(2h)
-| where name == "postureiq.secure_score.current"
+| where name == "secpostureiq.secure_score.current"
 | project timestamp, value
 | order by timestamp desc
 ```
@@ -223,7 +223,7 @@ customMetrics
 ```kusto
 customMetrics
 | where timestamp > ago(2h)
-| where name == "postureiq.assessment.duration_seconds"
+| where name == "secpostureiq.assessment.duration_seconds"
 | summarize avg(value), max(value), count() by bin(timestamp, 5m)
 | render timechart
 ```
@@ -383,8 +383,8 @@ Or via environment variable on the Container App:
 
 ```bash
 az containerapp update \
-  -n postureiq-dev-app \
-  -g rg-postureiq-dev \
+  -n secpostureiq-dev-app \
+  -g rg-secpostureiq-dev \
   --set-env-vars "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true"
 ```
 
@@ -393,7 +393,7 @@ az containerapp update \
 - **Direct `openai` SDK calls only.** The instrumentor patches the Python `openai` package
   within the app process. LLM calls made by external systems (e.g., the Copilot SDK runtime
   process) are not captured.
-- **No GenAI spans for Graph API tools.** Most PostureIQ tools call Microsoft Graph, not an
+- **No GenAI spans for Graph API tools.** Most SecPostureIQ tools call Microsoft Graph, not an
   LLM. These appear as regular HTTP dependency spans, not GenAI spans.
 - **Agent blade is in preview.** The UI and required attributes may evolve. The
   `opentelemetry-instrumentation-openai-v2` package tracks the latest GenAI semantic conventions.
@@ -504,7 +504,7 @@ python scripts/simulate_traffic.py --help
 python scripts/simulate_traffic.py --url http://localhost:8000
 
 # Production
-python scripts/simulate_traffic.py --url https://postureiq-prod-app.example.azurecontainerapps.io
+python scripts/simulate_traffic.py --url https://secpostureiq-prod-app.example.azurecontainerapps.io
 ```
 
 ---
@@ -517,8 +517,8 @@ python scripts/simulate_traffic.py --url https://postureiq-prod-app.example.azur
 
 ```bash
 az containerapp show \
-  -n postureiq-dev-app \
-  -g rg-postureiq-dev \
+  -n secpostureiq-dev-app \
+  -g rg-secpostureiq-dev \
   --query "properties.template.containers[0].env[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING']"
 ```
 
@@ -526,8 +526,8 @@ If missing, set it:
 
 ```bash
 az containerapp update \
-  -n postureiq-dev-app \
-  -g rg-postureiq-dev \
+  -n secpostureiq-dev-app \
+  -g rg-secpostureiq-dev \
   --set-env-vars "APPLICATIONINSIGHTS_CONNECTION_STRING=<your-connection-string>"
 ```
 
@@ -543,8 +543,8 @@ Look for `tracing.setup.complete` in the container logs:
 
 ```bash
 az containerapp logs show \
-  -n postureiq-dev-app \
-  -g rg-postureiq-dev \
+  -n secpostureiq-dev-app \
+  -g rg-secpostureiq-dev \
   --type console --tail 100 2>&1 \
   | grep -i "tracing.setup"
 ```
@@ -572,7 +572,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 FastAPIInstrumentor.instrument_app(app)
 ```
 
-**PostureIQ tool-call data always lives in the `dependencies` table** regardless:
+**SecPostureIQ tool-call data always lives in the `dependencies` table** regardless:
 
 ```kusto
 dependencies
@@ -638,8 +638,8 @@ git rev-parse --short HEAD
 
 # Image running in the container app
 az containerapp show \
-  -n postureiq-dev-app \
-  -g rg-postureiq-dev \
+  -n secpostureiq-dev-app \
+  -g rg-secpostureiq-dev \
   --query "properties.template.containers[0].image" -o tsv
 ```
 
@@ -655,7 +655,7 @@ count toward availability.
 Without a Web Test resource linked to the App Insights component, the Availability
 chart will always show 0%.
 
-**How PostureIQ addresses this:**
+**How SecPostureIQ addresses this:**
 
 The Bicep IaC includes an `availability-test` module
 (`infra/modules/availability-test.bicep`) that creates a Standard URL Ping test.
@@ -673,7 +673,7 @@ It is wired into `infra/main.bicep` and deployed automatically with every
 
 ```bash
 az monitor app-insights web-test list \
-  --resource-group rg-postureiq-dev \
+  --resource-group rg-secpostureiq-dev \
   -o table
 ```
 
@@ -681,9 +681,9 @@ az monitor app-insights web-test list \
 
 ```bash
 az monitor app-insights web-test create \
-  --resource-group rg-postureiq-dev \
-  --name "postureiq-dev-health-ping" \
-  --defined-web-test-name "PostureIQ Health Ping" \
+  --resource-group rg-secpostureiq-dev \
+  --name "secpostureiq-dev-health-ping" \
+  --defined-web-test-name "SecPostureIQ Health Ping" \
   --location centralus \
   --kind ping \
   --frequency 300 \
@@ -724,8 +724,8 @@ Check container logs for `tracing.setup.failed`:
 
 ```bash
 az containerapp logs show \
-  -n postureiq-dev-app \
-  -g rg-postureiq-dev \
+  -n secpostureiq-dev-app \
+  -g rg-secpostureiq-dev \
   --type console --tail 200 2>&1 \
   | grep "tracing.setup"
 ```
@@ -736,9 +736,9 @@ az containerapp logs show \
 
 | What | Command / Query |
 |---|---|
-| Verify env var | `az containerapp show -n postureiq-dev-app -g rg-postureiq-dev --query "properties.template.containers[0].env[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING']"` |
+| Verify env var | `az containerapp show -n secpostureiq-dev-app -g rg-secpostureiq-dev --query "properties.template.containers[0].env[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING']"` |
 | Quick data check | `az monitor app-insights query --app $APP_ID --analytics-query "dependencies \| take 5" --offset 24h` |
 | Tool span summary | `dependencies \| where timestamp > ago(1h) \| summarize count() by name` |
-| Container logs | `az containerapp logs show -n postureiq-dev-app -g rg-postureiq-dev --type console --tail 50` |
+| Container logs | `az containerapp logs show -n secpostureiq-dev-app -g rg-secpostureiq-dev --type console --tail 50` |
 | Simulate traffic | `python scripts/simulate_traffic.py --duration 30 --interval 5 --burst-size 20` |
 | Live metrics | Portal → App Insights → Investigate → Live metrics |

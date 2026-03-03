@@ -1,4 +1,4 @@
-"""PostureIQ — PII redaction middleware.
+"""SecPostureIQ — PII redaction middleware.
 
 Redacts personally identifiable information and tenant-sensitive data
 before sending content to Azure OpenAI or including in logs/traces.

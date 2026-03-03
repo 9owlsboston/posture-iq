@@ -1,4 +1,4 @@
-"""PostureIQ — Agent host entry point.
+"""SecPostureIQ — Agent host entry point.
 
 This is the main application that initializes the Copilot SDK, registers tools,
 sets the system prompt, and runs the agent session loop.
@@ -328,7 +328,7 @@ TOOLS: list[Tool] = [
 # ── Session Manager ────────────────────────────────────────────────────────
 
 
-class PostureIQAgent:
+class SecPostureIQAgent:
     """Manages the Copilot SDK client and session lifecycle.
 
     Responsibilities:
@@ -563,30 +563,30 @@ class PostureIQAgent:
 # ── CLI Entry Point ────────────────────────────────────────────────────────
 
 
-async def run_cli(agent: PostureIQAgent) -> None:
+async def run_cli(agent: SecPostureIQAgent) -> None:
     """Run the interactive CLI conversation loop.
 
     For local development and testing. In production, the FastAPI layer
     in src/api/app.py drives the agent via HTTP endpoints.
     """
-    print("\n🛡️  PostureIQ — ME5 Security Posture Assessment Agent")
+    print("\n🛡️  SecPostureIQ — ME5 Security Posture Assessment Agent")
     print("    Type 'quit' to exit.\n")
 
     while True:
         try:
             user_input = await asyncio.get_event_loop().run_in_executor(None, lambda: input("You: ").strip())
         except (EOFError, KeyboardInterrupt):
-            print("\n👋 PostureIQ session ended.")
+            print("\n👋 SecPostureIQ session ended.")
             break
 
         if user_input.lower() in ("quit", "exit", "q"):
-            print("\n👋 PostureIQ session ended.")
+            print("\n👋 SecPostureIQ session ended.")
             break
 
         if not user_input:
             continue
 
-        print("\nPostureIQ: ", end="", flush=True)
+        print("\nSecPostureIQ: ", end="", flush=True)
 
         # send_and_wait blocks until the turn is complete;
         # streaming deltas are printed via the event handler.
@@ -604,12 +604,12 @@ async def main() -> None:
     setup_tracing()
 
     logger.info(
-        "postureiq.starting",
+        "secpostureiq.starting",
         environment=settings.environment,
         log_level=settings.log_level,
     )
 
-    agent = PostureIQAgent()
+    agent = SecPostureIQAgent()
 
     # Register signal handlers for graceful shutdown
     loop = asyncio.get_running_loop()
@@ -626,9 +626,9 @@ async def main() -> None:
         await agent.stop()
 
 
-async def _shutdown(agent: PostureIQAgent) -> None:
+async def _shutdown(agent: SecPostureIQAgent) -> None:
     """Handle graceful shutdown on SIGINT/SIGTERM."""
-    logger.info("postureiq.shutting_down")
+    logger.info("secpostureiq.shutting_down")
     await agent.stop()
     sys.exit(0)
 

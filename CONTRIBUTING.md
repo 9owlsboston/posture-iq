@@ -1,6 +1,6 @@
-# Contributing to PostureIQ
+# Contributing to SecPostureIQ
 
-Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to PostureIQ.
+Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to SecPostureIQ.
 
 ## Code of Conduct
 

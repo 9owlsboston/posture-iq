@@ -1,6 +1,6 @@
-// PostureIQ — Main Bicep Template
+// SecPostureIQ — Main Bicep Template
 //
-// Orchestrates all Azure resources required for PostureIQ:
+// Orchestrates all Azure resources required for SecPostureIQ:
 //   - User-Assigned Managed Identity (service auth — deployed first for RBAC)
 //   - Azure Container Registry (image store — OIDC push, managed identity pull)
 //   - Azure OpenAI (LLM reasoning) + RBAC for managed identity
@@ -20,9 +20,9 @@ param environment string = 'dev'
 param location string = resourceGroup().location
 
 @description('Project name prefix for resource naming')
-param projectName string = 'postureiq'
+param projectName string = 'secpostureiq'
 
-@description('Container image to deploy (e.g., myacr.azurecr.io/postureiq:latest)')
+@description('Container image to deploy (e.g., myacr.azurecr.io/secpostureiq:latest)')
 param containerImage string = ''
 
 @description('Principal ID of the CI/CD service principal (for AcrPush RBAC via OIDC)')

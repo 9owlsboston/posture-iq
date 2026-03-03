@@ -1,4 +1,4 @@
-// PostureIQ — Azure Application Insights Availability (Web) Test
+// SecPostureIQ — Azure Application Insights Availability (Web) Test
 //
 // Creates a Standard URL ping test that hits the /health endpoint from multiple
 // geographic locations.  Results feed into the App Insights "Availability" blade.

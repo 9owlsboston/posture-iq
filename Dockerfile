@@ -1,4 +1,4 @@
-# PostureIQ — Container Image
+# SecPostureIQ — Container Image
 #
 # Multi-stage build for production deployment on Azure Container Apps.
 # Includes GitHub CLI (required for Copilot SDK runtime).
@@ -64,8 +64,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY src/ ./src/
 
 # Create non-root user for security
-RUN useradd --create-home --shell /bin/bash postureiq
-USER postureiq
+RUN useradd --create-home --shell /bin/bash secpostureiq
+USER secpostureiq
 
 # Health check — used by Container Apps for liveness probe
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

@@ -1,4 +1,4 @@
-"""PostureIQ Tool — get_green_playbook
+"""SecPostureIQ Tool — get_green_playbook
 
 Retrieves relevant Get to Green playbook sections from Foundry IQ based on
 identified security gaps.  Provides the agent with actionable context:

@@ -1,4 +1,4 @@
-"""PostureIQ Tool — query_secure_score
+"""SecPostureIQ Tool — query_secure_score
 
 Retrieves the tenant's Microsoft Secure Score via Graph Security API.
 Returns current score, category breakdown, 30-day trend, and industry comparison.

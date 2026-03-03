@@ -1,4 +1,4 @@
-"""PostureIQ — Configuration loader.
+"""SecPostureIQ — Configuration loader.
 
 Loads settings from environment variables (sourced from .env or Azure Key Vault).
 Uses pydantic-settings for validation and type coercion.

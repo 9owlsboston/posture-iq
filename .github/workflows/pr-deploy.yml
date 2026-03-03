@@ -1,4 +1,4 @@
-# PostureIQ — PR Preview Environment
+# SecPostureIQ — PR Preview Environment
 #
 # Deploys a temporary dev environment for each PR, so reviewers
 # can test changes live before merging to main.
@@ -20,9 +20,9 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.11"
-  RESOURCE_GROUP_PREFIX: "rg-postureiq-pr"
+  RESOURCE_GROUP_PREFIX: "rg-secpostureiq-pr"
   LOCATION: "eastus2"
-  CONTAINER_IMAGE_NAME: "postureiq"
+  CONTAINER_IMAGE_NAME: "secpostureiq"
 
 jobs:
   # ── Deploy preview environment on PR open/update ───────
@@ -74,12 +74,12 @@ jobs:
           az group create \
             --name ${{ steps.meta.outputs.rg-name }} \
             --location ${{ env.LOCATION }} \
-            --tags project=postureiq environment=pr pr=${{ steps.meta.outputs.pr-num }}
+            --tags project=secpostureiq environment=pr pr=${{ steps.meta.outputs.pr-num }}
 
       - name: Get ACR login server
         id: acr
         run: |
-          LOGIN_SERVER=$(az acr list --resource-group ${{ vars.RESOURCE_GROUP || 'rg-postureiq-dev' }} \
+          LOGIN_SERVER=$(az acr list --resource-group ${{ vars.RESOURCE_GROUP || 'rg-secpostureiq-dev' }} \
             --query "[0].loginServer" -o tsv)
           echo "LOGIN_SERVER=$LOGIN_SERVER" >> $GITHUB_OUTPUT
 
@@ -102,7 +102,7 @@ jobs:
           parameters: >-
             environment=dev
             location=${{ env.LOCATION }}
-            projectName=postureiq-pr${{ steps.meta.outputs.pr-num }}
+            projectName=secpostureiq-pr${{ steps.meta.outputs.pr-num }}
             containerImage=${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }}
           failOnStdErr: false
 

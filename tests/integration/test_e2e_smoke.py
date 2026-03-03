@@ -39,7 +39,7 @@ class TestApplicationStartup:
     """Verify the FastAPI app initialises without errors."""
 
     async def test_app_has_title(self):
-        assert app.title == "PostureIQ"
+        assert app.title == "SecPostureIQ"
 
     async def test_app_has_version(self):
         assert app.version == "0.1.0"
@@ -135,7 +135,7 @@ class TestOpenAPISchemaE2E:
         resp = await client.get("/openapi.json")
         assert resp.status_code == 200
         schema = resp.json()
-        assert schema["info"]["title"] == "PostureIQ"
+        assert schema["info"]["title"] == "SecPostureIQ"
 
     async def test_all_endpoints_in_schema(self, client: AsyncClient):
         resp = await client.get("/openapi.json")

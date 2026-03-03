@@ -592,7 +592,7 @@ class TestPowerBIDashboardTemplate:
         assert isinstance(template, dict)
 
     def test_has_name(self, template):
-        assert "PostureIQ" in template["name"]
+        assert "SecPostureIQ" in template["name"]
 
     def test_has_data_source(self, template):
         assert template["dataSource"]["type"] == "fabric_lakehouse"

@@ -1,4 +1,4 @@
-"""PostureIQ — Input validation for user queries.
+"""SecPostureIQ — Input validation for user queries.
 
 Enforces length limits, character-set restrictions, and structural rules
 on user queries before they reach the LLM or tools.

@@ -1,4 +1,4 @@
-"""PostureIQ Tool — check_purview_policies
+"""SecPostureIQ Tool — check_purview_policies
 
 Assesses Microsoft Purview Information Protection & Compliance policy
 coverage by analysing *SecureScoreControlProfile* records whose

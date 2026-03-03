@@ -1,6 +1,6 @@
-# PostureIQ — Azure Resource Provisioning & Graph API Setup Guide
+# SecPostureIQ — Azure Resource Provisioning & Graph API Setup Guide
 
-This guide covers the full provisioning of PostureIQ's Azure environment and
+This guide covers the full provisioning of SecPostureIQ's Azure environment and
 the Microsoft Graph API permissions required for security assessment.
 
 ---
@@ -24,7 +24,7 @@ az login
 This script handles:
 | Step | Resource | Description |
 |------|----------|-------------|
-| 1 | Resource Group (`rg-postureiq-dev`) | Container for all Azure resources |
+| 1 | Resource Group (`rg-secpostureiq-dev`) | Container for all Azure resources |
 | 2 | Azure Container Registry | Container image store (OIDC push, managed identity pull) |
 | 3 | Azure OpenAI (GPT-4o) | LLM reasoning & summarization |
 | 4 | Azure AI Content Safety | RAI content filtering |
@@ -44,17 +44,17 @@ To deploy infrastructure manually using the Bicep templates:
 
 ```bash
 # Create resource group
-az group create --name rg-postureiq-dev --location eastus2 --tags project=postureiq environment=dev
+az group create --name rg-secpostureiq-dev --location eastus2 --tags project=secpostureiq environment=dev
 
 # Validate templates
 az deployment group validate \
-  --resource-group rg-postureiq-dev \
+  --resource-group rg-secpostureiq-dev \
   --template-file infra/main.bicep \
   --parameters infra/parameters/dev.bicepparam
 
 # Deploy
 az deployment group create \
-  --resource-group rg-postureiq-dev \
+  --resource-group rg-secpostureiq-dev \
   --template-file infra/main.bicep \
   --parameters infra/parameters/dev.bicepparam
 ```
@@ -74,7 +74,7 @@ az deployment group create \
 
 ## CI/CD Authentication: OIDC Workload Identity Federation
 
-PostureIQ uses **OIDC Workload Identity Federation** for CI/CD — zero stored secrets.
+SecPostureIQ uses **OIDC Workload Identity Federation** for CI/CD — zero stored secrets.
 
 ### Why OIDC?
 
@@ -113,7 +113,7 @@ Only 3 non-sensitive identifiers (NOT credentials):
 
 ## Required Permissions (Delegated)
 
-PostureIQ uses **delegated permissions** — it acts on behalf of the signed-in user
+SecPostureIQ uses **delegated permissions** — it acts on behalf of the signed-in user
 and only accesses data the user is authorized to see.
 
 | Permission | Type | Purpose | Admin Consent |
@@ -135,7 +135,7 @@ and only accesses data the user is authorized to see.
 ```bash
 # Using Azure CLI
 az ad app create \
-  --display-name "PostureIQ - ME5 Security Assessment" \
+  --display-name "SecPostureIQ - ME5 Security Assessment" \
   --sign-in-audience "AzureADMyOrg" \
   --web-redirect-uris "http://localhost:8000/auth/callback"
 ```
@@ -144,7 +144,7 @@ az ad app create \
 
 ```bash
 # Get the App ID
-APP_ID=$(az ad app list --display-name "PostureIQ" --query "[0].appId" -o tsv)
+APP_ID=$(az ad app list --display-name "SecPostureIQ" --query "[0].appId" -o tsv)
 
 # Add Graph API permissions
 # SecurityEvents.Read.All
@@ -183,7 +183,7 @@ az ad app credential reset --id $APP_ID --years 1
 # Save the output — you'll need the password (client secret)
 ```
 
-### 5. Configure PostureIQ (Local Development)
+### 5. Configure SecPostureIQ (Local Development)
 
 Add the following to your `.env` file:
 
@@ -215,7 +215,7 @@ with M365 E5 licenses and sample data:
 
 ## Least-Privilege Principle
 
-PostureIQ follows least-privilege:
+SecPostureIQ follows least-privilege:
 - **Read-only** permissions only — no write/modify scopes
 - **Delegated** (not application) — acts as the user, not as a service
 - Specific scopes targeted to security assessment, not broad `Directory.Read.All`
@@ -264,14 +264,14 @@ The script handles:
 
 | Resource | Action |
 |----------|--------|
-| Resource group (`rg-postureiq-dev`) | Deletes the group and all resources inside (async) |
-| Entra ID App Registration | Deletes the `PostureIQ - ME5 Security Assessment` app |
+| Resource group (`rg-secpostureiq-dev`) | Deletes the group and all resources inside (async) |
+| Entra ID App Registration | Deletes the `SecPostureIQ - ME5 Security Assessment` app |
 | Soft-deleted Key Vaults | Purges any soft-deleted vaults (required to reuse names) |
 | Local `.env` file | Optionally removes it |
 
 > **Tip:** Resource group deletion runs asynchronously. Check status with:
 > ```bash
-> az group exists --name rg-postureiq-dev
+> az group exists --name rg-secpostureiq-dev
 > ```
 
 ---

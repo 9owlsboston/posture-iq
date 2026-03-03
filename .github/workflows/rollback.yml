@@ -1,4 +1,4 @@
-# PostureIQ — Rollback Workflow
+# SecPostureIQ — Rollback Workflow
 #
 # Manually roll back to a previously-pushed container image by Git SHA.
 # Uses workflow_dispatch so operators can trigger from the GitHub UI or CLI:
@@ -30,8 +30,8 @@ permissions:
   id-token: write
 
 env:
-  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'rg-postureiq-dev' }}
-  CONTAINER_IMAGE_NAME: "postureiq"
+  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'rg-secpostureiq-dev' }}
+  CONTAINER_IMAGE_NAME: "secpostureiq"
 
 jobs:
   rollback:

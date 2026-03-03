@@ -1,8 +1,8 @@
-# Scaling Strategy for PostureIQ
+# Scaling Strategy for SecPostureIQ
 
 > **Status:** Proposal — pending review
 > **Date:** 2026-02-26
-> **Author:** PostureIQ Engineering
+> **Author:** SecPostureIQ Engineering
 > **Related:** [Multi-Tenant Strategy](multi-tenant-strategy.md)
 
 ---
@@ -198,7 +198,7 @@ management.
 | **Analytics** | Built-in request analytics, latency tracking |
 | **OpenAI gateway** | APIM's GenAI gateway can load-balance across multiple OpenAI deployments |
 
-#### Key value for PostureIQ: **OpenAI load balancing**
+#### Key value for SecPostureIQ: **OpenAI load balancing**
 
 APIM's GenAI Gateway can distribute requests across multiple Azure OpenAI
 deployments (different regions, different quotas), effectively multiplying

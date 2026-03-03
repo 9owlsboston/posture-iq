@@ -1,4 +1,4 @@
-"""Tests for PostureIQ observability — tracing, logging, and custom metrics.
+"""Tests for SecPostureIQ observability — tracing, logging, and custom metrics.
 
 Validates:
   - Trace spans are created for tool calls and LLM calls
@@ -313,7 +313,7 @@ class TestTraceAgentInvocation:
 
         async with trace_agent_invocation(session_id="sess-nested") as span:
             tool_result = await nested_tool()
-            span.set_attribute("postureiq.tools_called", 1)
+            span.set_attribute("secpostureiq.tools_called", 1)
         assert tool_result["nested"] is True
 
     @pytest.mark.asyncio
@@ -529,13 +529,13 @@ class TestDashboard:
     def test_dashboard_file_exists(self):
         from pathlib import Path
 
-        dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "postureiq-dashboard.json"
+        dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "secpostureiq-dashboard.json"
         assert dashboard.exists(), "Dashboard JSON file missing"
 
     def test_dashboard_is_valid_json(self):
         from pathlib import Path
 
-        dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "postureiq-dashboard.json"
+        dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "secpostureiq-dashboard.json"
         content = json.loads(dashboard.read_text())
         assert "items" in content
         assert "version" in content
@@ -543,7 +543,7 @@ class TestDashboard:
     def test_dashboard_has_required_panels(self):
         from pathlib import Path
 
-        dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "postureiq-dashboard.json"
+        dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "secpostureiq-dashboard.json"
         content = json.loads(dashboard.read_text())
         panel_names = [item.get("name", "") for item in content["items"]]
 
@@ -559,10 +559,10 @@ class TestDashboard:
     def test_dashboard_queries_use_correct_metric_names(self):
         from pathlib import Path
 
-        dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "postureiq-dashboard.json"
+        dashboard = Path(__file__).parent.parent.parent / "infra" / "dashboards" / "secpostureiq-dashboard.json"
         raw = dashboard.read_text()
 
         # Verify our custom metric names appear in queries
-        assert "postureiq.secure_score.current" in raw
-        assert "postureiq.content_safety.blocked_count" in raw
-        assert "postureiq.remediation.steps_generated" in raw
+        assert "secpostureiq.secure_score.current" in raw
+        assert "secpostureiq.content_safety.blocked_count" in raw
+        assert "secpostureiq.remediation.steps_generated" in raw

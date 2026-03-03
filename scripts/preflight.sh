@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# PostureIQ — Pre-flight Check
+# SecPostureIQ — Pre-flight Check
 #
 # Validates the project before commit/push by running a comprehensive suite
 # of checks: tests, lint, Bicep validation, YAML syntax, Docker build, and
@@ -30,7 +30,7 @@ cd "$PROJECT_ROOT"
 BICEP_MAIN="infra/main.bicep"
 PARAM_FILES=("infra/parameters/dev.bicepparam" "infra/parameters/prod.bicepparam")
 WORKFLOW_DIR=".github/workflows"
-DOCKER_IMAGE_TAG="postureiq:preflight"
+DOCKER_IMAGE_TAG="secpostureiq:preflight"
 
 # ── Colours & Formatting ──────────────────────────────────
 RED='\033[0;31m'
@@ -296,7 +296,7 @@ run_git_status() {
 
 # ── Run Checks ────────────────────────────────────────────
 echo -e "${BOLD}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║       PostureIQ — Pre-flight Check              ║${NC}"
+echo -e "${BOLD}║       SecPostureIQ — Pre-flight Check              ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════════╝${NC}"
 
 if [[ "$DOCKER_ONLY" == true ]]; then

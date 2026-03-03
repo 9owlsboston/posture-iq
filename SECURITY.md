@@ -10,7 +10,7 @@
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-If you discover a security vulnerability in PostureIQ, please report it responsibly:
+If you discover a security vulnerability in SecPostureIQ, please report it responsibly:
 
 1. **Email:** Send details to the repository maintainers via the contact information on their GitHub profiles.
 2. **GitHub Security Advisories:** Use [GitHub's private vulnerability reporting](../../security/advisories/new) to submit a report directly through the repository.
@@ -30,7 +30,7 @@ If you discover a security vulnerability in PostureIQ, please report it responsi
 
 ## Security Best Practices for Deployers
 
-When deploying PostureIQ in a customer Azure tenant:
+When deploying SecPostureIQ in a customer Azure tenant:
 
 1. **Use Managed Identity** — Never store credentials in environment variables or code.
 2. **Follow least-privilege** — Grant only the Microsoft Graph permissions listed in the setup guide.

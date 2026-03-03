@@ -854,7 +854,7 @@ class TestSecureScoreTracing:
                 await query_secure_score()
 
             # Span should have recorded the error
-            mock_span.set_attribute.assert_any_call("postureiq.tool.status", "error")
+            mock_span.set_attribute.assert_any_call("secpostureiq.tool.status", "error")
             mock_span.record_exception.assert_called_once()
 
 

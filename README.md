@@ -1,8 +1,12 @@
-# PostureIQ
+# SecPostureIQ
+
+> **Note:** This project was previously known as **PostureIQ**. It has been renamed
+> to **SecPostureIQ** to better reflect the security-focused mission of the product,
+> per a branding decision by the internal product team.
 
 **ME5(M365 E5) Security Posture Assessment Agent** — Built with the GitHub Copilot SDK
 
-PostureIQ is a conversational AI agent that assesses an organization's Microsoft 365 E5 security posture, identifies deployment gaps, and generates prioritized remediation plans to accelerate the "Get to Green" (Get to Green) motion.
+SecPostureIQ is a conversational AI agent that assesses an organization's Microsoft 365 E5 security posture, identifies deployment gaps, and generates prioritized remediation plans to accelerate the "Get to Green" (Get to Green) motion.
 
 ---
 
@@ -22,7 +26,7 @@ PostureIQ is a conversational AI agent that assesses an organization's Microsoft
 ## Architecture
 
 ```
-User ↔ Copilot SDK ↔ Agent Runtime ↔ PostureIQ Tools ↔ Microsoft Graph API
+User ↔ Copilot SDK ↔ Agent Runtime ↔ SecPostureIQ Tools ↔ Microsoft Graph API
                                                       ↔ Azure OpenAI (GPT-4o)
 ```
 
@@ -117,7 +121,7 @@ Three fully end-to-end options:
 | **One-Click Portal** | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2F9owlsboston%2Fposture-iq%2Fmain%2Finfra%2Fazuredeploy.json) then `./scripts/post-deploy-button.sh` | Portal-guided, no CLI required |
 
 All three options provision infrastructure **and** set up Entra ID App Registration
-with Graph API permissions automatically. See [Customer Deployment Guide](docs/ghcp_challenge_submission/postureiq-customer-deployment-guide.md) for full details.
+with Graph API permissions automatically. See [Customer Deployment Guide](docs/ghcp_challenge_submission/secpostureiq-customer-deployment-guide.md) for full details.
 
 > **"One-Click Portal" flow:**
 > The button provisions infrastructure via the Azure Portal. After it finishes,
@@ -137,9 +141,9 @@ chmod +x scripts/setup-oidc.sh
 ./scripts/setup-oidc.sh
 
 # 2. Provision infrastructure (creates ACR, Container App, OpenAI, etc.)
-az group create --name rg-postureiq-dev --location eastus2
+az group create --name rg-secpostureiq-dev --location eastus2
 az deployment group create \
-  --resource-group rg-postureiq-dev \
+  --resource-group rg-secpostureiq-dev \
   --template-file infra/main.bicep \
   --parameters infra/parameters/dev.bicepparam
 
@@ -188,7 +192,7 @@ Fires ~50 requests over ~60 seconds with randomised delays, exercises all 8 tool
 python scripts/load_test.py
 
 # Against a cloud deployment
-POSTUREIQ_URL=https://my-app.azurecontainerapps.io python scripts/load_test.py
+SECPOSTUREIQ_URL=https://my-app.azurecontainerapps.io python scripts/load_test.py
 ```
 
 ### Traffic Simulator (`scripts/simulate_traffic.py`)
@@ -214,7 +218,7 @@ python scripts/simulate_traffic.py --tools secure_score,defender,entra
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--url` | `http://localhost:8000` | Target PostureIQ endpoint |
+| `--url` | `http://localhost:8000` | Target SecPostureIQ endpoint |
 | `--duration` | `0` (single burst) | Total run time in minutes |
 | `--interval` | `5` | Minutes between bursts |
 | `--burst-size` | `10` | Chat requests per burst |
@@ -253,7 +257,7 @@ posture-iq/
 
 ## Scoring Alignment
 
-| Category | Points | PostureIQ Coverage |
+| Category | Points | SecPostureIQ Coverage |
 |----------|--------|-------------------|
 | Enterprise Value | 35 | Get to Green acceleration, Secure Score improvement |
 | Azure Integration | 25 | OpenAI + Content Safety + App Insights + Key Vault + Container Apps |
@@ -267,8 +271,8 @@ posture-iq/
 
 This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
 
-**PostureIQ™** is a trademark of 9 Owls Boston. The license does not grant permission
-to use the PostureIQ name or branding. See [TRADEMARKS.md](TRADEMARKS.md) for details.
+**SecPostureIQ™** is a trademark of 9 Owls Boston. The license does not grant permission
+to use the SecPostureIQ name or branding. See [TRADEMARKS.md](TRADEMARKS.md) for details.
 
 ---
 
@@ -276,6 +280,6 @@ to use the PostureIQ name or branding. See [TRADEMARKS.md](TRADEMARKS.md) for de
 
 | Asset | Description |
 |-------|-------------|
-| [PostureIQ.mp4](PostureIQ.mp4) | 3-minute demo video — live assessment, remediation plan, adoption scorecard |
-| [PostureIQ.pptx](PostureIQ.pptx) | Slide deck — architecture, enterprise value, scoring alignment |
+| [SecPostureIQ.mp4](SecPostureIQ.mp4) | 3-minute demo video — live assessment, remediation plan, adoption scorecard |
+| [SecPostureIQ.pptx](SecPostureIQ.pptx) | Slide deck — architecture, enterprise value, scoring alignment |
 | [sdk-feedback.md.pdf](sdk-feedback.md.pdf) | SDK feedback log — issues, suggestions, workarounds discovered during development |

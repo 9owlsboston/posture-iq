@@ -1,4 +1,4 @@
-"""PostureIQ — FastAPI application with health probes and Entra ID auth.
+"""SecPostureIQ — FastAPI application with health probes and Entra ID auth.
 
 Provides:
   - GET /         — Chat UI (static HTML page)
@@ -50,7 +50,7 @@ logger = structlog.get_logger(__name__)
 setup_tracing()
 
 app = FastAPI(
-    title="PostureIQ",
+    title="SecPostureIQ",
     description="ME5 Security Posture Assessment Agent — Get to Green Get-to-Green",
     version="0.1.0",
 )
@@ -106,7 +106,7 @@ async def chat_ui() -> FileResponse:
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest) -> ChatResponse:
-    """Chat with the PostureIQ agent.
+    """Chat with the SecPostureIQ agent.
 
     Sends a user message, invokes the appropriate assessment tools,
     and returns a formatted response with tool-call metadata.

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# PostureIQ — Graph API Permission Setup Script
+# SecPostureIQ — Graph API Permission Setup Script
 #
 # Creates an Entra ID App Registration with the minimum required
-# Graph API permissions for PostureIQ security assessment.
+# Graph API permissions for SecPostureIQ security assessment.
 #
 # All 8 required delegated scopes and their consuming tools:
 #   1. SecurityEvents.Read.All      — secure_score, defender_coverage, purview_policies
@@ -32,7 +32,7 @@
 # Do NOT use set -e — we handle errors per-command for graceful reporting.
 set -uo pipefail
 
-APP_NAME="PostureIQ - ME5 Security Assessment"
+APP_NAME="SecPostureIQ - ME5 Security Assessment"
 REDIRECT_URI="http://localhost:8000/auth/callback"
 
 # ── Tracking arrays ──────────────────────────────────────────
@@ -58,7 +58,7 @@ add_permission() {
   return 1
 }
 
-echo "🛡️  PostureIQ — Setting up Graph API permissions"
+echo "🛡️  SecPostureIQ — Setting up Graph API permissions"
 echo "================================================"
 
 # ── Step 1: Create App Registration ──────────────────────────
@@ -151,9 +151,9 @@ echo "   ✅ Client secret created"
 echo ""
 echo "================================================"
 if [[ ${#FAILED[@]} -eq 0 ]]; then
-  echo "🎉 PostureIQ App Registration Complete! (8/8 permissions)"
+  echo "🎉 SecPostureIQ App Registration Complete! (8/8 permissions)"
 else
-  echo "⚠️  PostureIQ App Registration Complete with issues"
+  echo "⚠️  SecPostureIQ App Registration Complete with issues"
   echo "   ${#GRANTED[@]}/8 permissions granted, ${#FAILED[@]} failed."
   echo "   The agent will fall back to mock data for tools that"
   echo "   depend on the missing scopes, but functionality will"

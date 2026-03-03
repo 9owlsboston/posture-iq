@@ -368,7 +368,7 @@ class TestRemediationMockFallback:
 
         result = await generate_remediation_plan("{}")
         assert "disclaimer" in result
-        assert "PostureIQ" in result["disclaimer"]
+        assert "SecPostureIQ" in result["disclaimer"]
 
     @pytest.mark.asyncio
     @patch("src.tools.remediation_plan._create_openai_client", return_value=None)

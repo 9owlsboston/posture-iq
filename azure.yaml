@@ -1,4 +1,4 @@
-# PostureIQ — Azure Developer CLI (azd) Configuration
+# SecPostureIQ — Azure Developer CLI (azd) Configuration
 #
 # Enables one-command deployment via: azd up
 #
@@ -18,12 +18,12 @@
 #   azd deploy         # redeploy code changes only (skip infra)
 #   azd down           # tear down all resources
 
-name: postureiq
+name: secpostureiq
 metadata:
-  template: postureiq@0.0.1
+  template: secpostureiq@0.0.1
 
 services:
-  postureiq:
+  secpostureiq:
     project: .
     host: containerapp
     language: python

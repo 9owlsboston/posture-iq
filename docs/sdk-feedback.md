@@ -1,4 +1,4 @@
-# PostureIQ — SDK Feedback Log
+# SecPostureIQ — SDK Feedback Log
 
 > Running log of GitHub Copilot SDK pain points, API gaps, documentation issues, and suggestions.
 > This document will be submitted as part of the challenge for **10 bonus points**.

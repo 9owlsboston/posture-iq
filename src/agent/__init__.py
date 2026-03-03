@@ -1,1 +1,1 @@
-"""PostureIQ — Agent package."""
+"""SecPostureIQ — Agent package."""

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# PostureIQ — Customer Deployment Script
+# SecPostureIQ — Customer Deployment Script
 #
 # One-command deployment for customer Azure tenants.
 # No forking, no CI/CD pipeline, no OIDC setup required.
@@ -38,7 +38,7 @@ set -euo pipefail
 CUSTOMER_NAME=""
 LOCATION=""
 ENVIRONMENT="prod"
-PROJECT_NAME="postureiq"
+PROJECT_NAME="secpostureiq"
 SKIP_APP_REG=false
 SKIP_BUILD=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
     --skip-app-reg)   SKIP_APP_REG=true; shift ;;
     --skip-build)     SKIP_BUILD=true; shift ;;
     --help|-h)
-      echo "PostureIQ — Customer Deployment"
+      echo "SecPostureIQ — Customer Deployment"
       echo ""
       echo "Usage: $0 [options]"
       echo ""
@@ -79,7 +79,7 @@ done
 # ── Banner ────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║   PostureIQ — Customer Azure Deployment             ║"
+echo "║   SecPostureIQ — Customer Azure Deployment             ║"
 echo "║   ME5 Security Posture Assessment Agent             ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
@@ -152,8 +152,8 @@ echo ""
 
 # ── Derived names ────────────────────────────────────────
 RESOURCE_GROUP="rg-${PROJECT_NAME}-${CUSTOMER_NAME}"
-CONTAINER_IMAGE_NAME="postureiq"
-APP_NAME="PostureIQ - ${CUSTOMER_NAME}"
+CONTAINER_IMAGE_NAME="secpostureiq"
+APP_NAME="SecPostureIQ - ${CUSTOMER_NAME}"
 GIT_SHA=$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo "manual")
 IMAGE_TAG="$GIT_SHA"
 
@@ -188,7 +188,7 @@ else
   az group create \
     --name "$RESOURCE_GROUP" \
     --location "$LOCATION" \
-    --tags project=postureiq customer="$CUSTOMER_NAME" environment="$ENVIRONMENT" \
+    --tags project=secpostureiq customer="$CUSTOMER_NAME" environment="$ENVIRONMENT" \
     --output none
   echo "   ✅ Created '$RESOURCE_GROUP' in $LOCATION"
 fi
@@ -204,7 +204,7 @@ echo "   Resources: OpenAI (GPT-4o), Content Safety, App Insights, Key Vault, AC
 echo ""
 
 # Generate a customer-specific parameter override file
-PARAM_FILE=$(mktemp /tmp/postureiq-params-XXXXX.json)
+PARAM_FILE=$(mktemp /tmp/secpostureiq-params-XXXXX.json)
 cat > "$PARAM_FILE" <<EOF
 {
   "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
@@ -412,7 +412,7 @@ fi
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║   🎉 PostureIQ — Deployment Complete!               ║"
+echo "║   🎉 SecPostureIQ — Deployment Complete!               ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 echo "   🌐 Application URL:   https://$CONTAINER_APP_URL"

@@ -1,14 +1,14 @@
-# Multi-Tenant Strategy for PostureIQ
+# Multi-Tenant Strategy for SecPostureIQ
 
 > **Status:** Proposal — pending review  
 > **Date:** 2026-02-26  
-> **Author:** PostureIQ Engineering
+> **Author:** SecPostureIQ Engineering
 
 ---
 
 ## Problem Statement
 
-The current PostureIQ deployment is bound to a **single ME5 tenant**. All
+The current SecPostureIQ deployment is bound to a **single ME5 tenant**. All
 configuration — Graph API credentials, OAuth2 endpoints, JWT validation — is
 pinned to one `AZURE_TENANT_ID`. To assess a different customer tenant, a
 separate deployment with different environment variables is required.
@@ -131,7 +131,7 @@ tenant — it uses the token that arrived with each HTTP request.
        │                  │
        ▼                  ▼
 ┌──────────────────────────────────┐
-│      PostureIQ Agent (1 instance)│
+│      SecPostureIQ Agent (1 instance)│
 │                                  │
 │  ┌────────────────────────────┐  │
 │  │ Step 1: Validate JWT       │  │
@@ -216,12 +216,12 @@ their sessions are isolated.
 ```
 1. Customer admin navigates to:
    https://login.microsoftonline.com/{customer-tenant}/adminconsent
-     ?client_id=<PostureIQ-app-id>
-     &redirect_uri=<PostureIQ-URL>/auth/callback
+     ?client_id=<SecPostureIQ-app-id>
+     &redirect_uri=<SecPostureIQ-URL>/auth/callback
 
 2. Admin reviews and grants the requested Graph permissions.
 
-3. Customer users can now log in to PostureIQ and assess their own tenant.
+3. Customer users can now log in to SecPostureIQ and assess their own tenant.
 ```
 
 ### Security Considerations
@@ -242,7 +242,7 @@ their sessions are isolated.
 | **Cross-tenant token confusion** | **High** | A bug in issuer validation could let a token from Tenant A be accepted as Tenant B. In single-tenant mode the issuer is hardcoded, so this is impossible. Multi-tenant dynamic issuer validation widens this attack surface. | Validate that the token's `tid` claim matches the issuer URL in every request. Add integration tests that reject cross-tenant tokens. |
 | **Shared infrastructure = shared blast radius** | **High** | A vulnerability in the agent (e.g., prompt injection, dependency CVE) exposes **all** customer tenants simultaneously, not just one. | WAF/DDoS protection on the Container App ingress. Content Safety filtering (already in place). Dependency scanning in CI. Incident response plan that covers multi-tenant impact. |
 | **OBO token scope escalation** | **Medium** | The On-Behalf-Of flow exchanges the user's token for a Graph token. If the app registration requests overly broad scopes, a compromised agent could read more data than intended. | Request only the minimum delegated scopes needed (`SecurityEvents.Read.All`, `Policy.Read.All`, etc.). Never request `Directory.ReadWrite.All` or similar write scopes. Audit scope grants per tenant. |
-| **Admin consent phishing** | **Medium** | An attacker could craft a malicious admin consent URL pointing to PostureIQ's app ID but with additional scopes, tricking an admin into granting excessive permissions. | Pin the permitted scopes in the app registration manifest (`requiredResourceAccess`). Use the `/adminconsent` endpoint with a fixed scope set. Educate customer admins on consent review. |
+| **Admin consent phishing** | **Medium** | An attacker could craft a malicious admin consent URL pointing to SecPostureIQ's app ID but with additional scopes, tricking an admin into granting excessive permissions. | Pin the permitted scopes in the app registration manifest (`requiredResourceAccess`). Use the `/adminconsent` endpoint with a fixed scope set. Educate customer admins on consent review. |
 | **OBO credential for Graph** | **Low** | The OBO flow typically requires a `client_secret` or certificate. However, the current deployment already uses **OIDC Workload Identity Federation** for CI/CD and **User-Assigned Managed Identity** for runtime access to Azure services (OpenAI, Content Safety, Key Vault, ACR). If the managed identity can also be used for OBO, no secret is needed. If OBO requires a certificate/secret, it adds one credential to manage. | Use managed identity federated credential for OBO if supported. Otherwise, use certificate credentials stored in Key Vault with auto-rotation. |
 | **Denial of service across tenants** | **Medium** | One tenant's heavy usage or a targeted attack could degrade service for all tenants on the shared instance. | Per-tenant rate limiting (to be implemented). Container Apps auto-scaling (already configured 0–5 replicas). Azure Monitor alerts on anomalous request patterns. |
 | **In-memory session leakage** | **Low** | The current chat layer uses an in-memory `_sessions` dict. A bug could return one tenant's session to another tenant's user. | Key sessions by `(tenant_id, user_id, session_id)` tuple. Add a middleware guard that validates session ownership on every request. Move to Redis or Cosmos DB for durable, isolated session storage. |
@@ -259,7 +259,7 @@ its own environment variables and single-tenant app registration.
 
 - Parameterize `provision-dev.sh` to accept a target tenant ID.
 - Create a Bicep parameter file per tenant (or use a config map).
-- Each instance has its own URL (e.g., `postureiq-contoso.azurecontainerapps.io`).
+- Each instance has its own URL (e.g., `secpostureiq-contoso.azurecontainerapps.io`).
 
 ### Pros
 - Minimal code changes — mostly infra/config.

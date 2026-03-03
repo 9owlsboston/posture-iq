@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# PostureIQ — Post "Deploy to Azure" Button Setup
+# SecPostureIQ — Post "Deploy to Azure" Button Setup
 #
 # Run this AFTER deploying infrastructure via the "Deploy to Azure" button.
 # It completes the three remaining steps that the ARM template cannot do:
 #
-#   1. Builds and pushes the PostureIQ Docker image to the customer's ACR
+#   1. Builds and pushes the SecPostureIQ Docker image to the customer's ACR
 #   2. Creates an Entra ID App Registration with Graph API permissions
 #   3. Stores Graph API credentials in Key Vault
 #   4. Updates the Container App with the real image
@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
     --skip-build)        SKIP_BUILD=true; shift ;;
     --skip-app-reg)      SKIP_APP_REG=true; shift ;;
     --help|-h)
-      echo "PostureIQ — Post Deploy-to-Azure Button Setup"
+      echo "SecPostureIQ — Post Deploy-to-Azure Button Setup"
       echo ""
       echo "Usage: $0 --resource-group <rg-name> [options]"
       echo ""
@@ -57,7 +57,7 @@ done
 # ── Banner ────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║   PostureIQ — Post-Deployment Setup                 ║"
+echo "║   SecPostureIQ — Post-Deployment Setup                 ║"
 echo "║   Complete your Deploy-to-Azure deployment          ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
@@ -99,9 +99,9 @@ if [[ -z "$RESOURCE_GROUP" ]]; then
   echo "   (This is the resource group you selected in the Azure Portal)"
   echo ""
 
-  # List resource groups with postureiq tags or names
+  # List resource groups with secpostureiq tags or names
   echo "   Recent resource groups:"
-  az group list --query "[?contains(name,'postureiq') || tags.project=='postureiq'].{Name:name, Location:location}" -o table 2>/dev/null || true
+  az group list --query "[?contains(name,'secpostureiq') || tags.project=='secpostureiq'].{Name:name, Location:location}" -o table 2>/dev/null || true
   echo ""
 
   read -rp "   Resource group name: " RESOURCE_GROUP
@@ -155,7 +155,7 @@ if [[ "$SKIP_BUILD" != true ]]; then
   echo "🐳 Step 1/3: Build & Push Container Image"
 
   GIT_SHA=$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo "manual")
-  FULL_IMAGE="${ACR_LOGIN_SERVER}/postureiq"
+  FULL_IMAGE="${ACR_LOGIN_SERVER}/secpostureiq"
 
   echo "   🔑 Logging in to ACR ($ACR_NAME)..."
   az acr login --name "$ACR_NAME" 2>/dev/null
@@ -176,7 +176,7 @@ if [[ "$SKIP_BUILD" != true ]]; then
 
   # Update Container App with the real image
   echo ""
-  echo "   🔄 Updating Container App with PostureIQ image..."
+  echo "   🔄 Updating Container App with SecPostureIQ image..."
   if [[ -n "$CONTAINER_APP_NAME" ]]; then
     az containerapp update \
       -n "$CONTAINER_APP_NAME" \
@@ -202,7 +202,7 @@ if [[ "$SKIP_APP_REG" != true ]]; then
   echo "📝 Step 2/3: Entra ID App Registration"
 
   GRAPH_API_ID="00000003-0000-0000-c000-000000000000"
-  APP_DISPLAY_NAME="PostureIQ - ME5 Security Assessment"
+  APP_DISPLAY_NAME="SecPostureIQ - ME5 Security Assessment"
 
   # Check if app already exists
   EXISTING_APP_ID=$(az ad app list --display-name "$APP_DISPLAY_NAME" --query "[0].appId" -o tsv 2>/dev/null || echo "")
@@ -318,7 +318,7 @@ fi
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║   🎉 PostureIQ — Setup Complete!                    ║"
+echo "║   🎉 SecPostureIQ — Setup Complete!                    ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 echo "   🌐 Application URL:    https://${CONTAINER_APP_FQDN:-<pending>}"

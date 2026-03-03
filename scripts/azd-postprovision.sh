@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# PostureIQ — azd postprovision hook
+# SecPostureIQ — azd postprovision hook
 #
 # Automatically runs after `azd provision` (or as part of `azd up`).
 # Completes the Entra ID App Registration + Graph API setup that
@@ -19,7 +19,7 @@
 
 set -uo pipefail
 
-APP_DISPLAY_NAME="PostureIQ - ME5 Security Assessment"
+APP_DISPLAY_NAME="SecPostureIQ - ME5 Security Assessment"
 GRAPH_API_ID="00000003-0000-0000-c000-000000000000"
 
 # ── Tracking ──────────────────────────────────────────────
@@ -44,7 +44,7 @@ add_permission() {
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║   PostureIQ — Post-Provision Setup (azd hook)       ║"
+echo "║   SecPostureIQ — Post-Provision Setup (azd hook)       ║"
 echo "║   Setting up Entra ID + Graph API access            ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
@@ -168,7 +168,7 @@ fi
 if command -v azd &>/dev/null; then
   azd env set AZURE_TENANT_ID "$TENANT_ID" 2>/dev/null || true
   azd env set AZURE_CLIENT_ID "$CLIENT_ID" 2>/dev/null || true
-  azd env set POSTUREIQ_APP_REGISTRATION_ID "$APP_ID" 2>/dev/null || true
+  azd env set SECPOSTUREIQ_APP_REGISTRATION_ID "$APP_ID" 2>/dev/null || true
   echo "   ✅ Values saved to azd environment"
 fi
 

@@ -1,6 +1,6 @@
-// PostureIQ — Azure Container Registry module
+// SecPostureIQ — Azure Container Registry module
 //
-// Provisions an ACR instance for storing PostureIQ container images.
+// Provisions an ACR instance for storing SecPostureIQ container images.
 // Features: OIDC-based CI/CD push (no admin credentials), managed identity
 // pull via AcrPull role for Container Apps.
 

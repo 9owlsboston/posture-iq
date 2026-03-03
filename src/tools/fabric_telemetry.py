@@ -1,4 +1,4 @@
-"""PostureIQ Tool — Fabric Telemetry Push.
+"""SecPostureIQ Tool — Fabric Telemetry Push.
 
 Pushes security posture assessment snapshots to a **Microsoft Fabric
 lakehouse** for longitudinal analysis and Power BI dashboarding.

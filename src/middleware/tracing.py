@@ -1,4 +1,4 @@
-"""PostureIQ — Distributed tracing & custom metrics with Azure Application Insights.
+"""SecPostureIQ — Distributed tracing & custom metrics with Azure Application Insights.
 
 Integrates OpenTelemetry for distributed tracing. Every tool call, LLM call,
 and session becomes a trace span, enabling end-to-end visibility in App Insights.
@@ -9,10 +9,10 @@ GenAI semantic conventions (populates the App Insights "Agent (preview)" blade):
   - Token Usage → auto-instrumented by ``opentelemetry-instrumentation-openai-v2``
 
 Custom metrics emitted:
-  - postureiq.secure_score.current          (gauge)
-  - postureiq.assessment.duration_seconds   (histogram)
-  - postureiq.remediation.steps_generated   (counter)
-  - postureiq.content_safety.blocked_count  (counter)
+  - secpostureiq.secure_score.current          (gauge)
+  - secpostureiq.assessment.duration_seconds   (histogram)
+  - secpostureiq.remediation.steps_generated   (counter)
+  - secpostureiq.content_safety.blocked_count  (counter)
 """
 
 from __future__ import annotations
@@ -118,31 +118,31 @@ def setup_tracing() -> None:
             reason="no connection string configured",
         )
 
-    _tracer = trace.get_tracer("postureiq", "0.1.0")
-    _meter = metrics.get_meter("postureiq", "0.1.0")
+    _tracer = trace.get_tracer("secpostureiq", "0.1.0")
+    _meter = metrics.get_meter("secpostureiq", "0.1.0")
 
     # ── Custom metrics ────────────────────────────────────
     _secure_score_gauge = _meter.create_observable_gauge(
-        name="postureiq.secure_score.current",
+        name="secpostureiq.secure_score.current",
         description="Current tenant secure score",
         unit="points",
         callbacks=[_secure_score_callback],
     )
 
     _assessment_duration_histogram = _meter.create_histogram(
-        name="postureiq.assessment.duration_seconds",
+        name="secpostureiq.assessment.duration_seconds",
         description="Duration of security assessment operations",
         unit="s",
     )
 
     _remediation_steps_counter = _meter.create_counter(
-        name="postureiq.remediation.steps_generated",
+        name="secpostureiq.remediation.steps_generated",
         description="Total remediation steps generated",
         unit="steps",
     )
 
     _content_safety_blocked_counter = _meter.create_counter(
-        name="postureiq.content_safety.blocked_count",
+        name="secpostureiq.content_safety.blocked_count",
         description="Total content blocked by Azure AI Content Safety",
         unit="blocks",
     )
@@ -152,7 +152,7 @@ def get_tracer() -> trace.Tracer:
     """Get the configured tracer, initializing if needed."""
     global _tracer
     if _tracer is None:
-        _tracer = trace.get_tracer("postureiq", "0.1.0")
+        _tracer = trace.get_tracer("secpostureiq", "0.1.0")
     return _tracer
 
 
@@ -160,7 +160,7 @@ def get_meter() -> metrics.Meter:
     """Get the configured meter, initializing if needed."""
     global _meter
     if _meter is None:
-        _meter = metrics.get_meter("postureiq", "0.1.0")
+        _meter = metrics.get_meter("secpostureiq", "0.1.0")
     return _meter
 
 
@@ -179,7 +179,7 @@ def record_assessment_duration(duration_seconds: float, tool_name: str = "") -> 
     if _assessment_duration_histogram is not None:
         _assessment_duration_histogram.record(
             duration_seconds,
-            attributes={"postureiq.tool.name": tool_name},
+            attributes={"secpostureiq.tool.name": tool_name},
         )
 
 
@@ -193,7 +193,7 @@ def record_remediation_steps(count: int) -> None:
 def record_content_safety_block(category: str = "unknown") -> None:
     """Increment the content safety blocked counter."""
     if _content_safety_blocked_counter is not None:
-        _content_safety_blocked_counter.add(1, attributes={"postureiq.safety.category": category})
+        _content_safety_blocked_counter.add(1, attributes={"secpostureiq.safety.category": category})
     logger.warning("metric.content_safety.blocked", category=category)
 
 
@@ -203,7 +203,7 @@ def record_content_safety_block(category: str = "unknown") -> None:
 def trace_tool_call(tool_name: str) -> Callable[[F], F]:
     """Decorator that wraps a tool function in an OpenTelemetry span.
 
-    Records both PostureIQ-specific and GenAI semantic-convention attributes
+    Records both SecPostureIQ-specific and GenAI semantic-convention attributes
     so the span appears in the App Insights "Agent (preview)" → Tool Calls panel.
 
     GenAI attributes emitted:
@@ -233,9 +233,9 @@ def trace_tool_call(tool_name: str) -> Callable[[F], F]:
                     _GENAI_OPERATION_NAME: "execute_tool",
                     _GENAI_TOOL_NAME: tool_name,
                     _GENAI_TOOL_CALL_ID: tool_call_id,
-                    # PostureIQ-specific (custom dashboards)
-                    "postureiq.tool.name": tool_name,
-                    "postureiq.tool.type": "assessment",
+                    # SecPostureIQ-specific (custom dashboards)
+                    "secpostureiq.tool.name": tool_name,
+                    "secpostureiq.tool.type": "assessment",
                 },
             ) as span:
                 start_time = time.monotonic()
@@ -244,7 +244,7 @@ def trace_tool_call(tool_name: str) -> Callable[[F], F]:
                 if kwargs:
                     redacted_params = redact_dict(dict(kwargs))
                     span.set_attribute(
-                        "postureiq.tool.input_params",
+                        "secpostureiq.tool.input_params",
                         str(redacted_params)[:500],
                     )
 
@@ -253,18 +253,18 @@ def trace_tool_call(tool_name: str) -> Callable[[F], F]:
                     duration_ms = (time.monotonic() - start_time) * 1000
                     duration_s = duration_ms / 1000
 
-                    span.set_attribute("postureiq.tool.duration_ms", duration_ms)
-                    span.set_attribute("postureiq.tool.status", "success")
+                    span.set_attribute("secpostureiq.tool.duration_ms", duration_ms)
+                    span.set_attribute("secpostureiq.tool.status", "success")
 
                     # Record output summary
                     if isinstance(result, dict):
                         span.set_attribute(
-                            "postureiq.tool.output_summary",
+                            "secpostureiq.tool.output_summary",
                             str(list(result.keys()))[:200],
                         )
                     elif isinstance(result, str):
                         span.set_attribute(
-                            "postureiq.tool.output_summary",
+                            "secpostureiq.tool.output_summary",
                             f"string({len(result)} chars)",
                         )
 
@@ -284,9 +284,9 @@ def trace_tool_call(tool_name: str) -> Callable[[F], F]:
 
                 except Exception as e:
                     duration_ms = (time.monotonic() - start_time) * 1000
-                    span.set_attribute("postureiq.tool.duration_ms", duration_ms)
-                    span.set_attribute("postureiq.tool.status", "error")
-                    span.set_attribute("postureiq.tool.error", str(e))
+                    span.set_attribute("secpostureiq.tool.duration_ms", duration_ms)
+                    span.set_attribute("secpostureiq.tool.status", "error")
+                    span.set_attribute("secpostureiq.tool.error", str(e))
                     span.set_status(StatusCode.ERROR, str(e))
                     span.record_exception(e)
 
@@ -325,8 +325,8 @@ def trace_llm_call(
             with tracer.start_as_current_span(
                 name=f"llm.{model_name}",
                 attributes={
-                    "postureiq.llm.model": model_name,
-                    "postureiq.llm.type": "chat_completion",
+                    "secpostureiq.llm.model": model_name,
+                    "secpostureiq.llm.type": "chat_completion",
                 },
             ) as span:
                 start_time = time.monotonic()
@@ -334,8 +334,8 @@ def trace_llm_call(
                     result = await func(*args, **kwargs)
                     duration_ms = (time.monotonic() - start_time) * 1000
 
-                    span.set_attribute("postureiq.llm.duration_ms", duration_ms)
-                    span.set_attribute("postureiq.llm.status", "success")
+                    span.set_attribute("secpostureiq.llm.duration_ms", duration_ms)
+                    span.set_attribute("secpostureiq.llm.status", "success")
 
                     # Extract token usage if available
                     if isinstance(result, dict):
@@ -347,18 +347,18 @@ def trace_llm_call(
                                 "total_tokens",
                                 prompt_tokens + completion_tokens,
                             )
-                            span.set_attribute("postureiq.llm.prompt_tokens", prompt_tokens)
+                            span.set_attribute("secpostureiq.llm.prompt_tokens", prompt_tokens)
                             span.set_attribute(
-                                "postureiq.llm.completion_tokens",
+                                "secpostureiq.llm.completion_tokens",
                                 completion_tokens,
                             )
-                            span.set_attribute("postureiq.llm.total_tokens", total_tokens)
+                            span.set_attribute("secpostureiq.llm.total_tokens", total_tokens)
 
                         # Record Content Safety filter result if present
                         safety_result = result.get("content_safety_result", "")
                         if safety_result:
                             span.set_attribute(
-                                "postureiq.llm.content_safety_result",
+                                "secpostureiq.llm.content_safety_result",
                                 str(safety_result),
                             )
 
@@ -375,9 +375,9 @@ def trace_llm_call(
 
                 except Exception as e:
                     duration_ms = (time.monotonic() - start_time) * 1000
-                    span.set_attribute("postureiq.llm.duration_ms", duration_ms)
-                    span.set_attribute("postureiq.llm.status", "error")
-                    span.set_attribute("postureiq.llm.error", str(e))
+                    span.set_attribute("secpostureiq.llm.duration_ms", duration_ms)
+                    span.set_attribute("secpostureiq.llm.status", "error")
+                    span.set_attribute("secpostureiq.llm.error", str(e))
                     span.set_status(StatusCode.ERROR, str(e))
                     span.record_exception(e)
 
@@ -413,8 +413,8 @@ def trace_session(session_id: str) -> Callable[[F], F]:
             with tracer.start_as_current_span(
                 name="session",
                 attributes={
-                    "postureiq.session.id": session_id,
-                    "postureiq.session.type": "assessment",
+                    "secpostureiq.session.id": session_id,
+                    "secpostureiq.session.type": "assessment",
                 },
             ) as span:
                 start_time = time.monotonic()
@@ -422,8 +422,8 @@ def trace_session(session_id: str) -> Callable[[F], F]:
                     result = await func(*args, **kwargs)
                     duration_ms = (time.monotonic() - start_time) * 1000
 
-                    span.set_attribute("postureiq.session.duration_ms", duration_ms)
-                    span.set_attribute("postureiq.session.status", "completed")
+                    span.set_attribute("secpostureiq.session.duration_ms", duration_ms)
+                    span.set_attribute("secpostureiq.session.status", "completed")
                     span.set_status(StatusCode.OK)
 
                     logger.info(
@@ -435,8 +435,8 @@ def trace_session(session_id: str) -> Callable[[F], F]:
 
                 except Exception as e:
                     duration_ms = (time.monotonic() - start_time) * 1000
-                    span.set_attribute("postureiq.session.duration_ms", duration_ms)
-                    span.set_attribute("postureiq.session.status", "error")
+                    span.set_attribute("secpostureiq.session.duration_ms", duration_ms)
+                    span.set_attribute("secpostureiq.session.status", "error")
                     span.set_status(StatusCode.ERROR, str(e))
                     span.record_exception(e)
 
@@ -460,7 +460,7 @@ def trace_session(session_id: str) -> Callable[[F], F]:
 async def trace_agent_invocation(
     session_id: str,
     *,
-    agent_name: str = "PostureIQ",
+    agent_name: str = "SecPostureIQ",
     agent_description: str = "ME5 Security Posture Assessment Agent",
     model: str = "gpt-4o",
 ) -> AsyncIterator[trace.Span]:
@@ -481,7 +481,7 @@ async def trace_agent_invocation(
 
         async with trace_agent_invocation(session_id="sess-1") as span:
             result = await run_tools(message)
-            span.set_attribute("postureiq.tools_called", len(tools))
+            span.set_attribute("secpostureiq.tools_called", len(tools))
     """
     tracer = get_tracer()
     with tracer.start_as_current_span(
@@ -495,16 +495,16 @@ async def trace_agent_invocation(
             _GENAI_AGENT_DESCRIPTION: agent_description,
             _GENAI_CONVERSATION_ID: session_id,
             _GENAI_REQUEST_MODEL: model,
-            # PostureIQ-specific
-            "postureiq.session.id": session_id,
-            "postureiq.session.type": "assessment",
+            # SecPostureIQ-specific
+            "secpostureiq.session.id": session_id,
+            "secpostureiq.session.type": "assessment",
         },
     ) as span:
         start_time = time.monotonic()
         try:
             yield span
             duration_ms = (time.monotonic() - start_time) * 1000
-            span.set_attribute("postureiq.session.duration_ms", duration_ms)
+            span.set_attribute("secpostureiq.session.duration_ms", duration_ms)
             span.set_status(StatusCode.OK)
             logger.info(
                 "agent.invocation.completed",
@@ -513,7 +513,7 @@ async def trace_agent_invocation(
             )
         except Exception as e:
             duration_ms = (time.monotonic() - start_time) * 1000
-            span.set_attribute("postureiq.session.duration_ms", duration_ms)
+            span.set_attribute("secpostureiq.session.duration_ms", duration_ms)
             span.set_status(StatusCode.ERROR, str(e))
             span.record_exception(e)
             logger.error(
@@ -542,7 +542,7 @@ def trace_genai_tool_call(tool_name: str) -> Generator[Span, None, None]:
             _GENAI_OPERATION_NAME: "execute_tool",
             _GENAI_TOOL_NAME: tool_name,
             _GENAI_TOOL_CALL_ID: tool_call_id,
-            "postureiq.tool.name": tool_name,
+            "secpostureiq.tool.name": tool_name,
         },
     ) as span:
         yield span

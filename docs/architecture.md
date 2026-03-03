@@ -1,4 +1,4 @@
-# PostureIQ — Architecture
+# SecPostureIQ — Architecture
 
 ## High-Level Architecture
 
@@ -6,7 +6,7 @@
 flowchart TB
     User(["👤 User / Account Team"])
 
-    subgraph AGENT ["PostureIQ Agent"]
+    subgraph AGENT ["SecPostureIQ Agent"]
         direction TB
         API["🖥️ FastAPI — /health  /ready  /assess"]
         SDK["🤖 Copilot SDK — 8 tools · system prompt"]
@@ -61,7 +61,7 @@ graph TB
     OIDC -- "az acr login<br/>(no admin credentials)" --> ACR["Azure Container<br/>Registry (ACR)"]
 
     subgraph ACA["Azure Container Apps"]
-        subgraph Container["PostureIQ Container"]
+        subgraph Container["SecPostureIQ Container"]
             P1["Python 3.11 + FastAPI + Copilot SDK"]
             P2["GitHub CLI (agent runtime)"]
             P3["User-Assigned Managed Identity"]
@@ -83,7 +83,7 @@ graph TB
 graph LR
     subgraph UserAuth["User Authentication"]
         User --> EntraID["Entra ID<br/>(OAuth2)"]
-        EntraID --> Agent["PostureIQ Agent"]
+        EntraID --> Agent["SecPostureIQ Agent"]
     end
 
     subgraph ServiceAuth["Service Authentication"]

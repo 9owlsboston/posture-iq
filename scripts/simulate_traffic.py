@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""PostureIQ — Configurable traffic simulator for App Insights telemetry.
+"""SecPostureIQ — Configurable traffic simulator for App Insights telemetry.
 
-Sends realistic chat and probe traffic to a PostureIQ deployment over a
+Sends realistic chat and probe traffic to a SecPostureIQ deployment over a
 configurable duration, with periodic bursts at a settable interval.
 
 Usage examples:
@@ -82,7 +82,7 @@ ALL_TOOL_TAGS = sorted({tag for tag, _ in PROMPT_CATALOGUE})
 
 PROBE_PATHS = ["/health", "/ready", "/version"]
 
-DEFAULT_URL = os.environ.get("POSTUREIQ_URL", "http://localhost:8000")
+DEFAULT_URL = os.environ.get("SECPOSTUREIQ_URL", "http://localhost:8000")
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────
@@ -224,7 +224,7 @@ def print_summary(all_results: list[dict], wall_time: float, burst_count: int) -
 
     print()
     print("=" * 72)
-    print("  PostureIQ Traffic Simulation Summary")
+    print("  SecPostureIQ Traffic Simulation Summary")
     print("=" * 72)
     print(f"  Bursts completed : {burst_count}")
     print(f"  Total requests   : {len(all_results)}")
@@ -264,7 +264,7 @@ async def async_main(args: argparse.Namespace) -> None:
     interval_s = args.interval * 60
     burst_count = max(1, int(duration_s / interval_s)) if duration_s > 0 else 1
 
-    print("🚀 PostureIQ Traffic Simulator")
+    print("🚀 SecPostureIQ Traffic Simulator")
     print(f"   Target       : {url}")
     print(f"   Duration     : {args.duration} min ({burst_count} burst(s))")
     print(f"   Interval     : {args.interval} min")
@@ -310,7 +310,7 @@ async def async_main(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="PostureIQ traffic simulator — generate App Insights telemetry",
+        description="SecPostureIQ traffic simulator — generate App Insights telemetry",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -333,7 +333,7 @@ Available tool tags for --tools:
     parser.add_argument(
         "--url",
         default=DEFAULT_URL,
-        help=f"Base URL of the PostureIQ deployment (default: {DEFAULT_URL})",
+        help=f"Base URL of the SecPostureIQ deployment (default: {DEFAULT_URL})",
     )
     parser.add_argument(
         "--duration",

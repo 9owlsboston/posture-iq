@@ -2,7 +2,7 @@
 
 > **Status:** Reference — accompanies [Option A Implementation Plan](option-a-implementation-plan.md)
 > **Date:** 2026-02-26
-> **Author:** PostureIQ Engineering
+> **Author:** SecPostureIQ Engineering
 > **Related:** [Multi-Tenant Strategy](multi-tenant-strategy.md) · [Scaling Strategy](scaling-strategy.md)
 
 ---
@@ -10,14 +10,14 @@
 ## Overview
 
 This document walks through the complete user experience when **two ME5
-tenants** (Tenant X and Tenant Y) use the same PostureIQ agent instance
+tenants** (Tenant X and Tenant Y) use the same SecPostureIQ agent instance
 under Option A (multi-tenant app registration).
 
 ---
 
 ## Step 0 — One-Time Operator Setup
 
-You deploy PostureIQ once with the following configuration:
+You deploy SecPostureIQ once with the following configuration:
 
 | Setting | Value |
 |---------|-------|
@@ -37,12 +37,12 @@ Insights instance. No per-tenant infrastructure.
 Tenant X's Global Admin receives a link from you:
 
 ```
-https://postureiq.azurecontainerapps.io/admin/consent?tenant_id=tenantX-guid
+https://secpostureiq.azurecontainerapps.io/admin/consent?tenant_id=tenantX-guid
 ```
 
 They click it, get redirected to Entra ID's consent screen, and see:
 
-> **PostureIQ** is requesting permission to:
+> **SecPostureIQ** is requesting permission to:
 > - Read security events (`SecurityEvents.Read.All`)
 > - Read security actions (`SecurityActions.Read.All`)
 > - Read policies (`Policy.Read.All`)
@@ -60,7 +60,7 @@ They click it, get redirected to Entra ID's consent screen, and see:
 > missing scope will fall back to mock data at runtime.
 
 The admin clicks **Accept**. Entra ID records that Tenant X has granted
-these **delegated** permissions to PostureIQ's app registration.
+these **delegated** permissions to SecPostureIQ's app registration.
 
 ### Tenant Y
 
@@ -69,8 +69,8 @@ tenant ID. Neither admin sees or knows about the other.
 
 ### What This Means
 
-- No credentials are exchanged or stored by PostureIQ during consent.
-- Consent is recorded by Entra ID on the tenant side, not by PostureIQ.
+- No credentials are exchanged or stored by SecPostureIQ during consent.
+- Consent is recorded by Entra ID on the tenant side, not by SecPostureIQ.
 - Consent can be revoked at any time by the tenant admin from Entra ID →
   Enterprise Applications.
 
@@ -81,15 +81,15 @@ tenant ID. Neither admin sees or knows about the other.
 ### Alice (Tenant X)
 
 Alice, a security analyst in Tenant X, opens
-`https://postureiq.azurecontainerapps.io` and clicks **Sign In**.
+`https://secpostureiq.azurecontainerapps.io` and clicks **Sign In**.
 
 The app redirects her to:
 
 ```
 https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize
-  ?client_id=<PostureIQ-app-id>
+  ?client_id=<SecPostureIQ-app-id>
   &scope=SecurityEvents.Read.All Policy.Read.All ...
-  &redirect_uri=https://postureiq.azurecontainerapps.io/auth/callback
+  &redirect_uri=https://secpostureiq.azurecontainerapps.io/auth/callback
 ```
 
 Note the `/organizations/` path — this is what `auth.py` constructs when
@@ -99,7 +99,7 @@ Alice logs in with `alice@tenantX.onmicrosoft.com`. Entra ID issues a JWT:
 
 ```json
 {
-  "aud": "<PostureIQ-app-id>",
+  "aud": "<SecPostureIQ-app-id>",
   "iss": "https://login.microsoftonline.com/tenantX-guid/v2.0",
   "tid": "tenantX-guid",
   "oid": "alice-object-id",
@@ -113,7 +113,7 @@ Alice logs in with `alice@tenantX.onmicrosoft.com`. Entra ID issues a JWT:
 Bob does the same. His token has `tid: "tenantY-guid"` and
 `oid: "bob-object-id"`.
 
-Both are redirected back to the PostureIQ UI with their respective tokens
+Both are redirected back to the SecPostureIQ UI with their respective tokens
 stored in the browser session.
 
 ---
@@ -142,7 +142,7 @@ The `validate_token()` function in `auth.py` performs:
    Entra ID
 5. **Issuer check** → confirms issuer matches
    `https://login.microsoftonline.com/tenantX-guid/v2.0`
-6. **Audience check** → confirms `aud` matches PostureIQ's `client_id`
+6. **Audience check** → confirms `aud` matches SecPostureIQ's `client_id`
 
 Result: a `UserContext` object:
 
@@ -196,7 +196,7 @@ Alice's request
             user_access_token=Alice's token,
             tenant_id="tenantX-guid"
         )
-      → OBO exchange: PostureIQ exchanges Alice's token
+      → OBO exchange: SecPostureIQ exchanges Alice's token
         for a Graph-scoped token via Entra ID
       → GET https://graph.microsoft.com/v1.0/security/secureScores
         Authorization: Bearer <alice-graph-token>
@@ -221,12 +221,12 @@ Bob's request
 
 ### Why this is safe
 
-The PostureIQ agent **never decides** which tenant's data to fetch. Graph API
+The SecPostureIQ agent **never decides** which tenant's data to fetch. Graph API
 automatically returns data scoped to whichever token is presented:
 
 - Alice's token can **only** read Tenant X's data.
 - Bob's token can **only** read Tenant Y's data.
-- This is enforced by **Entra ID**, not by PostureIQ.
+- This is enforced by **Entra ID**, not by SecPostureIQ.
 
 The same pattern repeats for `assess_defender_coverage`,
 `check_purview_policies`, and `get_entra_config` — each receives the
@@ -295,10 +295,10 @@ Operators can filter audit logs by `tenant_id` to get per-tenant views.
 |----------|-----------|
 | Alice's token used to read Tenant Y's data | **Impossible.** Graph API rejects it — the token's `tid` doesn't match Tenant Y. |
 | Bob sees Alice's session history | **Prevented.** Session keys include `tenant_id:user_id:session_id`. |
-| A bug in PostureIQ swaps their tokens | **Contained per-request.** Tokens live on the request object (`UserContext`), not in shared state. Each async request handler has its own scope. |
+| A bug in SecPostureIQ swaps their tokens | **Contained per-request.** Tokens live on the request object (`UserContext`), not in shared state. Each async request handler has its own scope. |
 | Bob's heavy usage slows Alice down | **Possible today** (shared OpenAI quota). Mitigated in Phase 2 of the [scaling plan](scaling-strategy.md) with APIM per-tenant rate limiting. |
-| Tenant X revokes consent | Alice can no longer sign in. Existing tokens expire naturally (within hours). No action needed by PostureIQ. |
-| Tenant X admin grants consent but a regular user tries to sign in without the required licenses | Entra ID blocks the sign-in or Graph returns 403. PostureIQ surfaces the error to the user. |
+| Tenant X revokes consent | Alice can no longer sign in. Existing tokens expire naturally (within hours). No action needed by SecPostureIQ. |
+| Tenant X admin grants consent but a regular user tries to sign in without the required licenses | Entra ID blocks the sign-in or Graph returns 403. SecPostureIQ surfaces the error to the user. |
 
 ---
 
@@ -311,7 +311,7 @@ TENANT X (Alice)                         TENANT Y (Bob)
 ─────────────────                        ─────────────────
 Admin grants consent                     Admin grants consent
         │                                        │
-Alice opens PostureIQ                    Bob opens PostureIQ
+Alice opens SecPostureIQ                    Bob opens SecPostureIQ
 Alice signs in (Entra ID, Tenant X)      Bob signs in (Entra ID, Tenant Y)
         │                                        │
         ├── POST /chat ──────────────────────────────────────┐
@@ -319,7 +319,7 @@ Alice signs in (Entra ID, Tenant X)      Bob signs in (Entra ID, Tenant Y)
         │                                    POST /chat ─────┤
         │                                    Bearer: bob-token│
         │                                                    │
-     ┌──▼──────────── PostureIQ Agent ───────────▼──┐        │
+     ┌──▼──────────── SecPostureIQ Agent ───────────▼──┐        │
      │  validate(alice-token) → tid=X               │        │
      │  validate(bob-token)   → tid=Y               │        │
      │                                              │        │
@@ -337,7 +337,7 @@ Alice sees Tenant X report          Bob sees Tenant Y report
 
 ## Key Principle
 
-> **The user's JWT token IS the credential.** PostureIQ never selects,
+> **The user's JWT token IS the credential.** SecPostureIQ never selects,
 > stores, or manages per-tenant secrets. It passes through whatever token
 > the user brought. Graph API enforces tenant boundary. Entra ID enforces
-> identity. PostureIQ just orchestrates.
+> identity. SecPostureIQ just orchestrates.

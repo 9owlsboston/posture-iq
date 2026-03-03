@@ -1,1 +1,1 @@
-"""PostureIQ — Source root."""
+"""SecPostureIQ — Source root."""

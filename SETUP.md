@@ -1,6 +1,6 @@
-# PostureIQ — Setup Guide for Forks & Clones
+# SecPostureIQ — Setup Guide for Forks & Clones
 
-After cloning or forking PostureIQ, configure these items so that CI/CD
+After cloning or forking SecPostureIQ, configure these items so that CI/CD
 and the deployment scripts work in **your** Azure tenant.
 
 ---
@@ -11,10 +11,10 @@ Set these in **Settings → Secrets and variables → Actions → Variables**:
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `RESOURCE_GROUP` | `rg-postureiq-dev` | Azure resource group for deployments |
+| `RESOURCE_GROUP` | `rg-secpostureiq-dev` | Azure resource group for deployments |
 | `DEPLOY_ENV` | `dev` or `prod` | Selects the Bicep parameter file (`infra/parameters/<env>.bicepparam`) and the GitHub environment label |
 
-> If these variables are not set, the pipeline defaults to `rg-postureiq-dev` / `dev`.
+> If these variables are not set, the pipeline defaults to `rg-secpostureiq-dev` / `dev`.
 
 ---
 
@@ -80,7 +80,7 @@ If you want an **approval gate** before production deploys:
 
 ## 6. App Registration for Graph API
 
-PostureIQ needs delegated Microsoft Graph permissions to read security data.
+SecPostureIQ needs delegated Microsoft Graph permissions to read security data.
 Run:
 
 ```bash

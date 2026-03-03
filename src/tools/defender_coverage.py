@@ -1,4 +1,4 @@
-"""PostureIQ Tool — assess_defender_coverage
+"""SecPostureIQ Tool — assess_defender_coverage
 
 Evaluates M365 Defender deployment status across all workloads by
 analysing *SecureScoreControlProfile* records from the Graph Security API.

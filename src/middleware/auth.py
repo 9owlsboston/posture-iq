@@ -1,4 +1,4 @@
-"""PostureIQ — Authentication & Authorization middleware.
+"""SecPostureIQ — Authentication & Authorization middleware.
 
 Provides Entra ID (Azure AD) OAuth2 authentication for the FastAPI application:
   - JWT bearer-token validation against Entra ID JWKS keys

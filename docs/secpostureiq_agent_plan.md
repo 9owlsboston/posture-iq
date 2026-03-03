@@ -2,7 +2,7 @@
 
 > **Status:** Proposal — pending review
 > **Date:** 2026-02-26
-> **Author:** PostureIQ Engineering
+> **Author:** SecPostureIQ Engineering
 > **Related:** [Multi-Tenant Strategy](multi-tenant-strategy.md) · [Scaling Strategy](scaling-strategy.md)
 > **Effort estimate:** ~5 developer-days across 4 phases
 
@@ -339,7 +339,7 @@ session = _sessions.get(session_key, {"messages": []})
 ## Phase 3 — Tenant Onboarding + Admin Consent
 
 **Goal:** Provide a self-service admin consent flow so customer tenant admins
-can authorize PostureIQ with one click.
+can authorize SecPostureIQ with one click.
 
 **Effort:** ~1 day
 
@@ -365,7 +365,7 @@ can authorize PostureIQ with one click.
 |--------|-------|
 | File | `src/api/app.py` |
 | Change | Add `GET /admin/consent` that redirects to the Entra ID admin consent URL |
-| Why | Customer admins navigate here to grant PostureIQ permissions to their tenant |
+| Why | Customer admins navigate here to grant SecPostureIQ permissions to their tenant |
 
 ```python
 @app.get("/admin/consent")

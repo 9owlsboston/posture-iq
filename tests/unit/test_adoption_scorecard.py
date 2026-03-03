@@ -376,7 +376,7 @@ class TestGenerateMarkdownScorecard:
 
         workloads = {"Test Workload": {"status": "green", "coverage_pct": 80.0}}
         md = _generate_markdown_scorecard(workloads, [], 80.0, 5)
-        assert "# PostureIQ" in md
+        assert "# SecPostureIQ" in md
         assert "ME5 Adoption Scorecard" in md
 
     def test_contains_overall_pct(self):
@@ -491,7 +491,7 @@ class TestScorecardMockFallback:
         from src.tools.adoption_scorecard import create_adoption_scorecard
 
         result = await create_adoption_scorecard("")
-        assert "PostureIQ" in result["scorecard_markdown"]
+        assert "SecPostureIQ" in result["scorecard_markdown"]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -557,7 +557,7 @@ class TestScorecardLiveData:
 
         data = _make_assessment_data()
         result = await create_adoption_scorecard(json.dumps(data))
-        assert "PostureIQ" in result["scorecard_markdown"]
+        assert "SecPostureIQ" in result["scorecard_markdown"]
         assert "Workload Summary" in result["scorecard_markdown"]
 
     @pytest.mark.asyncio
@@ -666,7 +666,7 @@ class TestScorecardEdgeCases:
         from src.tools.adoption_scorecard import create_adoption_scorecard
 
         result = await create_adoption_scorecard("")
-        assert "PostureIQ" in result["disclaimer"]
+        assert "SecPostureIQ" in result["disclaimer"]
 
     @pytest.mark.asyncio
     async def test_generated_at_is_iso(self):

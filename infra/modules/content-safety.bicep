@@ -1,4 +1,4 @@
-// PostureIQ — Azure AI Content Safety module
+// SecPostureIQ — Azure AI Content Safety module
 
 @description('Content Safety resource name')
 param name string

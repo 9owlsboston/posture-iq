@@ -30,7 +30,7 @@
     },
     "projectName": {
       "type": "string",
-      "defaultValue": "postureiq",
+      "defaultValue": "secpostureiq",
       "metadata": {
         "description": "Project name prefix for resource naming"
       }
@@ -39,7 +39,7 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Container image to deploy (e.g., myacr.azurecr.io/postureiq:latest)"
+        "description": "Container image to deploy (e.g., myacr.azurecr.io/secpostureiq:latest)"
       }
     },
     "cicdPrincipalId": {
@@ -730,7 +730,7 @@
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "ACR login server (e.g., postureiqdevacrabcdef.azurecr.io)"
+                "description": "ACR login server (e.g., secpostureiqdevacrabcdef.azurecr.io)"
               }
             }
           },
@@ -768,7 +768,7 @@
                 "template": {
                   "containers": [
                     {
-                      "name": "postureiq",
+                      "name": "secpostureiq",
                       "image": "[if(not(empty(parameters('containerImage'))), parameters('containerImage'), 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest')]",
                       "resources": {
                         "cpu": "[json('0.5')]",

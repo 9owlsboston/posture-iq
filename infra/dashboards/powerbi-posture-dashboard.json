@@ -1,8 +1,8 @@
 {
   "$schema": "http://powerbi.com/product/schema#basic",
   "version": "1.0.0",
-  "name": "PostureIQ — ME5 Security Posture Dashboard",
-  "description": "Longitudinal dashboard showing ME5 security posture trends across assessed tenants. Powered by PostureIQ Fabric lakehouse telemetry.",
+  "name": "SecPostureIQ — ME5 Security Posture Dashboard",
+  "description": "Longitudinal dashboard showing ME5 security posture trends across assessed tenants. Powered by SecPostureIQ Fabric lakehouse telemetry.",
   "dataSource": {
     "type": "fabric_lakehouse",
     "table": "posture_snapshots",

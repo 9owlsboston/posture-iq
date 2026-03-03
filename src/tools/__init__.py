@@ -1,1 +1,1 @@
-"""PostureIQ — Tools package."""
+"""SecPostureIQ — Tools package."""
