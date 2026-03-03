@@ -8,12 +8,13 @@ realistic multi-user traffic.  Prints a summary table at the end.
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 import time
 
 import httpx
 
-BASE_URL = "https://postureiq-dev-app.redrock-8f5cd3d2.centralus.azurecontainerapps.io"
+BASE_URL = os.environ.get("POSTUREIQ_URL", "http://localhost:8000")
 
 # Messages designed to trigger each tool via the keyword-based intent classifier
 PROMPTS: list[dict[str, str]] = [

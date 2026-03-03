@@ -406,7 +406,7 @@ You can query App Insights without opening the Portal:
 
 ```bash
 # Set your App ID (from the connection string's ApplicationId)
-APP_ID="7787d1cc-8e48-4f14-a39a-99530d8f7354"
+APP_ID="<your-app-insights-application-id>"
 
 # Tool span summary
 az monitor app-insights query \
@@ -623,7 +623,7 @@ If `git push` fails with 403, switch to the correct GitHub account:
 
 ```bash
 gh auth status                          # see which account is active
-gh auth switch --user 9owlsboston       # switch to repo owner
+gh auth switch --user <your-github-username>   # switch to repo owner
 gh auth setup-git                       # configure git credential helper
 git push origin main
 ```

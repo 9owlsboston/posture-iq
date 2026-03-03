@@ -29,7 +29,11 @@ set -euo pipefail
 
 RESOURCE_GROUP="rg-postureiq-dev"
 APP_NAME="PostureIQ - ME5 Security Assessment"
-GITHUB_REPO="9owlsboston/posture-iq"
+GITHUB_REPO="${1:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo '')}"
+if [[ -z "$GITHUB_REPO" ]]; then
+  echo "❌ Could not detect GitHub repo. Pass it as first argument: $0 <org/repo>"
+  exit 1
+fi
 SKIP_GITHUB=false
 
 for arg in "$@"; do

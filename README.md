@@ -36,11 +36,23 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture diagr
 - Azure subscription with OpenAI, Content Safety, App Insights
 - Microsoft 365 E5 tenant (or CDX demo tenant)
 
-### Setup
+### Deploy to a Customer's Azure Tenant
+
+Three options from simplest to most sophisticated:
+
+| Option | Command | Best For |
+|--------|---------|----------|
+| **Clone & Deploy** | `git clone ... && ./scripts/deploy-customer.sh` | CSA-led deployments, most customers |
+| **Azure Developer CLI** | `git clone ... && azd up` | Azure-savvy developers |
+| **One-Click Portal** | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2F<your-org>%2Fposture-iq%2Fmain%2Finfra%2Fazuredeploy.json) | Non-technical stakeholders |
+
+See [Customer Deployment Guide](docs/ghcp_challenge_submission/postureiq-customer-deployment-guide.md) for full details.
+
+### Setup (Local Development)
 
 ```bash
 # Clone and install
-git clone https://github.com/9owlsboston/posture-iq.git
+git clone https://github.com/<your-org>/posture-iq.git
 cd posture-iq
 python3.11 -m venv .venv
 source .venv/bin/activate

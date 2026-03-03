@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import random
 import sys
 import time
@@ -81,7 +82,7 @@ ALL_TOOL_TAGS = sorted({tag for tag, _ in PROMPT_CATALOGUE})
 
 PROBE_PATHS = ["/health", "/ready", "/version"]
 
-DEFAULT_URL = "https://postureiq-dev-app.redrock-8f5cd3d2.centralus.azurecontainerapps.io"
+DEFAULT_URL = os.environ.get("POSTUREIQ_URL", "http://localhost:8000")
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────

@@ -95,9 +95,9 @@ This creates 3 federated credentials on the App Registration:
 
 | Subject | Purpose |
 |---------|---------|
-| `repo:9owlsboston/posture-iq:ref:refs/heads/main` | Push to main → build & deploy |
-| `repo:9owlsboston/posture-iq:pull_request` | PR preview environments |
-| `repo:9owlsboston/posture-iq:environment:production` | Production deploy stage |
+| `repo:<your-org>/posture-iq:ref:refs/heads/main` | Push to main → build & deploy |
+| `repo:<your-org>/posture-iq:pull_request` | PR preview environments |
+| `repo:<your-org>/posture-iq:environment:production` | Production deploy stage |
 
 ### GitHub Secrets Required
 

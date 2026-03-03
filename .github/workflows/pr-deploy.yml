@@ -79,7 +79,7 @@ jobs:
       - name: Get ACR login server
         id: acr
         run: |
-          LOGIN_SERVER=$(az acr list --resource-group rg-postureiq-dev \
+          LOGIN_SERVER=$(az acr list --resource-group ${{ vars.RESOURCE_GROUP || 'rg-postureiq-dev' }} \
             --query "[0].loginServer" -o tsv)
           echo "LOGIN_SERVER=$LOGIN_SERVER" >> $GITHUB_OUTPUT
 
