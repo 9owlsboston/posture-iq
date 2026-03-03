@@ -200,6 +200,10 @@ AZURE_CLIENT_SECRET=<secret-from-step-4>
 
 ## Using CDX Demo Tenants
 
+> **Note:** CDX is available to **Microsoft employees and partners only**. External
+> customers should use their own M365 E5 tenant or a
+> [free M365 E5 developer trial](https://developer.microsoft.com/en-us/microsoft-365/dev-program).
+
 For development, you can use a **Microsoft CDX demo tenant** which comes pre-populated
 with M365 E5 licenses and sample data:
 

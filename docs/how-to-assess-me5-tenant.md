@@ -372,7 +372,11 @@ To assess external customer tenants, the app would need to become **multi-tenant
 
 ## Quick Testing with a CDX Demo Tenant
 
-If you don't want to use a production tenant, use a **CDX demo tenant**
+> **Note:** CDX ([cdx.transform.microsoft.com](https://cdx.transform.microsoft.com)) is
+> available to **Microsoft employees and partners only**. External customers should
+> use their own M365 E5 tenant or a [free M365 E5 developer trial](https://developer.microsoft.com/en-us/microsoft-365/dev-program).
+
+If you have CDX access, use a **CDX demo tenant**
 (pre-populated with M365 E5 licenses and sample security data):
 
 1. Go to [cdx.transform.microsoft.com](https://cdx.transform.microsoft.com)

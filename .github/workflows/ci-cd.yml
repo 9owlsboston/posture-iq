@@ -19,6 +19,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write
@@ -54,7 +58,6 @@ jobs:
 
       - name: MyPy type check
         run: mypy src/
-        continue-on-error: true  # Don't block on type errors during early dev
 
   # ── Test ───────────────────────────────────────────────
   test:
@@ -163,13 +166,19 @@ jobs:
             --build-arg GIT_SHA=${{ steps.meta.outputs.GIT_SHA }} \
             --build-arg BUILD_TIME=${{ steps.meta.outputs.BUILD_TIME }} \
             -t ${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ steps.meta.outputs.GIT_SHA }} \
-            -t ${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:latest \
             .
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ steps.meta.outputs.GIT_SHA }}
+          severity: CRITICAL,HIGH
+          exit-code: 1
+          format: table
 
       - name: Push to ACR
         run: |
           docker push ${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ steps.meta.outputs.GIT_SHA }}
-          docker push ${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:latest
 
   # ── Deploy to Azure Container Apps ─────────────────────
   deploy:
@@ -229,3 +238,23 @@ jobs:
 
           echo "::error::Health check failed after $MAX_RETRIES attempts"
           exit 1
+
+      - name: Notify deploy result
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}' === 'success' ? '✅' : '❌';
+            const sha = '${{ needs.build.outputs.image_tag }}';
+            const env = '${{ env.DEPLOY_ENV }}';
+            const rg = '${{ env.RESOURCE_GROUP }}';
+            const summary = [
+              `## ${status} Deploy to **${env}**`,
+              '',
+              `| Detail | Value |`,
+              `|--------|-------|`,
+              `| **Image** | \`${sha}\` |`,
+              `| **Resource Group** | \`${rg}\` |`,
+              `| **Status** | ${'${{ job.status }}'} |`,
+            ].join('\n');
+            await core.summary.addRaw(summary).write();

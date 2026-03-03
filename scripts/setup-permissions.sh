@@ -163,11 +163,21 @@ else
 fi
 echo "================================================"
 echo ""
-echo "Add these to your .env file:"
-echo ""
-echo "AZURE_TENANT_ID=$(echo "$SECRET_OUTPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin)["tenantId"])')"
-echo "AZURE_CLIENT_ID=$(echo "$SECRET_OUTPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin)["clientId"])')"
-echo "AZURE_CLIENT_SECRET=$(echo "$SECRET_OUTPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin)["clientSecret"])')"
+# Write credentials to .env without echoing the secret to the terminal
+TENANT_ID=$(echo "$SECRET_OUTPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin)["tenantId"])')
+CLIENT_ID=$(echo "$SECRET_OUTPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin)["clientId"])')
+CLIENT_SECRET=$(echo "$SECRET_OUTPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin)["clientSecret"])')
+
+cat >> .env <<EOF
+AZURE_TENANT_ID=$TENANT_ID
+AZURE_CLIENT_ID=$CLIENT_ID
+AZURE_CLIENT_SECRET=$CLIENT_SECRET
+EOF
+
+echo "   ✅ Credentials written to .env (secret NOT displayed for security)"
+echo "   AZURE_TENANT_ID=$TENANT_ID"
+echo "   AZURE_CLIENT_ID=$CLIENT_ID"
+echo "   AZURE_CLIENT_SECRET=********"
 echo ""
 echo "⚠️  Store the client secret securely — it won't be shown again."
 echo "   In production, use Azure Key Vault instead of .env files."

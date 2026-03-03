@@ -34,7 +34,7 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture diagr
 
 - Python 3.11+
 - Azure subscription with OpenAI, Content Safety, App Insights
-- Microsoft 365 E5 tenant (or CDX demo tenant)
+- Microsoft 365 E5 tenant (or [M365 E5 developer trial](https://developer.microsoft.com/en-us/microsoft-365/dev-program); CDX demo tenants are available to Microsoft employees/partners only)
 
 ### Deploy to a Customer's Azure Tenant
 

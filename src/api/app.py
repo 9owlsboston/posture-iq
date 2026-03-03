@@ -374,10 +374,13 @@ async def trigger_assessment(
         email=user.email,
         scopes=user.scopes,
     )
-    # TODO: Wire up to the agent session
+    # The /assess endpoint is intentionally a stub. Full assessments are driven
+    # through the conversational /chat endpoint, which streams results via the
+    # Copilot SDK agent session. This endpoint is retained for future use as a
+    # headless / API-only trigger (e.g., scheduled assessments, webhooks).
     return {
         "status": "not_implemented",
-        "message": "Assessment endpoint will be wired to the Copilot SDK agent session in Phase 1",
+        "message": "Use the /chat endpoint to run an interactive assessment via the Copilot SDK agent session",
         "user": user.email,
     }
 
