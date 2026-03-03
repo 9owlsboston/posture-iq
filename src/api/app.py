@@ -308,15 +308,25 @@ class AuthMeResponse(BaseModel):
 
 
 @app.get("/auth/login")
-async def auth_login(request: Request) -> RedirectResponse:
+async def auth_login(
+    request: Request,
+    login_hint: str = "",
+) -> RedirectResponse:
     """Initiate OAuth2 authorization code flow.
 
     Redirects the user to Entra ID for login. After authentication,
     Entra ID redirects back to ``/auth/callback`` with an authorization code.
+
+    Query params:
+        login_hint: Optional email to pre-select in the Entra ID account picker.
     """
     redirect_uri = str(request.url_for("auth_callback"))
     state = secrets.token_urlsafe(32)
-    auth_url = build_auth_url(redirect_uri=redirect_uri, state=state)
+    auth_url = build_auth_url(
+        redirect_uri=redirect_uri,
+        state=state,
+        login_hint=login_hint,
+    )
     return RedirectResponse(url=auth_url)
 
 
