@@ -162,6 +162,8 @@ def _mock_settings():
         mock.azure_tenant_id = TENANT_ID
         mock.azure_client_id = CLIENT_ID
         mock.azure_client_secret = CLIENT_SECRET
+        mock.multi_tenant_enabled = False
+        mock.allowed_tenants_list = []
         mock.graph_scope_list = [
             "SecurityEvents.Read.All",
             "SecurityActions.Read.All",
@@ -362,6 +364,71 @@ class TestValidateToken:
             await validate_token(expired_token)
         assert exc_info.value.status_code == 401
         assert "expired" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_multi_tenant_allows_token_from_allowed_tenant(self, rsa_keys):
+        private_key, public_key = rsa_keys
+        claims = _standard_claims(
+            {
+                "tid": "allowed-tenant-123",
+                "iss": "https://login.microsoftonline.com/allowed-tenant-123/v2.0",
+            }
+        )
+        token = _make_token(claims, private_key)
+
+        mock_jwk = MagicMock()
+        mock_jwk.key = public_key
+        cache = get_jwks_cache()
+        original_keys = cache._keys
+        original_fetched = cache._fetched_at
+        cache._keys = {"test-kid-1": mock_jwk}
+        cache._fetched_at = time.time()
+
+        try:
+            with patch("src.middleware.auth.settings") as mock_settings:
+                mock_settings.azure_client_id = CLIENT_ID
+                mock_settings.azure_tenant_id = TENANT_ID
+                mock_settings.multi_tenant_enabled = True
+                mock_settings.allowed_tenants_list = ["allowed-tenant-123"]
+                user = await validate_token(token)
+                assert user.tenant_id == "allowed-tenant-123"
+        finally:
+            cache._keys = original_keys
+            cache._fetched_at = original_fetched
+
+    @pytest.mark.asyncio
+    async def test_multi_tenant_rejects_disallowed_tenant(self, rsa_keys):
+        from fastapi import HTTPException
+
+        private_key, public_key = rsa_keys
+        claims = _standard_claims(
+            {
+                "tid": "blocked-tenant-123",
+                "iss": "https://login.microsoftonline.com/blocked-tenant-123/v2.0",
+            }
+        )
+        token = _make_token(claims, private_key)
+
+        mock_jwk = MagicMock()
+        mock_jwk.key = public_key
+        cache = get_jwks_cache()
+        original_keys = cache._keys
+        original_fetched = cache._fetched_at
+        cache._keys = {"test-kid-1": mock_jwk}
+        cache._fetched_at = time.time()
+
+        try:
+            with patch("src.middleware.auth.settings") as mock_settings:
+                mock_settings.azure_client_id = CLIENT_ID
+                mock_settings.azure_tenant_id = TENANT_ID
+                mock_settings.multi_tenant_enabled = True
+                mock_settings.allowed_tenants_list = ["allowed-tenant-123"]
+                with pytest.raises(HTTPException) as exc_info:
+                    await validate_token(token)
+                assert exc_info.value.status_code == 403
+        finally:
+            cache._keys = original_keys
+            cache._fetched_at = original_fetched
 
     @pytest.mark.asyncio
     async def test_wrong_audience_raises_401(self, wrong_audience_token, _mock_jwks):

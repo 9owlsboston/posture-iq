@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.api.chat import ChatRequest, ChatResponse, _classify_intent, handle_chat
+from src.api.chat import ChatRequest, ChatResponse, _classify_intent, _sessions, handle_chat, handle_chat_for_user
+from src.middleware.auth import UserContext
 
 # ── Intent Classification ─────────────────────────────────────────────────
 
@@ -160,6 +161,21 @@ class TestHandleChat:
         assert hasattr(resp, "session_id")
         assert hasattr(resp, "tools_called")
         assert isinstance(resp.tools_called, list)
+
+    @pytest.mark.asyncio
+    async def test_sessions_are_isolated_by_tenant_and_user(self):
+        _sessions.clear()
+        sid = "shared-session-id"
+        req = ChatRequest(message="Hello", session_id=sid)
+        user_a = UserContext(user_id="user-a", tenant_id="tenant-a")
+        user_b = UserContext(user_id="user-b", tenant_id="tenant-b")
+
+        await handle_chat_for_user(req, user_a)
+        await handle_chat_for_user(req, user_b)
+
+        assert f"tenant-a:user-a:{sid}" in _sessions
+        assert f"tenant-b:user-b:{sid}" in _sessions
+        assert len(_sessions) == 2
 
 
 # ── ChatRequest Model ────────────────────────────────────────────────────

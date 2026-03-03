@@ -79,9 +79,13 @@ class _SecureScoreControlProfilesQueryParameters:
 # ── Graph client factory ───────────────────────────────────────────────
 
 
-def _create_graph_client() -> Any:
+def _create_graph_client(*, tenant_id: str = "", user_access_token: str = "") -> Any:
     """Delegate to the shared Graph client factory."""
-    return create_graph_client("purview_policies")
+    return create_graph_client(
+        "purview_policies",
+        tenant_id=tenant_id,
+        user_access_token=user_access_token,
+    )
 
 
 # ── Classification helpers ─────────────────────────────────────────────
@@ -291,7 +295,10 @@ def _generate_mock_response() -> dict[str, Any]:
 
 
 @trace_tool_call("check_purview_policies")
-async def check_purview_policies() -> dict[str, Any]:
+async def check_purview_policies(
+    tenant_id: str = "",
+    user_access_token: str = "",
+) -> dict[str, Any]:
     """Assess Purview Information Protection & Compliance policy coverage.
 
     Uses ``GET /security/secureScoreControlProfiles`` and filters for
@@ -308,9 +315,12 @@ async def check_purview_policies() -> dict[str, Any]:
           - assessed_at: ISO timestamp
           - data_source: "graph_api" | "mock" | "graph_api_empty"
     """
-    logger.info("tool.purview_policies.start")
+    logger.info("tool.purview_policies.start", tenant_id=tenant_id)
 
-    client = _create_graph_client()
+    client = _create_graph_client(
+        tenant_id=tenant_id,
+        user_access_token=user_access_token,
+    )
     if client is None:
         logger.info("tool.purview_policies.mock_fallback")
         return _generate_mock_response()

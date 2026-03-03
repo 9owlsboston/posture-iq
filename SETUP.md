@@ -93,6 +93,50 @@ for the full permission list.
 
 ---
 
+## 7. Multi-Tenant Runtime Mode
+
+Set runtime config in `.env`:
+
+```env
+MULTI_TENANT_ENABLED=true
+# Optional allowlist of tenant IDs (comma-separated)
+ALLOWED_TENANTS=
+```
+
+Behavior:
+- `MULTI_TENANT_ENABLED=false`: only `AZURE_TENANT_ID` is accepted.
+- `MULTI_TENANT_ENABLED=true`: any tenant is accepted unless `ALLOWED_TENANTS` is set.
+- `ALLOWED_TENANTS` set: only listed tenants are accepted.
+
+---
+
+## 8. Migration Checklist (Single-Tenant → Multi-Tenant)
+
+1. Update the app registration audience:
+```bash
+az ad app update --id <AZURE_CLIENT_ID> --sign-in-audience AzureADMultipleOrgs
+```
+2. Ensure your redirect URI includes your callback endpoint (`/auth/callback`).
+3. Update runtime config in `.env`:
+```env
+MULTI_TENANT_ENABLED=true
+ALLOWED_TENANTS=<tenant-guid-1>,<tenant-guid-2>
+```
+4. Restart/redeploy the app so env changes are applied.
+5. Validate auth for two tenants:
+- Sign in with home tenant user, call `GET /auth/me`, confirm `tenant_id`.
+- Sign in with external consented tenant user, call `GET /auth/me`, confirm different `tenant_id`.
+6. Validate tenant isolation:
+- Run `POST /chat` as each user and verify each sees their own tenant data.
+- Query `GET /audit/logs` and confirm each user only sees their tenant-scoped entries.
+7. Rollback plan:
+- Set `MULTI_TENANT_ENABLED=false` and redeploy to return to single-tenant admission.
+
+For production change windows, follow:
+- [docs/multi-tenant-cutover-runbook.md](docs/multi-tenant-cutover-runbook.md)
+
+---
+
 ## Quick Checklist
 
 ```
@@ -104,5 +148,6 @@ for the full permission list.
 [ ] Run ./scripts/setup-oidc.sh
 [ ] Review infra/parameters/dev.bicepparam
 [ ] Run ./scripts/setup-permissions.sh
+[ ] Set MULTI_TENANT_ENABLED / ALLOWED_TENANTS in .env (if using shared multi-tenant runtime)
 [ ] Push to main — CI/CD should build, scan, deploy, and health-check
 ```

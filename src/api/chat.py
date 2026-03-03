@@ -19,6 +19,7 @@ import structlog
 from pydantic import BaseModel
 
 from src.middleware.audit_logger import AuditLogger
+from src.middleware.auth import UserContext
 from src.middleware.tracing import trace_agent_invocation
 
 logger = structlog.get_logger(__name__)
@@ -46,29 +47,46 @@ _sessions: dict[str, dict[str, Any]] = {}
 # ── Tool dispatcher for direct mode ──────────────────────────────────────
 
 
-async def _run_tool(name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _run_tool(
+    name: str,
+    args: dict[str, Any] | None = None,
+    *,
+    user: UserContext,
+) -> dict[str, Any]:
     """Run a tool directly (bypass Copilot SDK) for demo / testing mode."""
     args = args or {}
 
     if name == "query_secure_score":
         from src.tools.secure_score import query_secure_score
 
-        return await query_secure_score(tenant_id=args.get("tenant_id", ""))
+        return await query_secure_score(
+            tenant_id=user.tenant_id,
+            user_access_token=user.access_token,
+        )
 
     if name == "assess_defender_coverage":
         from src.tools.defender_coverage import assess_defender_coverage
 
-        return await assess_defender_coverage()
+        return await assess_defender_coverage(
+            tenant_id=user.tenant_id,
+            user_access_token=user.access_token,
+        )
 
     if name == "check_purview_policies":
         from src.tools.purview_policies import check_purview_policies
 
-        return await check_purview_policies()
+        return await check_purview_policies(
+            tenant_id=user.tenant_id,
+            user_access_token=user.access_token,
+        )
 
     if name == "get_entra_config":
         from src.tools.entra_config import get_entra_config
 
-        return await get_entra_config()
+        return await get_entra_config(
+            tenant_id=user.tenant_id,
+            user_access_token=user.access_token,
+        )
 
     if name == "generate_remediation_plan":
         from src.tools.remediation_plan import generate_remediation_plan
@@ -96,7 +114,7 @@ async def _run_tool(name: str, args: dict[str, Any] | None = None) -> dict[str, 
         from src.tools.fabric_telemetry import push_posture_snapshot
 
         return await push_posture_snapshot(
-            tenant_id=args.get("tenant_id", ""),
+            tenant_id=user.tenant_id,
             secure_score_current=float(args.get("secure_score_current", 0)),
             secure_score_max=float(args.get("secure_score_max", 100)),
             workload_scores=args.get("workload_scores"),
@@ -393,13 +411,23 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
     functions carry ``@trace_tool_call`` decorators that emit ``execute_tool``
     spans for the Tool Calls panel.
     """
+    synthetic_user = UserContext(
+        user_id="anonymous-user",
+        tenant_id="anonymous-tenant",
+    )
+    return await handle_chat_for_user(request, synthetic_user)
+
+
+async def handle_chat_for_user(request: ChatRequest, user: UserContext) -> ChatResponse:
+    """Process a chat message scoped to a specific authenticated user."""
     sid = request.session_id or str(uuid.uuid4())
+    session_key = f"{user.tenant_id}:{user.user_id}:{sid}"
 
-    # Store session history
-    if sid not in _sessions:
-        _sessions[sid] = {"history": [], "results": {}}
+    # Store session history with tenant/user isolation
+    if session_key not in _sessions:
+        _sessions[session_key] = {"history": [], "results": {}}
 
-    session = _sessions[sid]
+    session = _sessions[session_key]
     session["history"].append({"role": "user", "content": request.message})
 
     audit = AuditLogger(session_id=sid)
@@ -435,7 +463,7 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
                     if tool_name in ("generate_remediation_plan", "create_adoption_scorecard"):
                         args["assessment_context"] = json.dumps(session["results"])
 
-                    result = await _run_tool(tool_name, args)
+                    result = await _run_tool(tool_name, args, user=user)
 
                     session["results"][tool_name] = result
                     tools_called.append(tool_name)
@@ -451,6 +479,8 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
                         tool_name=tool_name,
                         input_params=args,
                         output_summary=f"{len(json.dumps(result))} bytes",
+                        user_identity=user.email or user.user_id,
+                        tenant_id=user.tenant_id,
                     )
 
                 except Exception as e:
@@ -470,6 +500,13 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
         agent_span.set_attribute("postureiq.tools_called", len(tools_called))
 
     session["history"].append({"role": "assistant", "content": response_text})
+    audit.log_interaction(
+        user_input=request.message,
+        agent_response=response_text,
+        user_identity=user.email or user.user_id,
+        tools_called=tools_called,
+        tenant_id=user.tenant_id,
+    )
 
     return ChatResponse(
         response=response_text,

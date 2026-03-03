@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     azure_tenant_id: str = ""
     azure_client_id: str = ""
     azure_client_secret: str = ""
+    multi_tenant_enabled: bool = False
+    allowed_tenants: str = ""
     graph_scopes: str = (
         "SecurityEvents.Read.All,"
         "SecurityActions.Read.All,"
@@ -62,6 +64,11 @@ class Settings(BaseSettings):
     def graph_scope_list(self) -> list[str]:
         """Parse comma-separated Graph scopes into a list."""
         return [s.strip() for s in self.graph_scopes.split(",") if s.strip()]
+
+    @property
+    def allowed_tenants_list(self) -> list[str]:
+        """Parse comma-separated allowed tenant IDs into a list."""
+        return [s.strip() for s in self.allowed_tenants.split(",") if s.strip()]
 
     @property
     def is_production(self) -> bool:

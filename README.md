@@ -86,6 +86,25 @@ python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000
 | **Content Safety** | Local heuristic filtering | Azure AI Content Safety service |
 | **App Insights** | Logs to stdout via structlog | Full observability in Azure portal |
 
+### Enable Multi-Tenant Mode
+
+PostureIQ can run as a single shared instance for multiple customer tenants.
+
+1. Set these environment variables in `.env`:
+
+```env
+MULTI_TENANT_ENABLED=true
+# Optional tenant allowlist (comma-separated tenant IDs)
+ALLOWED_TENANTS=
+```
+
+2. Keep `AZURE_CLIENT_ID` set to your app registration.
+3. In multi-tenant mode, users sign in through `organizations`, and token validation is done against each token's own `tid`.
+4. If `ALLOWED_TENANTS` is non-empty, only those tenant IDs are accepted.
+
+See [SETUP.md](SETUP.md) for the migration checklist from an existing single-tenant deployment.
+For production change windows, use [docs/multi-tenant-cutover-runbook.md](docs/multi-tenant-cutover-runbook.md).
+
 #### Copilot SDK Agent Session (Alternative)
 
 For the LLM-powered CLI experience with the Copilot Runtime:

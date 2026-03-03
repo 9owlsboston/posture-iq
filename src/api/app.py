@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import secrets
+from hashlib import sha256
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src.agent.config import settings
-from src.api.chat import ChatRequest, ChatResponse, handle_chat
+from src.api.chat import ChatRequest, ChatResponse, handle_chat_for_user
 from src.middleware.audit_logger import (
     AUDIT_READER_ROLES,
     AuditLogger,
@@ -105,13 +106,16 @@ async def chat_ui() -> FileResponse:
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest) -> ChatResponse:
+async def chat_endpoint(
+    request: ChatRequest,
+    user: UserContext = Depends(get_current_user),
+) -> ChatResponse:
     """Chat with the PostureIQ agent.
 
     Sends a user message, invokes the appropriate assessment tools,
     and returns a formatted response with tool-call metadata.
     """
-    return await handle_chat(request)
+    return await handle_chat_for_user(request, user)
 
 
 # ── Health Probes ──────────────────────────────────────────────────────────
@@ -415,6 +419,7 @@ async def query_audit_logs(
     entries = audit.query_entries(
         event_type=event_type,
         tool_name=tool_name,
+        tenant_id_hash=sha256(user.tenant_id.encode("utf-8")).hexdigest(),
         limit=limit,
     )
 

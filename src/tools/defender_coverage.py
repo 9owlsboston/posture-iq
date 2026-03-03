@@ -71,9 +71,13 @@ class _SecureScoreControlProfilesQueryParameters:
 # ── Graph client factory ───────────────────────────────────────────────
 
 
-def _create_graph_client() -> Any:
+def _create_graph_client(*, tenant_id: str = "", user_access_token: str = "") -> Any:
     """Delegate to the shared Graph client factory."""
-    return create_graph_client("defender_coverage")
+    return create_graph_client(
+        "defender_coverage",
+        tenant_id=tenant_id,
+        user_access_token=user_access_token,
+    )
 
 
 # ── Parsing / classification helpers ───────────────────────────────────
@@ -312,7 +316,10 @@ def _generate_mock_response() -> dict[str, Any]:
 
 
 @trace_tool_call("assess_defender_coverage")
-async def assess_defender_coverage() -> dict[str, Any]:
+async def assess_defender_coverage(
+    tenant_id: str = "",
+    user_access_token: str = "",
+) -> dict[str, Any]:
     """Assess M365 Defender deployment coverage across all workloads.
 
     Uses ``GET /security/secureScoreControlProfiles`` from the Graph
@@ -332,9 +339,12 @@ async def assess_defender_coverage() -> dict[str, Any]:
           - assessed_at: ISO timestamp
           - data_source: "graph_api" | "mock" | "graph_api_empty"
     """
-    logger.info("tool.defender_coverage.start")
+    logger.info("tool.defender_coverage.start", tenant_id=tenant_id)
 
-    client = _create_graph_client()
+    client = _create_graph_client(
+        tenant_id=tenant_id,
+        user_access_token=user_access_token,
+    )
 
     if client is None:
         logger.info("tool.defender_coverage.mock_fallback")

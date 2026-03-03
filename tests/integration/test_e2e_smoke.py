@@ -110,6 +110,10 @@ class TestAuthEnforcementE2E:
         resp = await client.get("/audit/logs")
         assert resp.status_code == 401
 
+    async def test_chat_requires_auth(self, client: AsyncClient):
+        resp = await client.post("/chat", json={"message": "hello"})
+        assert resp.status_code == 401
+
     async def test_auth_login_redirects(self, client: AsyncClient):
         resp = await client.get("/auth/login", follow_redirects=False)
         assert resp.status_code == 307

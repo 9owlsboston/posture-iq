@@ -136,9 +136,11 @@ and only accesses data the user is authorized to see.
 # Using Azure CLI
 az ad app create \
   --display-name "PostureIQ - ME5 Security Assessment" \
-  --sign-in-audience "AzureADMyOrg" \
+  --sign-in-audience "AzureADMultipleOrgs" \
   --web-redirect-uris "http://localhost:8000/auth/callback"
 ```
+
+> For strict single-tenant deployments, use `AzureADMyOrg`.
 
 ### 2. Add API Permissions
 
@@ -191,10 +193,35 @@ Add the following to your `.env` file:
 AZURE_TENANT_ID=<your-tenant-id>
 AZURE_CLIENT_ID=<app-client-id-from-step-1>
 AZURE_CLIENT_SECRET=<secret-from-step-4>
+MULTI_TENANT_ENABLED=true
+ALLOWED_TENANTS=
 ```
 
 > **Production:** The Container App uses Managed Identity — no client secret
 > in environment variables. The secret is retrieved from Key Vault at runtime.
+
+### 6. Migration Checklist (Existing Single-Tenant Deployment)
+
+1. Convert app registration audience to multi-tenant:
+```bash
+az ad app update --id <AZURE_CLIENT_ID> --sign-in-audience AzureADMultipleOrgs
+```
+2. Set runtime multi-tenant flags:
+```env
+MULTI_TENANT_ENABLED=true
+ALLOWED_TENANTS=<tenant-guid-1>,<tenant-guid-2>
+```
+3. Redeploy the container app.
+4. Validate two different tenant users can sign in and get expected `tenant_id` from `GET /auth/me`.
+5. Validate `POST /chat` is authenticated and tenant-scoped.
+6. Validate `/audit/logs` returns caller-tenant-only records.
+7. Rollback if needed:
+```env
+MULTI_TENANT_ENABLED=false
+```
+
+For production cutovers, use:
+- [docs/multi-tenant-cutover-runbook.md](multi-tenant-cutover-runbook.md)
 
 ---
 

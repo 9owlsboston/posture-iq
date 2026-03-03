@@ -123,6 +123,12 @@ def _compute_integrity_hash(entry: AuditEntry) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _hash_tenant_id(tenant_id: str) -> str:
+    """Hash tenant IDs before persisting to shared telemetry."""
+    value = (tenant_id or "unknown-tenant").strip()
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def _build_entry(
     *,
     session_id: str,
@@ -134,6 +140,7 @@ def _build_entry(
     reasoning: str = "",
     duration_ms: float = 0.0,
     metadata: dict[str, Any] | None = None,
+    tenant_id: str = "",
 ) -> AuditEntry:
     """Construct a new immutable AuditEntry with PII redaction and integrity hash."""
     # Redact and truncate
@@ -152,7 +159,10 @@ def _build_entry(
         output_summary=redacted_output,
         reasoning=safe_reasoning,
         duration_ms=round(duration_ms, 2),
-        metadata=metadata or {},
+        metadata={
+            **(metadata or {}),
+            "tenant_id_hash": _hash_tenant_id(tenant_id),
+        },
     )
 
     # Compute integrity hash and create final entry
@@ -282,6 +292,7 @@ class AuditLogger:
         user_identity: str = "dev-user",
         reasoning: str = "",
         duration_ms: float = 0.0,
+        tenant_id: str = "",
     ) -> AuditEntry:
         """Log a tool invocation to the audit trail.
 
@@ -297,6 +308,7 @@ class AuditLogger:
             output_summary=output_summary[:MAX_OUTPUT_SUMMARY_LENGTH],
             reasoning=reasoning,
             duration_ms=duration_ms,
+            tenant_id=tenant_id,
         )
         return self._record(entry)
 
@@ -306,6 +318,7 @@ class AuditLogger:
         agent_response: str,
         user_identity: str = "dev-user",
         tools_called: list[str] | None = None,
+        tenant_id: str = "",
     ) -> AuditEntry:
         """Log a user↔agent interaction to the audit trail.
 
@@ -319,6 +332,7 @@ class AuditLogger:
             input_summary=user_input[:MAX_INPUT_SUMMARY_LENGTH],
             output_summary=agent_response[:MAX_OUTPUT_SUMMARY_LENGTH],
             metadata={"tools_called": tools_called or []},
+            tenant_id=tenant_id,
         )
         return self._record(entry)
 
@@ -327,6 +341,7 @@ class AuditLogger:
         event_type: str,
         details: str,
         user_identity: str = "dev-user",
+        tenant_id: str = "",
     ) -> AuditEntry:
         """Log a safety/RAI event (content blocked, injection detected, etc.).
 
@@ -339,10 +354,11 @@ class AuditLogger:
             user_identity=user_identity,
             input_summary=details[:MAX_INPUT_SUMMARY_LENGTH],
             metadata={"safety_event_type": event_type},
+            tenant_id=tenant_id,
         )
         return self._record(entry)
 
-    def log_session_start(self, user_identity: str = "dev-user") -> AuditEntry:
+    def log_session_start(self, user_identity: str = "dev-user", tenant_id: str = "") -> AuditEntry:
         """Log session creation.
 
         Returns:
@@ -352,10 +368,11 @@ class AuditLogger:
             session_id=self._session_id,
             event_type="session_start",
             user_identity=user_identity,
+            tenant_id=tenant_id,
         )
         return self._record(entry)
 
-    def log_session_end(self, user_identity: str = "dev-user") -> AuditEntry:
+    def log_session_end(self, user_identity: str = "dev-user", tenant_id: str = "") -> AuditEntry:
         """Log session termination.
 
         Returns:
@@ -365,6 +382,7 @@ class AuditLogger:
             session_id=self._session_id,
             event_type="session_end",
             user_identity=user_identity,
+            tenant_id=tenant_id,
         )
         return self._record(entry)
 
@@ -376,6 +394,7 @@ class AuditLogger:
         event_type: str | None = None,
         tool_name: str | None = None,
         user_identity: str | None = None,
+        tenant_id_hash: str | None = None,
         limit: int = 100,
     ) -> list[AuditEntry]:
         """Query audit entries with optional filters.
@@ -399,6 +418,9 @@ class AuditLogger:
 
         if user_identity:
             results = [e for e in results if user_identity.lower() in e.user_identity.lower()]
+
+        if tenant_id_hash:
+            results = [e for e in results if e.metadata.get("tenant_id_hash") == tenant_id_hash]
 
         # Newest first, limited
         return list(reversed(results))[:limit]

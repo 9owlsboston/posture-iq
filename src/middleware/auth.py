@@ -58,6 +58,7 @@ class UserContext:
     tenant_id: str = ""
     roles: list[str] = field(default_factory=list)
     scopes: list[str] = field(default_factory=list)
+    access_token: str = field(default="", repr=False)
     raw_claims: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
@@ -129,9 +130,16 @@ _jwks_cache = JWKSKeyCache()
 # ── OAuth2 Scheme ──────────────────────────────────────────────────────────
 
 
+def _authority_tenant_segment() -> str:
+    """Return the authority segment used for OAuth endpoints."""
+    if getattr(settings, "multi_tenant_enabled", False) is True:
+        return "organizations"
+    return settings.azure_tenant_id
+
+
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
-    authorizationUrl=f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/authorize",
-    tokenUrl=f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/token",
+    authorizationUrl=f"{ENTRA_AUTHORITY}/{_authority_tenant_segment()}/oauth2/v2.0/authorize",
+    tokenUrl=f"{ENTRA_AUTHORITY}/{_authority_tenant_segment()}/oauth2/v2.0/token",
     auto_error=False,  # We handle missing tokens ourselves for clearer messages
 )
 
@@ -154,13 +162,18 @@ async def validate_token(token: str) -> UserContext:
     Raises:
         HTTPException(401): For invalid, expired, or untrusted tokens.
     """
-    tenant_id = settings.azure_tenant_id
     client_id = settings.azure_client_id
 
-    if not tenant_id or not client_id:
+    if not client_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Auth configuration incomplete: AZURE_TENANT_ID and AZURE_CLIENT_ID required",
+            detail="Auth configuration incomplete: AZURE_CLIENT_ID required",
+        )
+    multi_tenant_mode = getattr(settings, "multi_tenant_enabled", False) is True
+    if not multi_tenant_mode and not settings.azure_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Auth configuration incomplete: AZURE_TENANT_ID required for single-tenant mode",
         )
 
     # Decode header to get the key-ID (kid)
@@ -181,13 +194,49 @@ async def validate_token(token: str) -> UserContext:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Retrieve signing key
-    signing_key = await _jwks_cache.get_signing_key(kid, tenant_id)
+    # Decode claims (without signature verification) to determine the tenant.
+    try:
+        unverified_claims = jwt.decode(token, options={"verify_signature": False})
+    except jwt.PyJWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token claims",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    token_tid = str(unverified_claims.get("tid", "")).strip()
+    if not token_tid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token missing tenant claim (tid)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if multi_tenant_mode:
+        allowed_tenants = set(settings.allowed_tenants_list)
+        if allowed_tenants and token_tid not in allowed_tenants:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tenant is not allowed",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        issuer_tid = token_tid
+    else:
+        if token_tid != settings.azure_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token tenant mismatch",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        issuer_tid = settings.azure_tenant_id
+
+    # Retrieve signing key for this token's tenant
+    signing_key = await _jwks_cache.get_signing_key(kid, issuer_tid)
 
     # Accepted issuers for v2.0 tokens
     valid_issuers = [
-        f"https://login.microsoftonline.com/{tenant_id}/v2.0",
-        f"https://sts.windows.net/{tenant_id}/",
+        f"https://login.microsoftonline.com/{issuer_tid}/v2.0",
+        f"https://sts.windows.net/{issuer_tid}/",
     ]
 
     try:
@@ -229,6 +278,14 @@ async def validate_token(token: str) -> UserContext:
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
+    claims_tid = str(claims.get("tid", "")).strip()
+    if claims_tid != issuer_tid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token tenant claim mismatch",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # Extract user identity claims
     scopes_raw = claims.get("scp", "")
     scopes = scopes_raw.split() if isinstance(scopes_raw, str) else []
@@ -240,6 +297,7 @@ async def validate_token(token: str) -> UserContext:
         tenant_id=claims.get("tid", ""),
         roles=claims.get("roles", []),
         scopes=scopes,
+        access_token=token,
         raw_claims=claims,
     )
 
@@ -355,7 +413,7 @@ def build_auth_url(
     if state:
         params["state"] = state
 
-    base = f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/authorize"
+    base = f"{ENTRA_AUTHORITY}/{_authority_tenant_segment()}/oauth2/v2.0/authorize"
     return f"{base}?{urlencode(params)}"
 
 
@@ -376,7 +434,7 @@ async def exchange_code_for_tokens(
     Raises:
         HTTPException(401): When the token exchange fails.
     """
-    token_url = f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/token"
+    token_url = f"{ENTRA_AUTHORITY}/{_authority_tenant_segment()}/oauth2/v2.0/token"
     data = {
         "client_id": settings.azure_client_id,
         "client_secret": settings.azure_client_secret,
