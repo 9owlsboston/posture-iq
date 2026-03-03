@@ -21,7 +21,9 @@ COPY requirements.txt* ./
 COPY src/ ./src/
 
 # Install Python dependencies (non-editable for production)
+# Pin transitive deps to patch known CVEs (CVE-2026-23949, CVE-2026-24049)
 RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir "jaraco.context>=6.1.0" "wheel>=0.46.2" \
     && pip install --no-cache-dir .
 
 # ── Stage 2: Runtime ───────────────────────────────────────
