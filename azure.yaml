@@ -1,0 +1,42 @@
+# PostureIQ — Azure Developer CLI (azd) Configuration
+#
+# Enables one-command deployment via: azd up
+#
+# Azure Developer CLI will:
+#   1. Prompt for subscription, location, and environment name
+#   2. Provision all infrastructure (Bicep)
+#   3. Build the Docker image
+#   4. Push to ACR
+#   5. Deploy to Container Apps
+#
+# Install azd: https://aka.ms/azd-install
+#
+# Usage:
+#   azd auth login
+#   azd init           # (only first time — creates .azure/ folder)
+#   azd up             # provision + build + deploy
+#   azd deploy         # redeploy code changes only (skip infra)
+#   azd down           # tear down all resources
+
+name: postureiq
+metadata:
+  template: postureiq@0.0.1
+
+services:
+  postureiq:
+    project: .
+    host: containerapp
+    language: python
+    docker:
+      path: Dockerfile
+    module: containerApp
+
+infra:
+  provider: bicep
+  path: infra
+  module: main
+
+hooks:
+  postprovision:
+    shell: sh
+    run: scripts/azd-postprovision.sh

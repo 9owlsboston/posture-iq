@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "PostureIQ — ME5 Security Posture Assessment Agent for the Get to Green Get-to-Green motion"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [
     { name = "Ying-Jung Chen" },
 ]

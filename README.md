@@ -33,70 +33,62 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture diagr
 ### Prerequisites
 
 - Python 3.11+
-- Azure subscription with OpenAI, Content Safety, App Insights
-- Microsoft 365 E5 tenant (or [M365 E5 developer trial](https://developer.microsoft.com/en-us/microsoft-365/dev-program); CDX demo tenants are available to Microsoft employees/partners only)
+- **For local dev with mock data:** Nothing else — works out of the box
+- **For real tenant assessment:** Entra ID app registration + M365 E5 tenant (or [M365 E5 developer trial](https://developer.microsoft.com/en-us/microsoft-365/dev-program))
+- **For cloud deployment:** Azure subscription with OpenAI, Content Safety, App Insights
+- Microsoft 365 E5 tenant (or [M365 E5 developer trial](https://developer.microsoft.com/en-us/microsoft-365/dev-program); CDX demo tenants are available to Microsoft employees/partners only) — *optional for local dev, see below*
 
-### Deploy to a Customer's Azure Tenant
+### Try It Locally (No Azure Required)
 
-Three options from simplest to most sophisticated:
-
-| Option | Command | Best For |
-|--------|---------|----------|
-| **Clone & Deploy** | `git clone ... && ./scripts/deploy-customer.sh` | CSA-led deployments, most customers |
-| **Azure Developer CLI** | `git clone ... && azd up` | Azure-savvy developers |
-| **One-Click Portal** | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2F<your-org>%2Fposture-iq%2Fmain%2Finfra%2Fazuredeploy.json) | Non-technical stakeholders |
-
-See [Customer Deployment Guide](docs/ghcp_challenge_submission/postureiq-customer-deployment-guide.md) for full details.
-
-### Setup (Local Development)
-
-> **Note:** Local development only requires an Entra ID app registration (for
-> Graph API access) and an M365 E5 tenant. Azure infrastructure (OpenAI,
-> Container Apps, etc.) is only needed for cloud deployment — see
-> [Deploy to a Customer's Azure Tenant](#deploy-to-a-customers-azure-tenant) above.
+The app works **out of the box with zero Azure credentials**. When Graph API
+credentials are missing, tools return realistic mock data (`"data_source": "mock"`).
+Content Safety falls back to local heuristics. No OpenAI endpoint is needed — the
+Web Chat UI uses keyword-based intent classification to route to tools directly.
 
 ```bash
 # Clone and install
-git clone https://github.com/<your-org>/posture-iq.git
+git clone https://github.com/9owlsboston/posture-iq.git
 cd posture-iq
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Configure environment
-cp .env.example .env
-# Edit .env — at minimum set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
-
-# Set up Graph API permissions (requires Azure CLI)
-chmod +x scripts/setup-permissions.sh
-./scripts/setup-permissions.sh
-```
-
-### Run Locally
-
-PostureIQ has **two entry points** — choose the one that fits your workflow:
-
-| Command | Interface | Requires |
-|---------|-----------|----------|
-| `python -m uvicorn src.api.app:app` | Web Chat UI at `http://localhost:8000` | `.env` with Azure/Graph creds |
-| `python -m src.agent.main` | CLI via Copilot SDK session loop | `gh` CLI + Copilot CLI running |
-
-#### Option A — Web Chat UI (recommended for demos & local testing)
-
-Starts a FastAPI server with a dark-themed chat page. Tools are dispatched via
-keyword intent classification — no Copilot CLI needed.
-
-```bash
-source .venv/bin/activate
-set -a && source .env && set +a
+# Run — no .env needed for mock mode
 python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000
 # Open http://localhost:8000
 ```
 
-#### Option B — Copilot SDK Agent Session
+Try: *"What is our Secure Score?"* → returns mock score of 47.3/100 with category breakdowns.
 
-Starts an interactive CLI session powered by the Copilot Runtime. The SDK
-registers all 8 tools and the runtime (via `gh copilot`) does the LLM planning.
+### Connect to a Real M365 Tenant (Optional)
+
+To assess a **real** Microsoft 365 E5 tenant instead of mock data:
+
+```bash
+# 1. Configure credentials
+cp .env.example .env
+# Edit .env — set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+
+# 2. Set up Graph API permissions (creates Entra ID App Registration)
+chmod +x scripts/setup-permissions.sh
+./scripts/setup-permissions.sh
+
+# 3. Run with real credentials
+source .venv/bin/activate
+set -a && source .env && set +a
+python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000
+```
+
+| Dependency | Without credentials | With credentials |
+|------------|-------------------|-----------------|
+| **Graph API** | Mock data (realistic scores, policies, configs) | Real tenant data via Microsoft Graph |
+| **Azure OpenAI** | Keyword intent classification (no LLM) | GPT-4o reasoning (requires endpoint in `.env`) |
+| **Content Safety** | Local heuristic filtering | Azure AI Content Safety service |
+| **App Insights** | Logs to stdout via structlog | Full observability in Azure portal |
+
+#### Copilot SDK Agent Session (Alternative)
+
+For the LLM-powered CLI experience with the Copilot Runtime:
 
 ```bash
 source .venv/bin/activate
@@ -107,14 +99,37 @@ python -m src.agent.main
 
 ### Run Tests
 
-No Azure credentials required — all external calls are mocked:
+All external calls are mocked — no Azure credentials required:
 
 ```bash
 source .venv/bin/activate
 pytest
 ```
 
-### Deploy to Azure
+### Deploy to a Customer's Azure Tenant
+
+Three fully end-to-end options:
+
+| Option | Command | Best For |
+|--------|---------|----------|
+| **Clone & Deploy** | `git clone ... && ./scripts/deploy-customer.sh` | CSA-led deployments, most customers |
+| **Azure Developer CLI** | `git clone ... && azd up` | Azure-savvy developers (single command) |
+| **One-Click Portal** | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2F9owlsboston%2Fposture-iq%2Fmain%2Finfra%2Fazuredeploy.json) then `./scripts/post-deploy-button.sh` | Portal-guided, no CLI required |
+
+All three options provision infrastructure **and** set up Entra ID App Registration
+with Graph API permissions automatically. See [Customer Deployment Guide](docs/ghcp_challenge_submission/postureiq-customer-deployment-guide.md) for full details.
+
+> **"One-Click Portal" flow:**
+> The button provisions infrastructure via the Azure Portal. After it finishes,
+> run the post-deploy script to build the image, register Graph API, and go live:
+>
+> ```bash
+> git clone https://github.com/9owlsboston/posture-iq.git && cd posture-iq
+> chmod +x scripts/post-deploy-button.sh
+> ./scripts/post-deploy-button.sh --resource-group <your-rg-name>
+> ```
+
+### CI/CD Pipeline (Internal Development)
 
 ```bash
 # 1. Set up OIDC Workload Identity Federation (one-time)
@@ -132,7 +147,7 @@ az deployment group create \
 git push origin main
 ```
 
-**CI/CD Pipeline (fully automated on push to main):**
+**Automated on push to main:**
 ```
 lint → test (80% coverage) → bicep-validate → build & push to ACR → deploy to Container Apps
 ```
@@ -140,7 +155,7 @@ lint → test (80% coverage) → bicep-validate → build & push to ACR → depl
 **Authentication:** OIDC Workload Identity Federation — zero stored secrets.  
 Only 3 non-sensitive GitHub secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
 
-## Development
+## Development Tooling
 
 ```bash
 # Lint
@@ -159,6 +174,56 @@ ruff format src/ tests/
 ./scripts/preflight.sh          # Full check (tests, lint, Bicep, YAML, Docker)
 ./scripts/preflight.sh --quick  # Skip Docker build
 ```
+
+## Test Tools
+
+Two scripts are included for validating a deployment (local or cloud) under realistic traffic.
+
+### Load Test (`scripts/load_test.py`)
+
+Fires ~50 requests over ~60 seconds with randomised delays, exercises all 8 tools via `/chat`, and prints latency percentiles (p50/p95) plus a per-request detail table.
+
+```bash
+# Against local dev server (default http://localhost:8000)
+python scripts/load_test.py
+
+# Against a cloud deployment
+POSTUREIQ_URL=https://my-app.azurecontainerapps.io python scripts/load_test.py
+```
+
+### Traffic Simulator (`scripts/simulate_traffic.py`)
+
+Configurable sustained traffic generator — ideal for populating App Insights dashboards or soak-testing a deployment.
+
+```bash
+# Quick smoke — single burst of 10 requests
+python scripts/simulate_traffic.py
+
+# 30-minute sustained load, burst every 5 min, 20 requests/burst
+python scripts/simulate_traffic.py --duration 30 --interval 5 --burst-size 20
+
+# Heavy 1-hour run with health probes
+python scripts/simulate_traffic.py --duration 60 --interval 2 --burst-size 50 --concurrency 10 --probes
+
+# Target a cloud deployment
+python scripts/simulate_traffic.py --url https://my-app.azurecontainerapps.io
+
+# Exercise only specific tools
+python scripts/simulate_traffic.py --tools secure_score,defender,entra
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--url` | `http://localhost:8000` | Target PostureIQ endpoint |
+| `--duration` | `0` (single burst) | Total run time in minutes |
+| `--interval` | `5` | Minutes between bursts |
+| `--burst-size` | `10` | Chat requests per burst |
+| `--concurrency` | `5` | Max simultaneous requests |
+| `--tools` | all | Comma-separated: `secure_score`, `defender`, `purview`, `entra`, `remediation`, `scorecard`, `playbook`, `full` |
+| `--probes` | off | Include `/health`, `/ready`, `/version` probes |
+| `-v` | off | Print each request as it completes |
+
+Both scripts work against mock data (no Azure credentials needed) and produce summary tables showing success rate, latency distribution, and which tools were exercised.
 
 ## Project Structure
 
@@ -200,7 +265,10 @@ posture-iq/
 
 ## License
 
-Internal Microsoft use only — GitHub Copilot SDK Enterprise Challenge submission.
+This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
+
+**PostureIQ™** is a trademark of 9 Owls Boston. The license does not grant permission
+to use the PostureIQ name or branding. See [TRADEMARKS.md](TRADEMARKS.md) for details.
 
 ---
 
