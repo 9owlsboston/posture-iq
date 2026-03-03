@@ -412,7 +412,7 @@ class PostureIQAgent:
         if self._client is None:
             raise RuntimeError("CopilotClient not started — call start_client() first")
 
-        self._session = await self._client.resume_session(session_id)
+        self._session = await self._client.resume_session(session_id)  # type: ignore[call-arg,unused-ignore]
         self._event_unsubscribe = self._session.on(self._handle_session_event)
 
         logger.info("agent.session.resumed", session_id=session_id)
@@ -460,7 +460,7 @@ class PostureIQAgent:
 
         logger.info("agent.message.sending", prompt_length=len(prompt))
 
-        response_event = await self._session.send_and_wait(
+        response_event = await self._session.send_and_wait(  # type: ignore[func-returns-value,unused-ignore]
             {"prompt": prompt},
             timeout=120.0,
         )

@@ -21,12 +21,12 @@ import contextlib
 import functools
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Generator
 from typing import Any, TypeVar
 
 import structlog
 from opentelemetry import metrics, trace
-from opentelemetry.trace import SpanKind, StatusCode
+from opentelemetry.trace import Span, SpanKind, StatusCode
 
 from src.agent.config import settings
 from src.middleware.pii_redaction import redact_dict
@@ -103,7 +103,7 @@ def setup_tracing() -> None:
         try:
             from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
 
-            OpenAIInstrumentor().instrument()
+            OpenAIInstrumentor().instrument()  # type: ignore[no-untyped-call]
             logger.info("tracing.genai_instrumentor.complete", instrumentor="openai_v2")
         except ImportError:
             logger.debug(
@@ -526,7 +526,7 @@ async def trace_agent_invocation(
 
 
 @contextlib.contextmanager
-def trace_genai_tool_call(tool_name: str):
+def trace_genai_tool_call(tool_name: str) -> Generator[Span, None, None]:
     """Synchronous context manager for a lightweight ``execute_tool`` span.
 
     Use this when you call a tool *outside* the ``@trace_tool_call`` decorator
