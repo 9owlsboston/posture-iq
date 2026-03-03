@@ -552,6 +552,24 @@
       color: var(--green);
     }
 
+    .demo-banner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: linear-gradient(90deg, rgba(234,179,8,0.12), rgba(234,179,8,0.05));
+      border-bottom: 1px solid rgba(234,179,8,0.25);
+      font-size: 12px;
+      color: var(--yellow);
+    }
+
+    .demo-banner a {
+      color: var(--primary);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
     .btn-signin {
       padding: 6px 14px;
       border: 1px solid var(--primary);
@@ -590,10 +608,10 @@
     </div>
     <div class="header-actions">
       <div class="status-dot" id="statusDot"></div>
-      <span class="status-label" id="statusLabel">Connected</span>
+      <span class="status-label" id="statusLabel">Checking…</span>
 
-      <!-- Unauthenticated: Sign In button -->
-      <button class="btn-signin" id="signInBtn" onclick="signIn()" style="display:none;">Sign In</button>
+      <!-- Unauthenticated: Sign In button (visible by default) -->
+      <button class="btn-signin" id="signInBtn" onclick="signIn()">Sign In</button>
 
       <!-- Authenticated: User panel + Sign Out -->
       <div class="user-panel" id="userPanel" style="display:none;">
@@ -609,6 +627,13 @@
       <button class="btn-outline" onclick="showEndpoints()">API Docs</button>
     </div>
   </header>
+
+  <!-- ── Demo Banner (shown when NOT authenticated) ───── -->
+  <div class="demo-banner" id="demoBanner">
+    <span>⚠️ Demo Mode — responses use <span class="data-source-badge mock">● Mock Data</span></span>
+    <a onclick="signIn()">Sign in</a>
+    <span>with your Microsoft account to assess real tenant posture.</span>
+  </div>
 
   <!-- ── Tenant Banner (shown when authenticated) ───── -->
   <div class="tenant-banner" id="tenantBanner">
@@ -790,6 +815,11 @@
     function showAuthenticatedUI() {
       document.getElementById('signInBtn').style.display = 'none';
       document.getElementById('userPanel').style.display = 'flex';
+      document.getElementById('demoBanner').style.display = 'none';
+
+      // Status indicator → "Signed in"
+      document.getElementById('statusDot').style.background = 'var(--green)';
+      document.getElementById('statusLabel').textContent = 'Signed in';
 
       // Initials for avatar
       const initials = (currentUser.name || currentUser.email || '?')
@@ -801,7 +831,6 @@
       // Tenant banner
       const banner = document.getElementById('tenantBanner');
       banner.classList.add('visible');
-      // Show tenant domain from email, or fallback to tenant ID
       const domain = currentUser.email ? currentUser.email.split('@')[1] : '';
       document.getElementById('tenantDisplay').textContent =
         domain || currentUser.tenant_id || 'Unknown';
@@ -810,7 +839,12 @@
     function showUnauthenticatedUI() {
       document.getElementById('signInBtn').style.display = 'inline-flex';
       document.getElementById('userPanel').style.display = 'none';
+      document.getElementById('demoBanner').style.display = 'flex';
       document.getElementById('tenantBanner').classList.remove('visible');
+
+      // Status indicator → "Demo mode" with yellow dot
+      document.getElementById('statusDot').style.background = 'var(--yellow)';
+      document.getElementById('statusLabel').textContent = 'Demo mode';
     }
 
     function signIn() {
@@ -843,10 +877,11 @@
       try {
         const r = await fetch('/health');
         const d = await r.json();
-        document.getElementById('statusDot').style.background =
-          d.status === 'healthy' ? 'var(--green)' : 'var(--red)';
-        document.getElementById('statusLabel').textContent =
-          d.status === 'healthy' ? 'Connected' : 'Unhealthy';
+        if (d.status !== 'healthy') {
+          document.getElementById('statusDot').style.background = 'var(--red)';
+          document.getElementById('statusLabel').textContent = 'Unhealthy';
+        }
+        // If healthy, leave the auth-aware label ("Signed in" / "Demo mode")
       } catch {
         document.getElementById('statusDot').style.background = 'var(--red)';
         document.getElementById('statusLabel').textContent = 'Disconnected';
@@ -906,6 +941,9 @@
       return html;
     }
 
+    // Track last known data source for per-message badges
+    let lastDataSource = 'mock';
+
     // ── Messages ─────────────────────────────────────────
     function addMessage(role, text, toolCalls) {
       const welcome = document.getElementById('welcome');
@@ -925,13 +963,21 @@
           '</div>';
       }
 
+      // Per-message data-source label for agent responses
+      let sourceBadge = '';
+      if (role === 'agent' && toolCalls && toolCalls.length) {
+        const cls = lastDataSource === 'live' ? 'live' : 'mock';
+        const label = lastDataSource === 'live' ? '● Live Data' : '● Mock Data';
+        sourceBadge = `<span class="data-source-badge ${cls}" style="margin-left:8px;vertical-align:middle;">${label}</span>`;
+      }
+
       const rendered = role === 'agent' ? renderMarkdown(text) : text
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
       div.innerHTML = `
         <div class="msg-avatar">${avatar}</div>
         <div class="msg-content">
-          <div class="msg-role">${name}</div>
+          <div class="msg-role">${name}${sourceBadge}</div>
           ${toolBadges}
           <div class="msg-text">${rendered}</div>
         </div>
@@ -978,6 +1024,7 @@
 
           // Update data-source badge from response
           if (data.data_source) {
+            lastDataSource = data.data_source;
             updateDataSourceBadge(data.data_source);
           }
         } else {
