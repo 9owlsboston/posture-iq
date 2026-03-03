@@ -477,6 +477,107 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+    /* ── User Identity & Tenant Banner ─────────────────── */
+    .user-panel {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .user-avatar {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600;
+      color: white;
+    }
+
+    .user-info {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+
+    .user-info .user-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .user-info .user-email {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .tenant-banner {
+      display: none; /* hidden until authenticated */
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: linear-gradient(90deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1));
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .tenant-banner.visible { display: flex; }
+
+    .tenant-banner .tenant-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .data-source-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .data-source-badge.mock {
+      background: rgba(234,179,8,0.15);
+      color: var(--yellow);
+    }
+
+    .data-source-badge.live {
+      background: rgba(34,197,94,0.15);
+      color: var(--green);
+    }
+
+    .btn-signin {
+      padding: 6px 14px;
+      border: 1px solid var(--primary);
+      border-radius: 6px;
+      background: var(--primary);
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+
+    .btn-signin:hover { background: var(--primary-hover); }
+
+    .btn-signout {
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+
+    .btn-signout:hover { border-color: var(--red); color: var(--red); }
   </style>
 </head>
 <body>
@@ -490,10 +591,31 @@
     <div class="header-actions">
       <div class="status-dot" id="statusDot"></div>
       <span class="status-label" id="statusLabel">Connected</span>
+
+      <!-- Unauthenticated: Sign In button -->
+      <button class="btn-signin" id="signInBtn" onclick="signIn()" style="display:none;">Sign In</button>
+
+      <!-- Authenticated: User panel + Sign Out -->
+      <div class="user-panel" id="userPanel" style="display:none;">
+        <div class="user-avatar" id="userAvatar"></div>
+        <div class="user-info">
+          <span class="user-name" id="userName"></span>
+          <span class="user-email" id="userEmail"></span>
+        </div>
+        <button class="btn-signout" onclick="signOut()">Sign Out</button>
+      </div>
+
       <button class="btn-outline" onclick="clearChat()">New Chat</button>
       <button class="btn-outline" onclick="showEndpoints()">API Docs</button>
     </div>
   </header>
+
+  <!-- ── Tenant Banner (shown when authenticated) ───── -->
+  <div class="tenant-banner" id="tenantBanner">
+    <span>🏢 Assessing:</span>
+    <span class="tenant-name" id="tenantDisplay"></span>
+    <span class="data-source-badge mock" id="dataSourceBadge">● Mock Data</span>
+  </div>
 
   <!-- ── Main ───────────────────────────────────────────── -->
   <div class="main-layout">
@@ -614,6 +736,100 @@
     // ── State ────────────────────────────────────────────
     let sessionId = null;
     let isProcessing = false;
+    let accessToken = null;
+    let currentUser = null;  // { user_id, email, name, tenant_id, scopes }
+
+    // ── Auth: Token Management ───────────────────────────
+
+    function parseHashParams() {
+      const hash = window.location.hash.substring(1);
+      if (!hash) return {};
+      return Object.fromEntries(hash.split('&').map(p => p.split('=')));
+    }
+
+    async function initAuth() {
+      // Check for token in URL fragment (from /auth/callback redirect)
+      const params = parseHashParams();
+      if (params.access_token) {
+        accessToken = params.access_token;
+        sessionStorage.setItem('access_token', accessToken);
+        // Clean the URL
+        history.replaceState(null, '', '/');
+      } else {
+        // Check sessionStorage
+        accessToken = sessionStorage.getItem('access_token');
+      }
+
+      if (accessToken) {
+        try {
+          const r = await fetch('/auth/me', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          if (r.ok) {
+            currentUser = await r.json();
+            showAuthenticatedUI();
+            return;
+          }
+        } catch (e) {
+          console.warn('Auth check failed:', e);
+        }
+        // Token invalid/expired
+        accessToken = null;
+        sessionStorage.removeItem('access_token');
+      }
+
+      showUnauthenticatedUI();
+    }
+
+    function showAuthenticatedUI() {
+      document.getElementById('signInBtn').style.display = 'none';
+      document.getElementById('userPanel').style.display = 'flex';
+
+      // Initials for avatar
+      const initials = (currentUser.name || currentUser.email || '?')
+        .split(/[\s@]+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
+      document.getElementById('userAvatar').textContent = initials;
+      document.getElementById('userName').textContent = currentUser.name || 'User';
+      document.getElementById('userEmail').textContent = currentUser.email || '';
+
+      // Tenant banner
+      const banner = document.getElementById('tenantBanner');
+      banner.classList.add('visible');
+      // Show tenant domain from email, or fallback to tenant ID
+      const domain = currentUser.email ? currentUser.email.split('@')[1] : '';
+      document.getElementById('tenantDisplay').textContent =
+        domain || currentUser.tenant_id || 'Unknown';
+    }
+
+    function showUnauthenticatedUI() {
+      document.getElementById('signInBtn').style.display = 'inline-flex';
+      document.getElementById('userPanel').style.display = 'none';
+      document.getElementById('tenantBanner').classList.remove('visible');
+    }
+
+    function signIn() {
+      window.location.href = '/auth/login';
+    }
+
+    function signOut() {
+      accessToken = null;
+      currentUser = null;
+      sessionStorage.removeItem('access_token');
+      sessionId = null;
+      showUnauthenticatedUI();
+      clearChat();
+    }
+
+    function updateDataSourceBadge(source) {
+      const badge = document.getElementById('dataSourceBadge');
+      if (source === 'live') {
+        badge.className = 'data-source-badge live';
+        badge.textContent = '● Live Data';
+      } else {
+        badge.className = 'data-source-badge mock';
+        badge.textContent = '● Mock Data';
+      }
+    }
 
     // ── Health Check ─────────────────────────────────────
     async function checkHealth() {
@@ -736,9 +952,14 @@
         const body = { message: text };
         if (sessionId) body.session_id = sessionId;
 
+        const headers = { 'Content-Type': 'application/json' };
+        if (accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+
         const r = await fetch('/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(body),
         });
 
@@ -747,6 +968,11 @@
         if (r.ok) {
           sessionId = data.session_id || sessionId;
           addMessage('agent', data.response, data.tools_called);
+
+          // Update data-source badge from response
+          if (data.data_source) {
+            updateDataSourceBadge(data.data_source);
+          }
         } else {
           addMessage('agent', `⚠️ Error: ${data.detail || data.error || 'Something went wrong'}`);
         }
@@ -805,6 +1031,7 @@
     }
 
     // ── Init ─────────────────────────────────────────────
+    initAuth();
     document.getElementById('userInput').focus();
   </script>
 </body>

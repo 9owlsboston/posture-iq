@@ -52,7 +52,9 @@ class Settings(BaseSettings):
 
     # ── Microsoft Fabric ──────────────────────────────────
     fabric_lakehouse_endpoint: str = ""
-
+    # ── Multi-Tenant ──────────────────────────────────
+    multi_tenant_enabled: bool = False
+    allowed_tenants: str = ""  # comma-separated tenant IDs (empty = all consented)
     # ── App Settings ──────────────────────────────────────
     log_level: str = "INFO"
     environment: str = "development"
@@ -66,6 +68,11 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment.lower() == "production"
+
+    @property
+    def allowed_tenant_list(self) -> list[str]:
+        """Parse comma-separated allowed tenant IDs into a list."""
+        return [t.strip() for t in self.allowed_tenants.split(",") if t.strip()]
 
     @property
     def use_managed_identity(self) -> bool:

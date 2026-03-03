@@ -129,9 +129,18 @@ _jwks_cache = JWKSKeyCache()
 # ── OAuth2 Scheme ──────────────────────────────────────────────────────────
 
 
+def _get_oauth2_tenant_path() -> str:
+    """Return 'organizations' (multi-tenant) or the configured tenant ID."""
+    if settings.multi_tenant_enabled:
+        return "organizations"
+    return settings.azure_tenant_id
+
+
+# The scheme object is just a FastAPI/OpenAPI schema hint — evaluated once at
+# import time.  The actual URLs used at runtime come from _get_oauth2_tenant_path().
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
-    authorizationUrl=f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/authorize",
-    tokenUrl=f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/token",
+    authorizationUrl=f"{ENTRA_AUTHORITY}/organizations/oauth2/v2.0/authorize",
+    tokenUrl=f"{ENTRA_AUTHORITY}/organizations/oauth2/v2.0/token",
     auto_error=False,  # We handle missing tokens ourselves for clearer messages
 )
 
@@ -144,18 +153,51 @@ async def validate_token(token: str) -> UserContext:
 
     Validation includes:
       - Signature verification against the Entra ID JWKS keys
-      - Issuer check (must match the configured tenant)
+      - Issuer check (must match the configured or token-claimed tenant)
       - Audience check (must match the configured client-ID)
       - Expiration check (iat, exp, nbf)
+      - Tenant allowlist check (when multi-tenant + ALLOWED_TENANTS is set)
 
     Returns:
         A :class:`UserContext` with the authenticated user's identity.
 
     Raises:
         HTTPException(401): For invalid, expired, or untrusted tokens.
+        HTTPException(403): For tokens from disallowed tenants.
     """
-    tenant_id = settings.azure_tenant_id
     client_id = settings.azure_client_id
+
+    # In multi-tenant mode, extract tenant from the token itself.
+    # In single-tenant mode, use the configured tenant.
+    if settings.multi_tenant_enabled:
+        # Pre-decode (no signature check) to extract tid
+        try:
+            unverified_claims = jwt.decode(token, options={"verify_signature": False})
+            tenant_id = unverified_claims.get("tid", "")
+        except jwt.DecodeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token format",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token missing tid claim",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Tenant allowlist check
+        allowed = settings.allowed_tenant_list
+        if allowed and tenant_id not in allowed:
+            logger.warning("auth.tenant.disallowed", tid=tenant_id)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Tenant {tenant_id} is not in the allowed tenants list",
+            )
+    else:
+        tenant_id = settings.azure_tenant_id
 
     if not tenant_id or not client_id:
         raise HTTPException(
@@ -355,7 +397,7 @@ def build_auth_url(
     if state:
         params["state"] = state
 
-    base = f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/authorize"
+    base = f"{ENTRA_AUTHORITY}/{_get_oauth2_tenant_path()}/oauth2/v2.0/authorize"
     return f"{base}?{urlencode(params)}"
 
 
@@ -376,7 +418,7 @@ async def exchange_code_for_tokens(
     Raises:
         HTTPException(401): When the token exchange fails.
     """
-    token_url = f"{ENTRA_AUTHORITY}/{settings.azure_tenant_id}/oauth2/v2.0/token"
+    token_url = f"{ENTRA_AUTHORITY}/{_get_oauth2_tenant_path()}/oauth2/v2.0/token"
     data = {
         "client_id": settings.azure_client_id,
         "client_secret": settings.azure_client_secret,

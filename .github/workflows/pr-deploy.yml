@@ -30,9 +30,6 @@ jobs:
     name: Deploy Preview
     runs-on: ubuntu-latest
     if: github.event.action != 'closed'
-    environment:
-      name: pr-${{ github.event.pull_request.number }}
-      url: ${{ steps.deploy.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
 

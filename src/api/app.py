@@ -39,6 +39,8 @@ from src.middleware.auth import (
     build_auth_url,
     exchange_code_for_tokens,
     get_current_user,
+    oauth2_scheme,
+    validate_token,
 )
 from src.middleware.tracing import setup_tracing
 
@@ -105,13 +107,29 @@ async def chat_ui() -> FileResponse:
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest) -> ChatResponse:
+async def chat_endpoint(
+    request: ChatRequest,
+    token: str | None = Depends(oauth2_scheme),
+) -> ChatResponse:
     """Chat with the SecPostureIQ agent.
 
     Sends a user message, invokes the appropriate assessment tools,
     and returns a formatted response with tool-call metadata.
+
+    If a valid Bearer token is present, the response includes
+    ``tenant_id`` and ``data_source`` from the authenticated user's context.
+    Unauthenticated requests still work (demo / mock-data mode).
     """
-    return await handle_chat(request)
+    tenant_id = ""
+    user_id = ""
+    if token:
+        try:
+            user = await validate_token(token)
+            tenant_id = user.tenant_id
+            user_id = user.user_id
+        except Exception:  # noqa: S110
+            pass  # Fall through to unauthenticated / mock mode
+    return await handle_chat(request, tenant_id=tenant_id, user_id=user_id)
 
 
 # ── Health Probes ──────────────────────────────────────────────────────────
@@ -303,12 +321,12 @@ async def auth_callback(
     error: str | None = None,
     error_description: str | None = None,
     state: str | None = None,
-) -> dict[str, str]:
+) -> RedirectResponse:
     """Handle the Entra ID OAuth2 callback.
 
-    Exchanges the authorization code for access + ID tokens and returns
-    the access token. In a real deployment, this would set a session cookie
-    or return the token for the SPA to store.
+    Exchanges the authorization code for access + ID tokens, then redirects
+    back to the SPA root with the token in a URL fragment so the browser
+    JavaScript can store it and display the authenticated user's identity.
     """
     if error:
         logger.warning(
@@ -333,12 +351,14 @@ async def auth_callback(
         redirect_uri=redirect_uri,
     )
 
-    return {
-        "access_token": token_response.get("access_token", ""),
-        "token_type": "Bearer",
-        "expires_in": str(token_response.get("expires_in", "")),
-        "scope": token_response.get("scope", ""),
-    }
+    access_token = token_response.get("access_token", "")
+    expires_in = token_response.get("expires_in", "")
+
+    # Redirect to SPA root with token in fragment (never hits the server)
+    return RedirectResponse(
+        url=f"/#access_token={access_token}&expires_in={expires_in}",
+        status_code=302,
+    )
 
 
 @app.get("/auth/me", response_model=AuthMeResponse)

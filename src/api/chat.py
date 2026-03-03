@@ -36,11 +36,22 @@ class ChatResponse(BaseModel):
     response: str
     session_id: str
     tools_called: list[str] = []
+    tenant_id: str = ""
+    data_source: str = "mock"  # "mock" or "live" — shown in UI badge
 
 
 # ── Session store (in-memory for demo) ────────────────────────────────────
+# In multi-tenant mode, session keys are "tenant_id:user_id:session_id"
+# to prevent cross-tenant session collisions.
 
 _sessions: dict[str, dict[str, Any]] = {}
+
+
+def _session_key(session_id: str, tenant_id: str = "", user_id: str = "") -> str:
+    """Build composite session key for tenant isolation."""
+    if tenant_id and user_id:
+        return f"{tenant_id}:{user_id}:{session_id}"
+    return session_id
 
 
 # ── Tool dispatcher for direct mode ──────────────────────────────────────
@@ -385,21 +396,31 @@ _FORMATTERS = {
 # ── Chat handler (direct tool mode) ──────────────────────────────────────
 
 
-async def handle_chat(request: ChatRequest) -> ChatResponse:
+async def handle_chat(
+    request: ChatRequest,
+    tenant_id: str = "",
+    user_id: str = "",
+) -> ChatResponse:
     """Process a chat message by classifying intent → running tools → formatting response.
 
     Each call creates an ``invoke_agent`` GenAI span so it appears in the
     App Insights Agent (preview) → Agent Runs panel.  Individual tool
     functions carry ``@trace_tool_call`` decorators that emit ``execute_tool``
     spans for the Tool Calls panel.
+
+    Args:
+        request: The chat request with message and optional session_id.
+        tenant_id: The Entra ID tenant (from UserContext, if authenticated).
+        user_id: The user's oid (from UserContext, if authenticated).
     """
     sid = request.session_id or str(uuid.uuid4())
+    skey = _session_key(sid, tenant_id, user_id)
 
     # Store session history
-    if sid not in _sessions:
-        _sessions[sid] = {"history": [], "results": {}}
+    if skey not in _sessions:
+        _sessions[skey] = {"history": [], "results": {}}
 
-    session = _sessions[sid]
+    session = _sessions[skey]
     session["history"].append({"role": "user", "content": request.message})
 
     audit = AuditLogger(session_id=sid)
@@ -471,8 +492,17 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
 
     session["history"].append({"role": "assistant", "content": response_text})
 
+    # Determine data source from tool results (mock vs live)
+    data_source = "mock"
+    for result in session["results"].values():
+        if isinstance(result, dict) and result.get("data_source") == "live":
+            data_source = "live"
+            break
+
     return ChatResponse(
         response=response_text,
         session_id=sid,
         tools_called=tools_called,
+        tenant_id=tenant_id,
+        data_source=data_source,
     )

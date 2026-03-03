@@ -162,6 +162,8 @@ def _mock_settings():
         mock.azure_tenant_id = TENANT_ID
         mock.azure_client_id = CLIENT_ID
         mock.azure_client_secret = CLIENT_SECRET
+        mock.multi_tenant_enabled = False
+        mock.allowed_tenant_list = []
         mock.graph_scope_list = [
             "SecurityEvents.Read.All",
             "SecurityActions.Read.All",
@@ -415,6 +417,8 @@ class TestValidateToken:
         with patch("src.middleware.auth.settings") as mock:
             mock.azure_tenant_id = ""
             mock.azure_client_id = ""
+            mock.multi_tenant_enabled = False
+            mock.allowed_tenant_list = []
             with pytest.raises(HTTPException) as exc_info:
                 await validate_token("some.jwt.token")
         assert exc_info.value.status_code == 500
