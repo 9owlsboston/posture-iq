@@ -1,11 +1,11 @@
-"""PostureIQ Tool — get_project479_playbook
+"""PostureIQ Tool — get_green_playbook
 
-Retrieves relevant Project 479 playbook sections from Foundry IQ based on
+Retrieves relevant Get to Green playbook sections from Foundry IQ based on
 identified security gaps.  Provides the agent with actionable context:
 
   * **ME5 Get to Green standard playbook** — step-by-step remediation
     workflow per workload area.
-  * **Offer catalog** — which Project 479 offers to recommend based on gaps.
+  * **Offer catalog** — which Get to Green offers to recommend based on gaps.
   * **Customer onboarding checklists** — readiness tasks for each ME5
     security workload.
 
@@ -48,9 +48,9 @@ WORKLOAD_AREAS: list[str] = [
 ]
 
 # ── Built-in Playbook Content ──────────────────────────────────────────
-# Structured playbooks that mirror the Foundry IQ Project 479 knowledge
+# Structured playbooks that mirror the Foundry IQ Get to Green knowledge
 # base.  Each entry maps a workload area to its remediation playbook,
-# recommended Project 479 offer, and onboarding checklist.
+# recommended Get to Green offer, and onboarding checklist.
 
 _PLAYBOOKS: dict[str, dict[str, Any]] = {
     # ── Defender XDR ───────────────────────────────────────
@@ -67,7 +67,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Defender XDR Deployment Workshop",
-            "id": "P479-DEF-001",
+            "id": "GTG-DEF-001",
             "description": (
                 "Two-day hands-on workshop covering onboarding, ASR rules, AIR configuration, and threat analytics."
             ),
@@ -96,7 +96,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Email Protection Optimization",
-            "id": "P479-DEF-002",
+            "id": "GTG-DEF-002",
             "description": (
                 "One-day assessment and configuration of Safe Attachments, Safe Links, and anti-phishing policies."
             ),
@@ -124,7 +124,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Identity Threat Protection Engagement",
-            "id": "P479-DEF-003",
+            "id": "GTG-DEF-003",
             "description": (
                 "Sensor deployment, health remediation, and lateral movement path analysis with the customer's AD team."
             ),
@@ -151,7 +151,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Cloud App Security Assessment",
-            "id": "P479-DEF-004",
+            "id": "GTG-DEF-004",
             "description": ("Shadow IT discovery, API connector setup, and session policy configuration workshop."),
             "duration": "1–2 days",
             "delivery": "Remote",
@@ -177,7 +177,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Data Loss Prevention Workshop",
-            "id": "P479-PUR-001",
+            "id": "GTG-PUR-001",
             "description": (
                 "Classification strategy, SIT customization, and DLP policy deployment across M365 workloads."
             ),
@@ -203,7 +203,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Information Protection Readiness",
-            "id": "P479-PUR-002",
+            "id": "GTG-PUR-002",
             "description": (
                 "Label taxonomy design, publishing, and auto-labeling strategy "
                 "aligned with data classification requirements."
@@ -230,7 +230,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Records & Retention Strategy",
-            "id": "P479-PUR-003",
+            "id": "GTG-PUR-003",
             "description": ("Retention schedule development, policy creation, and records management configuration."),
             "duration": "1 day",
             "delivery": "Remote",
@@ -253,7 +253,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Insider Risk Management Workshop",
-            "id": "P479-PUR-004",
+            "id": "GTG-PUR-004",
             "description": ("Config-based setup: HR connector, policy templates, and analyst role assignment."),
             "duration": "1 day",
             "delivery": "Remote",
@@ -279,7 +279,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Conditional Access Hardening",
-            "id": "P479-EID-001",
+            "id": "GTG-EID-001",
             "description": ("Architecture review, policy design, and staged rollout of Conditional Access policies."),
             "duration": "2 days",
             "delivery": "Remote or on-site",
@@ -304,7 +304,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Privileged Access Management Engagement",
-            "id": "P479-EID-002",
+            "id": "GTG-EID-002",
             "description": (
                 "PIM rollout: role inventory, migration from permanent to "
                 "eligible, activation policies, and alert setup."
@@ -331,7 +331,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Identity Protection Configuration",
-            "id": "P479-EID-003",
+            "id": "GTG-EID-003",
             "description": ("Risk policy setup, tuning, and integration with existing security operations workflows."),
             "duration": "1 day",
             "delivery": "Remote",
@@ -355,7 +355,7 @@ _PLAYBOOKS: dict[str, dict[str, Any]] = {
         ],
         "offer": {
             "name": "Access Governance Workshop",
-            "id": "P479-EID-004",
+            "id": "GTG-EID-004",
             "description": (
                 "Access review design, entitlement management setup, and governance reporting configuration."
             ),
@@ -549,19 +549,19 @@ def _build_playbook_context(
 # ── Public Tool Function ──────────────────────────────────────────────
 
 
-@trace_tool_call("get_project479_playbook")
-async def get_project479_playbook(
+@trace_tool_call("get_green_playbook")
+async def get_green_playbook(
     *,
     gaps: list[str] | None = None,
     workload_areas: list[str] | None = None,
     include_offers: bool = True,
     include_checklists: bool = True,
 ) -> dict[str, Any]:
-    """Retrieve Project 479 Get-to-Green playbook sections from Foundry IQ.
+    """Retrieve Get to Green Get-to-Green playbook sections from Foundry IQ.
 
     The agent calls this tool after identifying gaps via the assessment tools.
     It maps gaps to workload areas and returns the relevant remediation
-    playbooks, recommended Project 479 offers, and onboarding checklists.
+    playbooks, recommended Get to Green offers, and onboarding checklists.
 
     When Foundry IQ is unavailable, returns built-in playbook content that
     mirrors the real structure.
@@ -571,7 +571,7 @@ async def get_project479_playbook(
             Used to automatically identify relevant workload areas.
         workload_areas: Optional explicit list of workload area keys.
             Takes precedence over gap-based mapping when provided.
-        include_offers: Whether to include Project 479 offer recommendations.
+        include_offers: Whether to include Get to Green offer recommendations.
         include_checklists: Whether to include onboarding checklists.
 
     Returns:

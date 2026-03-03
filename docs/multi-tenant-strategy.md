@@ -13,7 +13,7 @@ configuration — Graph API credentials, OAuth2 endpoints, JWT validation — is
 pinned to one `AZURE_TENANT_ID`. To assess a different customer tenant, a
 separate deployment with different environment variables is required.
 
-For the Project 479 "Get to Green" campaign to scale across multiple ME5
+For the Get to Green "Get to Green" campaign to scale across multiple ME5
 customers, the agent must be reusable across tenants without redeployment.
 
 ---
@@ -272,7 +272,7 @@ its own environment variables and single-tenant app registration.
 - **O(n) maintenance** — patching, upgrades, and config changes must be
   rolled out to every instance.
 - **Onboarding friction** — each new tenant requires a full provisioning run.
-- Does not scale for the Project 479 campaign (potentially hundreds of tenants).
+- Does not scale for the Get to Green campaign (potentially hundreds of tenants).
 
 ### Security Risk Exposure — Option B
 
@@ -358,7 +358,7 @@ lifetime (hours, not months).
 
 ## Recommendation
 
-**Option A (multi-tenant app)** is the right path for Project 479 at scale.
+**Option A (multi-tenant app)** is the right path for Get to Green at scale.
 
 ### Implementation Phases
 

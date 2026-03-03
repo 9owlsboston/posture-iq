@@ -68,10 +68,10 @@ PROMPT_CATALOGUE: list[tuple[str, str]] = [
     ("scorecard", "Create an adoption scorecard dashboard"),
     ("scorecard", "Show me the scorecard for our ME5 adoption"),
     ("scorecard", "Generate an executive summary with RAG status per workload"),
-    # get_project479_playbook
-    ("playbook", "Show me the Project 479 Foundry playbook"),
+    # get_green_playbook
+    ("playbook", "Show me the Get to Green Foundry playbook"),
     ("playbook", "What's in the get to green playbook and onboarding checklist?"),
-    ("playbook", "Map our gaps to the Project 479 offer catalog"),
+    ("playbook", "Map our gaps to the Get to Green offer catalog"),
     # full assessment (triggers 4 tools)
     ("full", "Run a full assessment of this tenant"),
     ("full", "Do a full posture assessment for my tenant"),

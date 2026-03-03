@@ -26,7 +26,7 @@ from src.tools.foundry_playbook import (
     _build_playbook_context,
     _get_built_in_playbooks,
     _identify_workload_areas,
-    get_project479_playbook,
+    get_green_playbook,
 )
 
 # ========================================================================
@@ -57,7 +57,7 @@ class TestBuiltInPlaybooks:
             assert offer, f"{area} missing offer"
             assert "name" in offer, f"{area} offer missing name"
             assert "id" in offer, f"{area} offer missing id"
-            assert offer["id"].startswith("P479-"), f"{area} offer ID not P479 format"
+            assert offer["id"].startswith("GTG-"), f"{area} offer ID not GTG format"
             assert "description" in offer, f"{area} offer missing description"
             assert "duration" in offer, f"{area} offer missing duration"
             assert "delivery" in offer, f"{area} offer missing delivery"
@@ -228,7 +228,7 @@ class TestBuildPlaybookContext:
     def test_context_contains_offer(self):
         playbooks = _get_built_in_playbooks(["defender_endpoint"])
         ctx = _build_playbook_context(playbooks)
-        assert "P479-DEF-001" in ctx
+        assert "GTG-DEF-001" in ctx
 
     def test_context_contains_checklist(self):
         playbooks = _get_built_in_playbooks(["defender_endpoint"])
@@ -249,7 +249,7 @@ class TestBuildPlaybookContext:
 
 
 # ========================================================================
-# SECTION 5: get_project479_playbook Tool — Gap-based
+# SECTION 5: get_green_playbook Tool — Gap-based
 # ========================================================================
 
 
@@ -258,52 +258,52 @@ class TestGetPlaybookByGaps:
 
     @pytest.mark.asyncio
     async def test_gap_based_lookup(self):
-        result = await get_project479_playbook(gaps=["MFA not enforced", "No DLP policies configured"])
+        result = await get_green_playbook(gaps=["MFA not enforced", "No DLP policies configured"])
         assert result["matched_count"] >= 2
         assert "entra_conditional_access" in result["matched_areas"]
         assert "purview_dlp" in result["matched_areas"]
 
     @pytest.mark.asyncio
     async def test_result_has_playbook_version(self):
-        result = await get_project479_playbook(gaps=["MFA not enforced"])
+        result = await get_green_playbook(gaps=["MFA not enforced"])
         assert result["playbook_version"] == PLAYBOOK_VERSION
 
     @pytest.mark.asyncio
     async def test_result_has_source(self):
-        result = await get_project479_playbook(gaps=["MFA not enforced"])
+        result = await get_green_playbook(gaps=["MFA not enforced"])
         assert result["source"] == "built_in"
 
     @pytest.mark.asyncio
     async def test_result_has_context_summary(self):
-        result = await get_project479_playbook(gaps=["MFA not enforced"])
+        result = await get_green_playbook(gaps=["MFA not enforced"])
         assert result["context_summary"]
         assert "Conditional Access" in result["context_summary"]
 
     @pytest.mark.asyncio
     async def test_result_has_recommended_offers(self):
-        result = await get_project479_playbook(gaps=["MFA not enforced", "Safe Links disabled"])
+        result = await get_green_playbook(gaps=["MFA not enforced", "Safe Links disabled"])
         assert len(result["recommended_offers"]) >= 2
-        assert all(o.startswith("P479-") for o in result["recommended_offers"])
+        assert all(o.startswith("GTG-") for o in result["recommended_offers"])
 
     @pytest.mark.asyncio
     async def test_result_has_timestamp(self):
-        result = await get_project479_playbook(gaps=["MFA not enforced"])
+        result = await get_green_playbook(gaps=["MFA not enforced"])
         assert "timestamp" in result
         assert "T" in result["timestamp"]
 
     @pytest.mark.asyncio
     async def test_result_has_total_areas(self):
-        result = await get_project479_playbook(gaps=["MFA not enforced"])
+        result = await get_green_playbook(gaps=["MFA not enforced"])
         assert result["total_areas"] == 12
 
     @pytest.mark.asyncio
     async def test_result_has_total_score_impact(self):
-        result = await get_project479_playbook(gaps=["MFA not enforced"])
+        result = await get_green_playbook(gaps=["MFA not enforced"])
         assert result["total_estimated_score_impact"] > 0
 
 
 # ========================================================================
-# SECTION 6: get_project479_playbook Tool — Area-based
+# SECTION 6: get_green_playbook Tool — Area-based
 # ========================================================================
 
 
@@ -312,14 +312,14 @@ class TestGetPlaybookByAreas:
 
     @pytest.mark.asyncio
     async def test_explicit_areas(self):
-        result = await get_project479_playbook(workload_areas=["defender_endpoint", "entra_pim"])
+        result = await get_green_playbook(workload_areas=["defender_endpoint", "entra_pim"])
         assert result["matched_count"] == 2
         assert "defender_endpoint" in result["matched_areas"]
         assert "entra_pim" in result["matched_areas"]
 
     @pytest.mark.asyncio
     async def test_areas_take_precedence_over_gaps(self):
-        result = await get_project479_playbook(
+        result = await get_green_playbook(
             gaps=["MFA not enforced"],
             workload_areas=["defender_endpoint"],
         )
@@ -328,12 +328,12 @@ class TestGetPlaybookByAreas:
 
     @pytest.mark.asyncio
     async def test_invalid_areas_filtered(self):
-        result = await get_project479_playbook(workload_areas=["fake_area", "defender_endpoint"])
+        result = await get_green_playbook(workload_areas=["fake_area", "defender_endpoint"])
         assert result["matched_areas"] == ["defender_endpoint"]
 
     @pytest.mark.asyncio
     async def test_all_invalid_areas(self):
-        result = await get_project479_playbook(workload_areas=["fake1", "fake2"])
+        result = await get_green_playbook(workload_areas=["fake1", "fake2"])
         # All invalid areas are filtered out → empty valid list → falls back to all
         # Actually, valid_areas=[] then resolved_areas=[] → _get_built_in_playbooks([]) → all
         # This is intentional: unknown areas should not crash.
@@ -341,7 +341,7 @@ class TestGetPlaybookByAreas:
 
 
 # ========================================================================
-# SECTION 7: get_project479_playbook — No Args (All Playbooks)
+# SECTION 7: get_green_playbook — No Args (All Playbooks)
 # ========================================================================
 
 
@@ -350,13 +350,13 @@ class TestGetPlaybookAll:
 
     @pytest.mark.asyncio
     async def test_no_args_returns_all(self):
-        result = await get_project479_playbook()
+        result = await get_green_playbook()
         assert result["matched_count"] == 12
         assert len(result["playbooks"]) == 12
 
     @pytest.mark.asyncio
     async def test_all_areas_present(self):
-        result = await get_project479_playbook()
+        result = await get_green_playbook()
         for area in WORKLOAD_AREAS:
             assert area in result["playbooks"]
 
@@ -371,7 +371,7 @@ class TestOfferChecklistFlags:
 
     @pytest.mark.asyncio
     async def test_exclude_offers(self):
-        result = await get_project479_playbook(
+        result = await get_green_playbook(
             workload_areas=["defender_endpoint"],
             include_offers=False,
         )
@@ -380,7 +380,7 @@ class TestOfferChecklistFlags:
 
     @pytest.mark.asyncio
     async def test_exclude_checklists(self):
-        result = await get_project479_playbook(
+        result = await get_green_playbook(
             workload_areas=["defender_endpoint"],
             include_checklists=False,
         )
@@ -389,7 +389,7 @@ class TestOfferChecklistFlags:
 
     @pytest.mark.asyncio
     async def test_exclude_both(self):
-        result = await get_project479_playbook(
+        result = await get_green_playbook(
             workload_areas=["defender_endpoint"],
             include_offers=False,
             include_checklists=False,
@@ -402,7 +402,7 @@ class TestOfferChecklistFlags:
 
     @pytest.mark.asyncio
     async def test_include_both_default(self):
-        result = await get_project479_playbook(
+        result = await get_green_playbook(
             workload_areas=["defender_endpoint"],
         )
         pb = result["playbooks"]["defender_endpoint"]
@@ -420,7 +420,7 @@ class TestPlaybookResponseStructure:
 
     @pytest.mark.asyncio
     async def test_playbook_entry_fields(self):
-        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
+        result = await get_green_playbook(workload_areas=["defender_endpoint"])
         pb = result["playbooks"]["defender_endpoint"]
         assert "title" in pb
         assert "remediation_steps" in pb
@@ -431,14 +431,14 @@ class TestPlaybookResponseStructure:
 
     @pytest.mark.asyncio
     async def test_remediation_steps_are_list(self):
-        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
+        result = await get_green_playbook(workload_areas=["defender_endpoint"])
         pb = result["playbooks"]["defender_endpoint"]
         assert isinstance(pb["remediation_steps"], list)
         assert len(pb["remediation_steps"]) >= 3
 
     @pytest.mark.asyncio
     async def test_offer_has_required_fields(self):
-        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
+        result = await get_green_playbook(workload_areas=["defender_endpoint"])
         offer = result["playbooks"]["defender_endpoint"]["offer"]
         assert "name" in offer
         assert "id" in offer
@@ -455,14 +455,14 @@ class TestFoundryIQFallback:
 
     @pytest.mark.asyncio
     async def test_default_uses_builtin(self):
-        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
+        result = await get_green_playbook(workload_areas=["defender_endpoint"])
         assert result["source"] == "built_in"
 
     @pytest.mark.asyncio
     @patch("src.tools.foundry_playbook._create_foundry_client")
     async def test_no_client_uses_builtin(self, mock_client):
         mock_client.return_value = None
-        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
+        result = await get_green_playbook(workload_areas=["defender_endpoint"])
         assert result["source"] == "built_in"
         assert result["matched_count"] == 1
 
@@ -472,7 +472,7 @@ class TestFoundryIQFallback:
     async def test_fetch_failure_falls_back(self, mock_client, mock_fetch):
         mock_client.return_value = {"endpoint": "https://foundry.example.com"}
         mock_fetch.return_value = None  # API failed
-        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
+        result = await get_green_playbook(workload_areas=["defender_endpoint"])
         assert result["source"] == "built_in"
 
     @pytest.mark.asyncio
@@ -486,7 +486,7 @@ class TestFoundryIQFallback:
                 "remediation_playbook": ["Step 1", "Step 2", "Step 3"],
                 "offer": {
                     "name": "Remote Offer",
-                    "id": "P479-REMOTE-001",
+                    "id": "GTG-REMOTE-001",
                     "description": "Remote offer desc",
                     "duration": "1 day",
                     "delivery": "Remote",
@@ -496,7 +496,7 @@ class TestFoundryIQFallback:
                 "impact_on_score": 10.0,
             }
         }
-        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
+        result = await get_green_playbook(workload_areas=["defender_endpoint"])
         assert result["source"] == "foundry_iq"
         assert result["playbooks"]["defender_endpoint"]["title"] == "Remote Playbook"
 
@@ -512,17 +512,17 @@ class TestSystemPromptInjection:
     def test_system_prompt_mentions_playbook_tool(self):
         from src.agent.system_prompt import SYSTEM_PROMPT
 
-        assert "get_project479_playbook" in SYSTEM_PROMPT
+        assert "get_green_playbook" in SYSTEM_PROMPT
 
     def test_system_prompt_mentions_foundry_iq(self):
         from src.agent.system_prompt import SYSTEM_PROMPT
 
         assert "Foundry IQ" in SYSTEM_PROMPT
 
-    def test_system_prompt_mentions_project_479(self):
+    def test_system_prompt_mentions_green(self):
         from src.agent.system_prompt import SYSTEM_PROMPT
 
-        assert "Project 479" in SYSTEM_PROMPT
+        assert "Get to Green" in SYSTEM_PROMPT
 
     def test_system_prompt_mentions_offers(self):
         from src.agent.system_prompt import SYSTEM_PROMPT
@@ -547,18 +547,18 @@ class TestToolRegistration:
         from src.agent.main import TOOLS
 
         tool_names = [t.name for t in TOOLS]
-        assert "get_project479_playbook" in tool_names
+        assert "get_green_playbook" in tool_names
 
     def test_foundry_tool_has_handler(self):
         from src.agent.main import TOOLS
 
-        tool = next(t for t in TOOLS if t.name == "get_project479_playbook")
+        tool = next(t for t in TOOLS if t.name == "get_green_playbook")
         assert tool.handler is not None
 
     def test_foundry_tool_has_parameters(self):
         from src.agent.main import TOOLS
 
-        tool = next(t for t in TOOLS if t.name == "get_project479_playbook")
+        tool = next(t for t in TOOLS if t.name == "get_green_playbook")
         props = tool.parameters["properties"]
         assert "gaps" in props
         assert "workload_areas" in props
@@ -579,30 +579,30 @@ class TestEdgeCases:
 
     @pytest.mark.asyncio
     async def test_empty_gaps_list(self):
-        result = await get_project479_playbook(gaps=[])
+        result = await get_green_playbook(gaps=[])
         # Empty gaps → all playbooks
         assert result["matched_count"] == 12
 
     @pytest.mark.asyncio
     async def test_none_gaps(self):
-        result = await get_project479_playbook(gaps=None)
+        result = await get_green_playbook(gaps=None)
         assert result["matched_count"] == 12
 
     @pytest.mark.asyncio
     async def test_empty_workload_areas(self):
-        result = await get_project479_playbook(workload_areas=[])
+        result = await get_green_playbook(workload_areas=[])
         # Empty areas → all playbooks
         assert result["matched_count"] == 12
 
     @pytest.mark.asyncio
     async def test_single_area(self):
-        result = await get_project479_playbook(workload_areas=["entra_pim"])
+        result = await get_green_playbook(workload_areas=["entra_pim"])
         assert result["matched_count"] == 1
         assert "entra_pim" in result["matched_areas"]
 
     @pytest.mark.asyncio
     async def test_result_is_json_serializable(self):
-        result = await get_project479_playbook(workload_areas=["defender_endpoint"])
+        result = await get_green_playbook(workload_areas=["defender_endpoint"])
         # Should not raise
         serialized = json.dumps(result, default=str)
         assert serialized

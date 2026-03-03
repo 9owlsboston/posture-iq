@@ -346,7 +346,7 @@ These spans land in the `dependencies` table and the Agent blade reads them auto
 | `check_purview_policies` | No — Graph API | No |
 | `get_entra_config` | No — Graph API | No |
 | `create_adoption_scorecard` | No — deterministic | No |
-| `get_project479_playbook` | No — deterministic | No |
+| `get_green_playbook` | No — deterministic | No |
 
 To see data in the Agent blade, send prompts that trigger `generate_remediation_plan`:
 
@@ -479,7 +479,7 @@ python scripts/simulate_traffic.py --tools remediation,playbook --burst-size 5
 | `entra` | `get_entra_config` | Graph API / mock |
 | `remediation` | `generate_remediation_plan` | Calls Azure OpenAI |
 | `scorecard` | `create_adoption_scorecard` | Aggregation tool |
-| `playbook` | `get_project479_playbook` | Foundry IQ integration |
+| `playbook` | `get_green_playbook` | Foundry IQ integration |
 | `full` | All 4 assessment tools | Full tenant assessment |
 
 ### Full Parameter Reference

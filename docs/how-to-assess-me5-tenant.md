@@ -56,7 +56,7 @@ An **ME5 tenant** is not a special type of Azure tenant. It's a standard **Entra
 
 Many customers *buy* ME5 licenses but don't *deploy* all the security features — they're
 paying for Defender, Purview, and Entra ID P2 but haven't turned them on.
-**Project 479 ("Get to Green")** is Microsoft's internal campaign to help these
+**Get to Green ("Get to Green")** is Microsoft's internal campaign to help these
 customers actually adopt what they've paid for.
 
 PostureIQ assesses this adoption by calling the **Microsoft Graph Security API**:
@@ -328,7 +328,7 @@ az containerapp update \
 | Adoption Scorecard | `/reports/getM365AppUserDetail` | M365 app adoption rates |
 | Remediation Plan | *(aggregates all tools + GPT-4o)* | Prioritized fix recommendations with scripts |
 | Fabric Telemetry | *(Fabric workspace API)* | ME5 workload telemetry from Microsoft Fabric |
-| Foundry Playbook (`get_project479_playbook`) | *(Foundry IQ knowledge base)* | Gap-to-remediation playbook mapping for Project 479 |
+| Foundry Playbook (`get_green_playbook`) | *(Foundry IQ knowledge base)* | Gap-to-remediation playbook mapping for Get to Green |
 
 ---
 
@@ -549,5 +549,5 @@ Our first real assessment of the ME5 tenant returned:
 | Entra Config | **55%** coverage, 6 gaps | Legacy auth not blocked (critical gap) |
 
 This baseline confirms the "bought but not deployed" problem that
-Project 479 targets — the tenant has E5 licenses but hasn't activated
+Get to Green targets — the tenant has E5 licenses but hasn't activated
 the security features they paid for.

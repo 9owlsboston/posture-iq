@@ -247,7 +247,7 @@ class TestToolsRegistry:
         "get_entra_config",
         "generate_remediation_plan",
         "create_adoption_scorecard",
-        "get_project479_playbook",
+        "get_green_playbook",
         "push_posture_snapshot",
     ]
 

@@ -51,7 +51,7 @@ setup_tracing()
 
 app = FastAPI(
     title="PostureIQ",
-    description="ME5 Security Posture Assessment Agent — Project 479 Get-to-Green",
+    description="ME5 Security Posture Assessment Agent — Get to Green Get-to-Green",
     version="0.1.0",
 )
 

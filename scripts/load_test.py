@@ -36,8 +36,8 @@ PROMPTS: list[dict[str, str]] = [
     # create_adoption_scorecard
     {"message": "Create an adoption scorecard dashboard"},
     {"message": "Show me the scorecard for our ME5 adoption"},
-    # get_project479_playbook
-    {"message": "Show me the Project 479 Foundry playbook"},
+    # get_green_playbook
+    {"message": "Show me the Get to Green Foundry playbook"},
     {"message": "What's in the get to green playbook and onboarding checklist?"},
     # full assessment (triggers 4 tools at once)
     {"message": "Run a full assessment of this tenant"},

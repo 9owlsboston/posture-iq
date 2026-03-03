@@ -84,10 +84,10 @@ async def _run_tool(name: str, args: dict[str, Any] | None = None) -> dict[str, 
             assessment_context=args.get("assessment_context", "{}"),
         )
 
-    if name == "get_project479_playbook":
-        from src.tools.foundry_playbook import get_project479_playbook
+    if name == "get_green_playbook":
+        from src.tools.foundry_playbook import get_green_playbook
 
-        return await get_project479_playbook(
+        return await get_green_playbook(
             gaps=args.get("gaps"),
             workload_areas=args.get("workload_areas"),
         )
@@ -119,8 +119,8 @@ _TOOL_INTENTS: list[tuple[list[str], str]] = [
     (["entra", "conditional access", "pim", "identity protection", "mfa"], "get_entra_config"),
     (["remediation", "remediate", "fix", "plan", "get-to-green", "get to green"], "generate_remediation_plan"),
     (
-        ["playbook", "project 479", "foundry", "get to green playbook", "onboarding checklist", "offer catalog"],
-        "get_project479_playbook",
+        ["playbook", "get to green", "foundry", "get to green playbook", "onboarding checklist", "offer catalog"],
+        "get_green_playbook",
     ),
     (
         ["fabric", "telemetry", "lakehouse", "snapshot", "push posture", "longitudinal"],
@@ -291,10 +291,10 @@ def _format_remediation(data: dict[str, Any]) -> str:
             conf = step["confidence"]
             conf_icon = "🟢" if conf == "high" else ("🟡" if conf == "medium" else "🔴")
             lines.append(f"- **Confidence**: {conf_icon} {conf}")
-        offer = step.get("project_479_offer")
+        offer = step.get("green_offer")
         if offer:
             lines.append(
-                f"- **P479 Offer**: 📘 {offer['name']} ({offer['id']}) — {offer['duration']}, {offer['delivery']}"
+                f"- **GTG Offer**: 📘 {offer['name']} ({offer['id']}) — {offer['duration']}, {offer['delivery']}"
             )
         if step.get("script"):
             lines.append(f"\n```powershell\n{step['script']}\n```\n")
@@ -324,7 +324,7 @@ def _format_scorecard(data: dict[str, Any]) -> str:
 
 
 def _format_playbook(data: dict[str, Any]) -> str:
-    lines = ["## 📖 Project 479 — Get-to-Green Playbook\n"]
+    lines = ["## 📖 Get to Green — Get-to-Green Playbook\n"]
     lines.append(f"**Version**: {data.get('playbook_version', 'N/A')}")
     lines.append(f"**Source**: {data.get('source', 'built_in')}")
     lines.append(f"**Matched Areas**: {data.get('matched_count', 0)} / {data.get('total_areas', 0)}\n")
@@ -377,7 +377,7 @@ _FORMATTERS = {
     "get_entra_config": _format_entra,
     "generate_remediation_plan": _format_remediation,
     "create_adoption_scorecard": _format_scorecard,
-    "get_project479_playbook": _format_playbook,
+    "get_green_playbook": _format_playbook,
     "push_posture_snapshot": _format_fabric_snapshot,
 }
 

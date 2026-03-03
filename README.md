@@ -2,7 +2,7 @@
 
 **ME5(M365 E5) Security Posture Assessment Agent** — Built with the GitHub Copilot SDK
 
-PostureIQ is a conversational AI agent that assesses an organization's Microsoft 365 E5 security posture, identifies deployment gaps, and generates prioritized remediation plans to accelerate the "Get to Green" (Project 479) motion.
+PostureIQ is a conversational AI agent that assesses an organization's Microsoft 365 E5 security posture, identifies deployment gaps, and generates prioritized remediation plans to accelerate the "Get to Green" (Get to Green) motion.
 
 ---
 
@@ -17,7 +17,7 @@ PostureIQ is a conversational AI agent that assesses an organization's Microsoft
 | `generate_remediation_plan` | AI-generated prioritized remediation with PowerShell scripts |
 | `create_adoption_scorecard` | Executive summary scorecard with RAG status per workload |
 | `push_fabric_telemetry` | Push posture snapshots to Fabric lakehouse for trend analysis & Power BI |
-| `get_project479_playbook` | Foundry IQ playbook retrieval for gap-to-remediation mapping |
+| `get_green_playbook` | Foundry IQ playbook retrieval for gap-to-remediation mapping |
 
 ## Architecture
 
@@ -190,7 +190,7 @@ posture-iq/
 
 | Category | Points | PostureIQ Coverage |
 |----------|--------|-------------------|
-| Enterprise Value | 35 | Project 479 acceleration, Secure Score improvement |
+| Enterprise Value | 35 | Get to Green acceleration, Secure Score improvement |
 | Azure Integration | 25 | OpenAI + Content Safety + App Insights + Key Vault + Container Apps |
 | Operational Readiness | 15 | CI/CD (OIDC), health probes, IaC, ACR, auto-scaling |
 | Security & RAI | 15 | Content Safety, PII redaction, audit logs, prompt injection |

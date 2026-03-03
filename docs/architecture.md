@@ -27,7 +27,7 @@ flowchart TB
             T1["secure_score"] --- T2["defender_coverage"]
             T3["purview_policies"] --- T4["entra_config"]
             T5["remediation_plan"] --- T6["adoption_scorecard"]
-            T7["project479_playbook"]
+            T7["green_playbook"]
         end
 
         RT --> MW --> TOOLS

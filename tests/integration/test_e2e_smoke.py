@@ -177,7 +177,7 @@ class TestToolRegistryE2E:
             "get_entra_config",
             "generate_remediation_plan",
             "create_adoption_scorecard",
-            "get_project479_playbook",
+            "get_green_playbook",
         ]
         for name in expected:
             assert name in tool_names, f"Missing tool: {name}"
@@ -259,9 +259,9 @@ class TestFoundryIQPipelineE2E:
     """End-to-end test of the Foundry IQ playbook pipeline."""
 
     async def test_gap_to_playbook_lookup(self):
-        from src.tools.foundry_playbook import get_project479_playbook
+        from src.tools.foundry_playbook import get_green_playbook
 
-        result = await get_project479_playbook(
+        result = await get_green_playbook(
             gaps=["MFA not enforced", "No DLP policies"],
         )
         assert result["playbook_version"]
@@ -270,15 +270,15 @@ class TestFoundryIQPipelineE2E:
         assert result["context_summary"]
 
     async def test_all_playbooks_retrieval(self):
-        from src.tools.foundry_playbook import get_project479_playbook
+        from src.tools.foundry_playbook import get_green_playbook
 
-        result = await get_project479_playbook()
+        result = await get_green_playbook()
         assert len(result["playbooks"]) == 12
 
     async def test_playbook_has_remediation_steps(self):
-        from src.tools.foundry_playbook import get_project479_playbook
+        from src.tools.foundry_playbook import get_green_playbook
 
-        result = await get_project479_playbook(
+        result = await get_green_playbook(
             workload_areas=["defender_endpoint"],
         )
         playbook = list(result["playbooks"].values())[0]
@@ -286,9 +286,9 @@ class TestFoundryIQPipelineE2E:
         assert len(playbook["remediation_steps"]) > 0
 
     async def test_playbook_has_offers(self):
-        from src.tools.foundry_playbook import get_project479_playbook
+        from src.tools.foundry_playbook import get_green_playbook
 
-        result = await get_project479_playbook(
+        result = await get_green_playbook(
             workload_areas=["defender_endpoint"],
             include_offers=True,
         )

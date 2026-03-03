@@ -255,7 +255,7 @@ These tools don't call Graph but may need `tenant_id` for audit/telemetry:
 |--------------|------|--------|
 | `generate_remediation_plan()` | `src/tools/remediation_plan.py` | Add `tenant_id: str = ""` parameter; include in audit context |
 | `create_adoption_scorecard()` | `src/tools/adoption_scorecard.py` | Add `tenant_id: str = ""` parameter; include in output metadata |
-| `get_project479_playbook()` | `src/tools/foundry_playbook.py` | No change needed (tenant-agnostic playbook content) |
+| `get_green_playbook()` | `src/tools/foundry_playbook.py` | No change needed (tenant-agnostic playbook content) |
 | `push_snapshot()` | `src/tools/fabric_telemetry.py` | Already accepts `tenant_id` — no change needed |
 
 ### Task 2.4 — Thread `UserContext` through `_run_tool()` in chat.py
