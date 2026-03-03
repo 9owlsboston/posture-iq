@@ -50,6 +50,11 @@ See [Customer Deployment Guide](docs/ghcp_challenge_submission/postureiq-custome
 
 ### Setup (Local Development)
 
+> **Note:** Local development only requires an Entra ID app registration (for
+> Graph API access) and an M365 E5 tenant. Azure infrastructure (OpenAI,
+> Container Apps, etc.) is only needed for cloud deployment — see
+> [Deploy to a Customer's Azure Tenant](#deploy-to-a-customers-azure-tenant) above.
+
 ```bash
 # Clone and install
 git clone https://github.com/<your-org>/posture-iq.git

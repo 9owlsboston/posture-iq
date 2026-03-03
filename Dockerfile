@@ -23,8 +23,9 @@ COPY src/ ./src/
 # Install Python dependencies (non-editable for production)
 # Pin transitive deps to patch known CVEs (CVE-2026-23949, CVE-2026-24049)
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir "jaraco.context>=6.1.0" "wheel>=0.46.2" \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir . \
+    && pip install --no-cache-dir --force-reinstall --no-deps \
+       "jaraco.context>=6.1.0" "wheel>=0.46.2"
 
 # ── Stage 2: Runtime ───────────────────────────────────────
 FROM python:3.11-slim AS runtime
@@ -50,7 +51,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy installed packages from builder
+# Clear base-image site-packages to avoid stale dist-info (e.g. wheel 0.45.1)
+# then copy the patched set from the builder stage
+RUN rm -rf /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
