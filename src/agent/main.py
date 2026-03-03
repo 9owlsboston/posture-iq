@@ -433,7 +433,7 @@ class PostureIQAgent:
         """Gracefully shut down: close session, then stop the client."""
         await self.close_session()
         if self._client:
-            errors = await self._client.stop()
+            errors = await self._client.stop()  # type: ignore[func-returns-value,unused-ignore]
             if errors:
                 logger.warning("agent.client.stop_errors", errors=[str(e) for e in errors])
             else:
