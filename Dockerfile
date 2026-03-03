@@ -22,10 +22,13 @@ COPY src/ ./src/
 
 # Install Python dependencies (non-editable for production)
 # Pin transitive deps to patch known CVEs (CVE-2026-23949, CVE-2026-24049)
+# Remove setuptools+pip after install — not needed at runtime and setuptools
+# vendors vulnerable copies of jaraco.context/wheel that Trivy flags.
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir . \
     && pip install --no-cache-dir --force-reinstall --no-deps \
-       "jaraco.context>=6.1.0" "wheel>=0.46.2"
+       "jaraco.context>=6.1.0" "wheel>=0.46.2" \
+    && pip uninstall -y setuptools pip
 
 # ── Stage 2: Runtime ───────────────────────────────────────
 FROM python:3.11-slim AS runtime
