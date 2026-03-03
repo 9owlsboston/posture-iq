@@ -106,6 +106,12 @@ async def chat_ui() -> FileResponse:
     return FileResponse(str(_STATIC_DIR / "index.html"), media_type="text/html")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> FileResponse:
+    """Serve the favicon."""
+    return FileResponse(str(_STATIC_DIR / "favicon.ico"), media_type="image/x-icon")
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(
     request: ChatRequest,
@@ -351,12 +357,17 @@ async def auth_callback(
         redirect_uri=redirect_uri,
     )
 
-    access_token = token_response.get("access_token", "")
+    # Use id_token for SPA auth — its audience is our app's client-ID,
+    # whereas the access_token audience is https://graph.microsoft.com.
+    id_token = token_response.get("id_token", "")
     expires_in = token_response.get("expires_in", "")
 
-    # Redirect to SPA root with token in fragment (never hits the server)
+    # Also pass the Graph access_token so the SPA can make Graph calls later
+    access_token = token_response.get("access_token", "")
+
+    # Redirect to SPA root with tokens in fragment (never hits the server)
     return RedirectResponse(
-        url=f"/#access_token={access_token}&expires_in={expires_in}",
+        url=f"/#id_token={id_token}&access_token={access_token}&expires_in={expires_in}",
         status_code=302,
     )
 

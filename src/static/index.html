@@ -750,14 +750,18 @@
     async function initAuth() {
       // Check for token in URL fragment (from /auth/callback redirect)
       const params = parseHashParams();
-      if (params.access_token) {
-        accessToken = params.access_token;
-        sessionStorage.setItem('access_token', accessToken);
+      if (params.id_token) {
+        // id_token has aud=our-client-id; access_token has aud=graph.microsoft.com
+        accessToken = params.id_token;
+        sessionStorage.setItem('id_token', accessToken);
+        if (params.access_token) {
+          sessionStorage.setItem('graph_token', params.access_token);
+        }
         // Clean the URL
         history.replaceState(null, '', '/');
       } else {
         // Check sessionStorage
-        accessToken = sessionStorage.getItem('access_token');
+        accessToken = sessionStorage.getItem('id_token');
       }
 
       if (accessToken) {
@@ -774,8 +778,10 @@
           console.warn('Auth check failed:', e);
         }
         // Token invalid/expired
+        console.warn('Auth: /auth/me returned non-OK, clearing token');
         accessToken = null;
-        sessionStorage.removeItem('access_token');
+        sessionStorage.removeItem('id_token');
+        sessionStorage.removeItem('graph_token');
       }
 
       showUnauthenticatedUI();
@@ -814,7 +820,8 @@
     function signOut() {
       accessToken = null;
       currentUser = null;
-      sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('id_token');
+      sessionStorage.removeItem('graph_token');
       sessionId = null;
       showUnauthenticatedUI();
       clearChat();
