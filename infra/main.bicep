@@ -31,6 +31,8 @@ param cicdPrincipalId string = ''
 // ── Variables ─────────────────────────────────────────────
 var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
 var resourcePrefix = '${projectName}-${environment}'
+// Shortened prefix for resources with strict name-length limits (e.g. Key Vault ≤ 24 chars)
+var shortPrefix = 'spiq-${environment}'
 
 // ── Managed Identity (deployed early for RBAC wiring) ─────
 resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
@@ -71,7 +73,7 @@ module contentSafety 'modules/content-safety.bicep' = {
 module keyVault 'modules/keyvault.bicep' = {
   name: 'keyVaultDeployment'
   params: {
-    name: '${resourcePrefix}-kv-${uniqueSuffix}'
+    name: '${shortPrefix}-kv-${uniqueSuffix}'
     location: location
     managedIdentityPrincipalId: managedIdentity.properties.principalId
   }
