@@ -364,7 +364,7 @@ require_security_events = scope_checker("SecurityEvents.Read.All")
 require_security_actions = scope_checker("SecurityActions.Read.All")
 require_policy_read = scope_checker("Policy.Read.All")
 require_reports_read = scope_checker("Reports.Read.All")
-require_info_protection = scope_checker("InformationProtection.Read.All")
+require_info_protection = scope_checker("InformationProtectionPolicy.Read.All")
 
 
 # ── OAuth2 Authorization Code Flow Helpers ─────────────────────────────────

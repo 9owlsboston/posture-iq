@@ -11,7 +11,7 @@ Falls back to SecureScoreControlProfiles when direct endpoints are
 unavailable or return 403.
 
 Graph API endpoint: GET /security/secureScoreControlProfiles
-Required scope: SecurityEvents.Read.All, InformationProtection.Read.All
+Required scope: SecurityEvents.Read.All, InformationProtectionPolicy.Read.All
 """
 
 from __future__ import annotations

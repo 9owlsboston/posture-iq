@@ -332,7 +332,7 @@ if [[ "$SKIP_APP_REG" != true ]]; then
     ["SecurityActions.Read.All"]="1638cddf-07a5-4f16-928e-0b80f95e632c"
     ["Policy.Read.All"]="572fea84-0151-49b2-9301-11cb16974376"
     ["Reports.Read.All"]="02e97553-ed7b-43d0-ab3c-f8bace0d040c"
-    ["InformationProtection.Read.All"]="d9731f5b-aca7-42d8-8aeb-0ac1bf55e2e9"
+    ["InformationProtectionPolicy.Read.All"]="19da66cb-0fb0-4390-b071-ebc76a349482"
   )
 
   for perm_name in "${!PERMISSIONS[@]}"; do
