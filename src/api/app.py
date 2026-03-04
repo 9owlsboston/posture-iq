@@ -14,6 +14,7 @@ Provides:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 from datetime import UTC, datetime
@@ -181,19 +182,21 @@ async def readiness_check() -> ReadinessResponse:
 
     Used by Azure Container Apps to determine if traffic should be routed to this instance.
     """
-    checks: dict[str, str] = {}
+    # Run all dependency checks concurrently so the endpoint stays fast
+    # even when external services are slow or unreachable.
+    copilot_sdk, azure_openai, graph_api, key_vault = await asyncio.gather(
+        _check_copilot_sdk(),
+        _check_azure_openai(),
+        _check_graph_api(),
+        _check_key_vault(),
+    )
 
-    # Check Copilot SDK availability
-    checks["copilot_sdk"] = await _check_copilot_sdk()
-
-    # Check Azure OpenAI
-    checks["azure_openai"] = await _check_azure_openai()
-
-    # Check Graph API credentials
-    checks["graph_api"] = await _check_graph_api()
-
-    # Check Key Vault
-    checks["key_vault"] = await _check_key_vault()
+    checks: dict[str, str] = {
+        "copilot_sdk": copilot_sdk,
+        "azure_openai": azure_openai,
+        "graph_api": graph_api,
+        "key_vault": key_vault,
+    }
 
     # Determine overall readiness
     failed = {k: v for k, v in checks.items() if v not in ("ok", "skipped")}
@@ -235,7 +238,7 @@ async def _check_azure_openai() -> str:
 
     try:
         url = endpoint.rstrip("/") + "/openai/deployments?api-version=2024-02-01"
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.get(url)
         # Any HTTP response means the endpoint is reachable.
         # 401/403 = auth required (expected with Managed Identity)
@@ -288,7 +291,7 @@ async def _check_key_vault() -> str:
     try:
         # Ping Key Vault discovery endpoint (no auth needed)
         url = kv_url.rstrip("/") + "/keys?api-version=7.4"
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.get(url)
         # 401 = reachable (auth required, expected); 200/403 also ok
         if resp.status_code in (200, 401, 403):

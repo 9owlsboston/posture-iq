@@ -247,6 +247,25 @@ def print_summary(all_results: list[dict], wall_time: float, burst_count: int) -
 # ── Main ──────────────────────────────────────────────────────────────────
 
 
+async def _preflight_check(url: str) -> bool:
+    """Verify the target server is reachable before starting bursts."""
+    print(f"   Preflight    : checking {url}/health …", end=" ", flush=True)
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{url}/health", timeout=5.0)
+        if resp.status_code == 200:
+            print("✅ server is up")
+            return True
+        print(f"⚠️  got HTTP {resp.status_code}")
+        return True  # Server is reachable even if not healthy
+    except httpx.ConnectError:
+        print("❌ connection refused — is the server running?")
+        return False
+    except Exception as exc:
+        print(f"❌ {exc.__class__.__name__}: {exc}")
+        return False
+
+
 async def async_main(args: argparse.Namespace) -> None:
     # Filter prompts by --tools selection
     if args.tools:
@@ -271,6 +290,12 @@ async def async_main(args: argparse.Namespace) -> None:
     print(f"   Burst size   : {args.burst_size} chat requests" + (" + probes" if args.probes else ""))
     print(f"   Concurrency  : {args.concurrency}")
     print(f"   Prompt pool  : {len(prompts)} messages")
+
+    if not await _preflight_check(url):
+        print()
+        print("Hint: start the server first with:")
+        print("  python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000")
+        sys.exit(1)
     print()
 
     all_results: list[dict] = []
@@ -293,7 +318,18 @@ async def async_main(args: argparse.Namespace) -> None:
             all_results.extend(results)
 
             ok = sum(1 for r in results if r["status"] == 200)
-            print(f"   ✓ {ok}/{len(results)} succeeded\n")
+            errs = len(results) - ok
+            print(f"   ✓ {ok}/{len(results)} succeeded")
+            if errs:
+                # Show error breakdown
+                err_counts: dict[str, int] = {}
+                for r in results:
+                    if r["status"] != 200:
+                        key = str(r["status"])
+                        err_counts[key] = err_counts.get(key, 0) + 1
+                for err_key, cnt in sorted(err_counts.items(), key=lambda x: -x[1]):
+                    print(f"   ✗ {cnt}× {err_key}")
+            print()
 
             # Sleep until next burst (skip after last burst)
             if i < burst_count - 1:

@@ -614,7 +614,12 @@ class TestRemediationTracing:
         mock_tracer_fn.return_value = mock_tracer
 
         await generate_remediation_plan("{}")
-        mock_tracer.start_as_current_span.assert_called_once()
+        # The tool span + a synthetic GenAI chat span for mock token usage
+        assert mock_tracer.start_as_current_span.call_count == 2
+        tool_call = mock_tracer.start_as_current_span.call_args_list[0]
+        assert "generate_remediation_plan" in tool_call.kwargs.get("name", tool_call.args[0] if tool_call.args else "")
+        genai_call = mock_tracer.start_as_current_span.call_args_list[1]
+        assert "chat" in genai_call.kwargs.get("name", genai_call.args[0] if genai_call.args else "")
 
     @pytest.mark.asyncio
     @patch("src.tools.remediation_plan._create_openai_client", return_value=None)
@@ -630,8 +635,9 @@ class TestRemediationTracing:
         mock_tracer_fn.return_value = mock_tracer
 
         await generate_remediation_plan("{}")
-        call_args = mock_tracer.start_as_current_span.call_args
-        span_name = call_args.kwargs.get("name", call_args[0][0] if call_args[0] else "")
+        # First call is the execute_tool span; the second is the GenAI chat span
+        tool_call = mock_tracer.start_as_current_span.call_args_list[0]
+        span_name = tool_call.kwargs.get("name", tool_call[0][0] if tool_call[0] else "")
         assert "generate_remediation_plan" in span_name
 
 

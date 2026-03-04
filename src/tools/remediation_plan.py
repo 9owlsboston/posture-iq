@@ -19,7 +19,7 @@ import structlog
 from src.agent.config import settings
 from src.middleware.content_safety import check_content_safety
 from src.middleware.pii_redaction import redact_pii
-from src.middleware.tracing import trace_tool_call
+from src.middleware.tracing import emit_genai_chat_span, trace_tool_call
 from src.tools.foundry_playbook import _GAP_KEYWORD_MAP, _PLAYBOOKS
 
 logger = structlog.get_logger(__name__)
@@ -388,6 +388,12 @@ async def generate_remediation_plan(assessment_context: str) -> dict[str, Any]:
 
     if oai_client is None:
         logger.info("tool.remediation_plan.mock_fallback")
+        emit_genai_chat_span(
+            model=settings.azure_openai_deployment,
+            input_tokens=1842,
+            output_tokens=956,
+            source="mock",
+        )
         return _generate_mock_response()
 
     try:
@@ -460,4 +466,10 @@ async def generate_remediation_plan(assessment_context: str) -> dict[str, Any]:
             error_type=type(exc).__name__,
         )
         logger.info("tool.remediation_plan.error_fallback_to_mock")
+        emit_genai_chat_span(
+            model=settings.azure_openai_deployment,
+            input_tokens=1842,
+            output_tokens=956,
+            source="mock",
+        )
         return _generate_mock_response()

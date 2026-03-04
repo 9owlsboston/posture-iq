@@ -138,12 +138,12 @@ async def _run_tool(
 # ── Intent classifier (keyword-based for demo) ───────────────────────────
 
 _TOOL_INTENTS: list[tuple[list[str], str]] = [
-    (["scorecard", "adoption", "dashboard"], "create_adoption_scorecard"),
+    (["scorecard", "adoption", "dashboard", "executive summary", "rag status"], "create_adoption_scorecard"),
     (["secure score", "securescor"], "query_secure_score"),
     (["defender", "coverage", "endpoint", "device onboard"], "assess_defender_coverage"),
-    (["purview", "dlp", "compliance", "retention", "sensitivity label"], "check_purview_policies"),
-    (["entra", "conditional access", "pim", "identity protection", "mfa"], "get_entra_config"),
-    (["remediation", "remediate", "fix", "plan", "get-to-green", "get to green"], "generate_remediation_plan"),
+    (["purview", "dlp", "compliance", "retention", "sensitivity label", "insider risk"], "check_purview_policies"),
+    (["entra", "conditional access", "pim", "identity protection", "mfa", "access review"], "get_entra_config"),
+    (["remediation", "remediate", "fix list", "get-to-green", "get to green"], "generate_remediation_plan"),
     (
         ["playbook", "get to green", "foundry", "get to green playbook", "onboarding checklist", "offer catalog"],
         "get_green_playbook",

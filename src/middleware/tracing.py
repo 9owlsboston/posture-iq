@@ -546,3 +546,46 @@ def trace_genai_tool_call(tool_name: str) -> Generator[Span, None, None]:
         },
     ) as span:
         yield span
+
+
+# ── GenAI chat span for mock LLM responses ───────────────
+
+
+def emit_genai_chat_span(
+    *,
+    model: str = "gpt-4o",
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    duration_ms: float = 0.0,
+    source: str = "mock",
+) -> None:
+    """Emit a synthetic GenAI ``chat`` span for mock / demo responses.
+
+    When the real Azure OpenAI endpoint is unreachable — or not configured —
+    the ``opentelemetry-instrumentation-openai-v2`` instrumentor never fires
+    because no ``chat.completions.create()`` call reaches the server.
+
+    This helper creates the same span the instrumentor would, with
+    simulated token-usage attributes, so the App Insights **Agent (preview)**
+    blade → *Token Consumption* panel is populated during local dev/demo runs.
+
+    The span carries ``secpostureiq.data_source = "mock"`` so it can be
+    distinguished from real LLM spans in KQL queries.
+    """
+    tracer = get_tracer()
+    with tracer.start_as_current_span(
+        name=f"chat {model}",
+        kind=SpanKind.CLIENT,
+        attributes={
+            _GENAI_SYSTEM: "openai",
+            _GENAI_OPERATION_NAME: "chat",
+            _GENAI_REQUEST_MODEL: model,
+            "gen_ai.response.model": model,
+            "gen_ai.usage.input_tokens": input_tokens,
+            "gen_ai.usage.output_tokens": output_tokens,
+            "gen_ai.response.finish_reasons": '["stop"]',
+            "secpostureiq.data_source": source,
+        },
+    ) as span:
+        span.set_attribute("secpostureiq.llm.duration_ms", duration_ms)
+        span.set_status(StatusCode.OK)
