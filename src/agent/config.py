@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     # ENTRA_APP_CLIENT_ID to the app-registration client-ID so
     # the OAuth2 login flow uses the correct identity.
     entra_app_client_id: str = ""
+    entra_app_client_secret: str = ""  # OAuth2 token exchange secret (app registration)
     graph_scopes: str = (
         "SecurityEvents.Read.All,"
         "SecurityActions.Read.All,"

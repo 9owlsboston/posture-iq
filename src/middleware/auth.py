@@ -431,7 +431,7 @@ async def exchange_code_for_tokens(
     token_url = f"{ENTRA_AUTHORITY}/{_get_oauth2_tenant_path()}/oauth2/v2.0/token"
     data = {
         "client_id": settings.oauth_client_id,
-        "client_secret": settings.azure_client_secret,
+        "client_secret": settings.entra_app_client_secret or settings.azure_client_secret,
         "code": code,
         "redirect_uri": redirect_uri,
         "grant_type": "authorization_code",

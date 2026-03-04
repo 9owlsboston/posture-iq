@@ -163,6 +163,7 @@ def _mock_settings():
         mock.azure_client_id = CLIENT_ID
         mock.azure_client_secret = CLIENT_SECRET
         mock.entra_app_client_id = ""  # empty → oauth_client_id falls back to azure_client_id
+        mock.entra_app_client_secret = ""  # empty → falls back to azure_client_secret
         mock.oauth_client_id = CLIENT_ID  # used by validate_token for audience check
         mock.multi_tenant_enabled = False
         mock.allowed_tenant_list = []
