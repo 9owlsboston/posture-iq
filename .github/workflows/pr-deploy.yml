@@ -106,6 +106,8 @@ jobs:
             projectName=secpostureiq-pr${{ steps.meta.outputs.pr-num }}
             containerImage=${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }}
             acrLoginServerOverride=${{ steps.acr.outputs.LOGIN_SERVER }}
+            azureTenantId=${{ secrets.AZURE_TENANT_ID }}
+            entraAppClientId=${{ vars.ENTRA_APP_CLIENT_ID }}
           failOnStdErr: false
 
       - name: Grant AcrPull on dev ACR to PR managed identity

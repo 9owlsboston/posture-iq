@@ -31,8 +31,14 @@ class Settings(BaseSettings):
 
     # ── Microsoft Graph API ───────────────────────────────
     azure_tenant_id: str = ""
-    azure_client_id: str = ""
+    azure_client_id: str = ""  # Also used by Azure SDK for managed identity
     azure_client_secret: str = ""
+
+    # ── Entra ID App Registration (OAuth2) ─────────────────
+    # In Azure, AZURE_CLIENT_ID is the managed identity.  Set
+    # ENTRA_APP_CLIENT_ID to the app-registration client-ID so
+    # the OAuth2 login flow uses the correct identity.
+    entra_app_client_id: str = ""
     graph_scopes: str = (
         "SecurityEvents.Read.All,"
         "SecurityActions.Read.All,"
@@ -64,6 +70,16 @@ class Settings(BaseSettings):
     def graph_scope_list(self) -> list[str]:
         """Parse comma-separated Graph scopes into a list."""
         return [s.strip() for s in self.graph_scopes.split(",") if s.strip()]
+
+    @property
+    def oauth_client_id(self) -> str:
+        """Client ID for OAuth2/Entra ID auth flows.
+
+        Prefers ``entra_app_client_id`` (app registration) over
+        ``azure_client_id`` (which doubles as the managed-identity
+        client ID in Azure Container Apps).
+        """
+        return self.entra_app_client_id or self.azure_client_id
 
     @property
     def is_production(self) -> bool:

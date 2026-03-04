@@ -162,6 +162,8 @@ def _mock_settings():
         mock.azure_tenant_id = TENANT_ID
         mock.azure_client_id = CLIENT_ID
         mock.azure_client_secret = CLIENT_SECRET
+        mock.entra_app_client_id = ""  # empty → oauth_client_id falls back to azure_client_id
+        mock.oauth_client_id = CLIENT_ID  # used by validate_token for audience check
         mock.multi_tenant_enabled = False
         mock.allowed_tenant_list = []
         mock.graph_scope_list = [
@@ -417,6 +419,7 @@ class TestValidateToken:
         with patch("src.middleware.auth.settings") as mock:
             mock.azure_tenant_id = ""
             mock.azure_client_id = ""
+            mock.oauth_client_id = ""
             mock.multi_tenant_enabled = False
             mock.allowed_tenant_list = []
             with pytest.raises(HTTPException) as exc_info:
