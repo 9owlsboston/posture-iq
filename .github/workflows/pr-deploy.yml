@@ -93,6 +93,45 @@ jobs:
             ${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }}
           docker push ${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }}
 
+      # ── Pre-create managed identity & grant AcrPull BEFORE Bicep deploy ──
+      # The Container App needs AcrPull on the shared dev ACR at deploy time
+      # (not after). We pre-create the identity so the role assignment propagates
+      # before the Bicep template deploys the Container App.
+      - name: Pre-create Managed Identity
+        id: identity
+        run: |
+          IDENTITY_NAME="secpostureiq-pr${{ steps.meta.outputs.pr-num }}-dev-app-identity"
+          RG_NAME="${{ steps.meta.outputs.rg-name }}"
+
+          az identity create \
+            --name "$IDENTITY_NAME" \
+            --resource-group "$RG_NAME" \
+            --location ${{ env.LOCATION }} \
+            --output none
+
+          PRINCIPAL_ID=$(az identity show \
+            --name "$IDENTITY_NAME" \
+            --resource-group "$RG_NAME" \
+            --query principalId -o tsv)
+          echo "principalId=$PRINCIPAL_ID" >> $GITHUB_OUTPUT
+
+      - name: Grant AcrPull on dev ACR to PR managed identity
+        run: |
+          DEV_ACR_ID=$(az acr show \
+            --name $(echo "${{ steps.acr.outputs.LOGIN_SERVER }}" | cut -d. -f1) \
+            --query id -o tsv)
+
+          # Idempotent — succeeds even if the role assignment already exists
+          az role assignment create \
+            --assignee-object-id "${{ steps.identity.outputs.principalId }}" \
+            --assignee-principal-type ServicePrincipal \
+            --role AcrPull \
+            --scope "$DEV_ACR_ID" \
+            --output none 2>/dev/null || true
+
+      - name: Wait for role assignment propagation
+        run: sleep 30
+
       - name: Deploy PR environment
         id: deploy
         uses: azure/arm-deploy@v2
@@ -109,32 +148,6 @@ jobs:
             azureTenantId=${{ secrets.AZURE_TENANT_ID }}
             entraAppClientId=${{ vars.ENTRA_APP_CLIENT_ID }}
           failOnStdErr: false
-
-      - name: Grant AcrPull on dev ACR to PR managed identity
-        run: |
-          DEV_ACR_ID=$(az acr show \
-            --name $(echo "${{ steps.acr.outputs.LOGIN_SERVER }}" | cut -d. -f1) \
-            --query id -o tsv)
-          IDENTITY_PRINCIPAL_ID=${{ steps.deploy.outputs.managedIdentityPrincipalId }}
-          az role assignment create \
-            --assignee-object-id "$IDENTITY_PRINCIPAL_ID" \
-            --assignee-principal-type ServicePrincipal \
-            --role AcrPull \
-            --scope "$DEV_ACR_ID"
-
-      - name: Restart Container App to pick up ACR permissions
-        run: |
-          APP_NAME="secpostureiq-pr${{ steps.meta.outputs.pr-num }}-dev-app"
-          az containerapp revision restart \
-            --name "$APP_NAME" \
-            --resource-group ${{ steps.meta.outputs.rg-name }} \
-            --revision "$(az containerapp revision list --name "$APP_NAME" --resource-group ${{ steps.meta.outputs.rg-name }} --query '[0].name' -o tsv)" \
-            2>/dev/null || \
-          az containerapp update \
-            --name "$APP_NAME" \
-            --resource-group ${{ steps.meta.outputs.rg-name }} \
-            --set-env-vars "DEPLOY_TIMESTAMP=$(date -u +%s)" \
-            2>/dev/null || true
 
       - name: Get preview URL
         id: preview
