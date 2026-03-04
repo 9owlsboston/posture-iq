@@ -105,7 +105,7 @@ add_permission "SecurityEvents.Read.All"         "bf394140-e372-4bf9-a898-299cfc
 add_permission "SecurityActions.Read.All"        "1638cddf-07a5-4f16-928e-0b80f95e632c"
 add_permission "Policy.Read.All"                 "572fea84-0151-49b2-9301-11cb16974376"
 add_permission "Reports.Read.All"                "02e97553-ed7b-43d0-ab3c-f8bace0d040c"
-add_permission "InformationProtection.Read.All"  "d9731f5b-aca7-42d8-8aeb-0ac1bf55e2e9"
+add_permission "InformationProtectionPolicy.Read.All"  "19da66cb-0fb0-4390-b071-ebc76a349482"
 add_permission "RoleManagement.Read.Directory"   "741f803b-c850-494e-b5df-cde7c675a1ca"
 add_permission "IdentityRiskyUser.Read.All"      "d04bb851-cb7c-4146-97c7-ca3e71baf56c"
 add_permission "AccessReview.Read.All"           "ebfcd32b-babb-40f4-a14b-42706e83bd28"

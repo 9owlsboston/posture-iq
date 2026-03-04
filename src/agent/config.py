@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     graph_scopes: str = (
         "SecurityEvents.Read.All,"
         "SecurityActions.Read.All,"
-        "InformationProtection.Read.All,"
+        "InformationProtectionPolicy.Read.All,"
         "Policy.Read.All,"
         "Reports.Read.All"
     )

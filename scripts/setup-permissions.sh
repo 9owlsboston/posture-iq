@@ -10,7 +10,7 @@
 #   2. SecurityActions.Read.All     — defender_coverage (action recommendations)
 #   3. Policy.Read.All              — entra_config (conditional access)
 #   4. Reports.Read.All             — adoption_scorecard (usage reports)
-#   5. InformationProtection.Read.All — purview_policies (sensitivity labels)
+#   5. InformationProtectionPolicy.Read.All — purview_policies (sensitivity labels)
 #   6. RoleManagement.Read.Directory  — entra_config (PIM role assignments)
 #   7. IdentityRiskyUser.Read.All     — entra_config (identity protection)
 #   8. AccessReview.Read.All          — entra_config (access reviews)
@@ -87,7 +87,7 @@ add_permission "SecurityEvents.Read.All"         "bf394140-e372-4bf9-a898-299cfc
 add_permission "SecurityActions.Read.All"        "1638cddf-07a5-4f16-928e-0b80f95e632c" || true
 add_permission "Policy.Read.All"                 "572fea84-0151-49b2-9301-11cb16974376" || true
 add_permission "Reports.Read.All"                "02e97553-ed7b-43d0-ab3c-f8bace0d040c" || true
-add_permission "InformationProtection.Read.All"  "d9731f5b-aca7-42d8-8aeb-0ac1bf55e2e9" || true
+add_permission "InformationProtectionPolicy.Read.All"  "19da66cb-0fb0-4390-b071-ebc76a349482" || true
 
 # ── Entra ID configuration scopes (entra_config.py) ─────────
 add_permission "RoleManagement.Read.Directory"   "741f803b-c850-494e-b5df-cde7c675a1ca" || true
