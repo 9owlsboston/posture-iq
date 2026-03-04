@@ -45,7 +45,7 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 module containerRegistry 'modules/container-registry.bicep' = {
   name: 'containerRegistryDeployment'
   params: {
-    name: '${projectName}${environment}acr${uniqueSuffix}'  // ACR names must be alphanumeric
+    name: '${replace(projectName, '-', '')}${environment}acr${uniqueSuffix}'  // ACR names must be alphanumeric
     location: location
     sku: environment == 'prod' ? 'Standard' : 'Basic'
     pullIdentityPrincipalId: managedIdentity.properties.principalId

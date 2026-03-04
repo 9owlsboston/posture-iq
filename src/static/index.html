@@ -596,6 +596,19 @@
     }
 
     .btn-signout:hover { border-color: var(--red); color: var(--red); }
+
+    .btn-switch {
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+
+    .btn-switch:hover { border-color: var(--primary); color: var(--primary); }
   </style>
 </head>
 <body>
@@ -620,6 +633,7 @@
           <span class="user-name" id="userName"></span>
           <span class="user-email" id="userEmail"></span>
         </div>
+        <button class="btn-switch" onclick="switchAccount()" title="Sign in with a different account">Switch</button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
 
@@ -848,6 +862,16 @@
     }
 
     function signIn() {
+      window.location.href = '/auth/login';
+    }
+
+    function switchAccount() {
+      // Clear local session, then redirect to login.
+      // prompt=select_account (server default) forces the Entra ID account picker.
+      sessionStorage.removeItem('id_token');
+      sessionStorage.removeItem('graph_token');
+      accessToken = null;
+      currentUser = null;
       window.location.href = '/auth/login';
     }
 

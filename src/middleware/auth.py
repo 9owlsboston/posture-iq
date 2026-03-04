@@ -372,6 +372,8 @@ def build_auth_url(
     redirect_uri: str,
     state: str = "",
     scopes: list[str] | None = None,
+    login_hint: str = "",
+    prompt: str = "select_account",
 ) -> str:
     """Build the Entra ID authorization URL for the OAuth2 code flow.
 
@@ -379,6 +381,9 @@ def build_auth_url(
         redirect_uri: Where Entra ID should redirect after login.
         state: Opaque value to prevent CSRF (should be validated on callback).
         scopes: OAuth2 scopes to request. Defaults to the configured Graph scopes.
+        login_hint: Pre-fill the username field (e.g. alice@contoso.com).
+        prompt: Entra ID prompt behaviour. Defaults to ``select_account`` so
+            users with multiple identities always see the account picker.
 
     Returns:
         Fully-qualified authorization URL.
@@ -387,15 +392,18 @@ def build_auth_url(
     # Always include openid + profile for ID token claims
     scope_str = " ".join({"openid", "profile", "email", *scope_list})
 
-    params = {
+    params: dict[str, str] = {
         "client_id": settings.azure_client_id,
         "response_type": "code",
         "redirect_uri": redirect_uri,
         "scope": scope_str,
         "response_mode": "query",
+        "prompt": prompt,
     }
     if state:
         params["state"] = state
+    if login_hint:
+        params["login_hint"] = login_hint
 
     base = f"{ENTRA_AUTHORITY}/{_get_oauth2_tenant_path()}/oauth2/v2.0/authorize"
     return f"{base}?{urlencode(params)}"
