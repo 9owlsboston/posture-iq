@@ -411,76 +411,30 @@ class TestGenerateMockResponse:
 
 
 class TestCreateGraphClient:
-    """Tests for _create_graph_client factory."""
+    """Tests for _create_graph_client factory.
 
-    def test_returns_none_when_no_credentials(self):
+    The shared ``create_graph_client`` now only accepts user-delegated
+    tokens. App-level credentials are never used for Graph queries.
+    """
+
+    def test_returns_none_when_no_token(self):
         from src.tools.secure_score import _create_graph_client
 
-        with patch("src.tools.graph_client.settings") as mock_settings:
-            mock_settings.azure_tenant_id = ""
-            mock_settings.azure_client_id = ""
-            assert _create_graph_client() is None
+        assert _create_graph_client() is None
 
-    def test_returns_none_when_no_client_id(self):
+    def test_returns_none_when_empty_token(self):
         from src.tools.secure_score import _create_graph_client
 
-        with patch("src.tools.graph_client.settings") as mock_settings:
-            mock_settings.azure_tenant_id = "some-tenant"
-            mock_settings.azure_client_id = ""
-            assert _create_graph_client() is None
+        assert _create_graph_client(graph_token="") is None
 
-    def test_uses_client_secret_credential_when_secret_set(self):
+    def test_returns_client_when_token_provided(self):
         from src.tools.secure_score import _create_graph_client
 
-        with patch("src.tools.graph_client.settings") as mock_settings:
-            mock_settings.azure_tenant_id = "tenant-123"
-            mock_settings.azure_client_id = "client-123"
-            mock_settings.azure_client_secret = "secret-123"
-
-            mock_cred = MagicMock()
-            mock_client = MagicMock()
-
-            with (
-                patch("azure.identity.ClientSecretCredential", return_value=mock_cred),
-                patch("msgraph.GraphServiceClient", return_value=mock_client),
-            ):
-                result = _create_graph_client()
-                assert result is not None
-
-    def test_uses_default_credential_when_no_secret(self):
-        from src.tools.secure_score import _create_graph_client
-
-        with patch("src.tools.graph_client.settings") as mock_settings:
-            mock_settings.azure_tenant_id = "tenant-123"
-            mock_settings.azure_client_id = "client-123"
-            mock_settings.azure_client_secret = ""
-
-            mock_cred = MagicMock()
-            mock_client = MagicMock()
-
-            with (
-                patch("azure.identity.DefaultAzureCredential", return_value=mock_cred),
-                patch("msgraph.GraphServiceClient", return_value=mock_client),
-            ):
-                result = _create_graph_client()
-                assert result is not None
-
-    def test_raises_on_credential_error(self):
-        from src.tools.secure_score import _create_graph_client
-
-        with patch("src.tools.graph_client.settings") as mock_settings:
-            mock_settings.azure_tenant_id = "tenant-123"
-            mock_settings.azure_client_id = "client-123"
-            mock_settings.azure_client_secret = "secret-123"
-
-            with (
-                patch(
-                    "azure.identity.ClientSecretCredential",
-                    side_effect=ValueError("bad cred"),
-                ),
-                pytest.raises(ValueError, match="bad cred"),
-            ):
-                _create_graph_client()
+        with patch("src.tools.graph_client.create_graph_client_with_token") as mock_factory:
+            mock_factory.return_value = MagicMock()
+            result = _create_graph_client(graph_token="user-token-abc")
+            mock_factory.assert_called_once_with("user-token-abc", "secure_score")
+            assert result is not None
 
 
 # ═══════════════════════════════════════════════════════════════════════

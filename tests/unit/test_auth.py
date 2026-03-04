@@ -835,12 +835,13 @@ class TestAuthEndpoints:
 
 
 class TestManagedIdentityAuth:
-    """Tests for service-to-service authentication via Managed Identity.
+    """Tests for Graph client authentication behaviour.
 
     Validates that:
-    - DefaultAzureCredential is used when no explicit API keys are set
-    - ClientSecretCredential is used when explicit secrets are present
-    - Graph client factory handles both scenarios correctly
+    - Only user-delegated tokens are accepted for Graph queries
+    - App-level credentials (Managed Identity / client secret) are never
+      used for Graph — they exist for infrastructure only
+    - Missing or empty tokens always produce ``None`` (mock fallback)
     """
 
     def test_config_use_managed_identity_when_no_key(self):
@@ -856,47 +857,38 @@ class TestManagedIdentityAuth:
         s = Settings(azure_openai_api_key="sk-some-key")
         assert s.use_managed_identity is False
 
-    def test_graph_client_returns_none_without_credentials(self):
-        """Graph client factory returns None when no creds configured."""
+    def test_graph_client_returns_none_without_token(self):
+        """Graph client factory returns None when no user token given."""
         from src.tools.graph_client import create_graph_client
 
-        with (
-            patch("src.tools.graph_client.settings") as mock_settings,
-        ):
-            mock_settings.azure_tenant_id = ""
-            mock_settings.azure_client_id = ""
-            result = create_graph_client("test")
+        result = create_graph_client("test")
+        assert result is None
+
+    def test_graph_client_never_uses_app_credentials(self):
+        """App-level credentials must NOT be used for Graph queries.
+
+        Even when settings contain valid tenant/client/secret values the
+        factory must return None when no user token is supplied.  Using
+        app-level identity would assess the hosting tenant, not the
+        user's tenant.
+        """
+        from src.tools.graph_client import create_graph_client
+
+        with patch("src.tools.graph_client.create_graph_client_with_token") as mock_token_factory:
+            result = create_graph_client("test", graph_token="")
+            mock_token_factory.assert_not_called()
             assert result is None
 
-    def test_graph_client_uses_client_secret_when_present(self):
-        """Graph client uses ClientSecretCredential when secret is set."""
-        with (
-            patch("src.tools.graph_client.settings") as mock_settings,
-            patch("src.tools.graph_client.ClientSecretCredential", create=True) as mock_cred_cls,
-            patch("src.tools.graph_client.GraphServiceClient", create=True) as mock_graph_cls,
-        ):
-            mock_settings.azure_tenant_id = TENANT_ID
-            mock_settings.azure_client_id = CLIENT_ID
-            mock_settings.azure_client_secret = CLIENT_SECRET
+    def test_graph_client_returns_none_for_falsy_tokens(self):
+        """All falsy token values (None-ish, empty) produce None."""
+        from src.tools.graph_client import create_graph_client
 
-            # We need to import inside the patches
+        for token in ("", None):
+            result = create_graph_client("test", graph_token=token or "")
+            assert result is None
 
-            # Directly test the logic to avoid import side effects
-            assert mock_settings.azure_client_secret == CLIENT_SECRET
-
-    def test_graph_client_uses_default_credential_without_secret(self):
-        """Graph client falls back to DefaultAzureCredential when no secret."""
-        with (
-            patch("src.tools.graph_client.settings") as mock_settings,
-        ):
-            mock_settings.azure_tenant_id = TENANT_ID
-            mock_settings.azure_client_id = CLIENT_ID
-            mock_settings.azure_client_secret = ""
-            # DefaultAzureCredential would be used — verify config triggers it
-            assert not mock_settings.azure_client_secret
-
-    def test_graph_client_prefers_user_token_over_app_creds(self):
-        """When graph_token is provided, app credentials are bypassed."""
+    def test_graph_client_uses_user_token(self):
+        """When graph_token is provided, user-delegated path is used."""
         from src.tools.graph_client import create_graph_client
 
         with (
@@ -908,15 +900,12 @@ class TestManagedIdentityAuth:
             assert result == "mock-client"
 
     def test_graph_client_ignores_empty_token(self):
-        """Empty graph_token falls through to credential-based logic."""
+        """Empty graph_token returns None — no credential fallback."""
         from src.tools.graph_client import create_graph_client
 
         with (
-            patch("src.tools.graph_client.settings") as mock_settings,
             patch("src.tools.graph_client.create_graph_client_with_token") as mock_token_factory,
         ):
-            mock_settings.azure_tenant_id = ""
-            mock_settings.azure_client_id = ""
             result = create_graph_client("test", graph_token="")
             mock_token_factory.assert_not_called()
             assert result is None
