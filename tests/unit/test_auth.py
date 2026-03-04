@@ -170,7 +170,7 @@ def _mock_settings():
         mock.graph_scope_list = [
             "SecurityEvents.Read.All",
             "SecurityActions.Read.All",
-            "InformationProtectionPolicy.Read.All",
+            "InformationProtectionPolicy.Read",
             "Policy.Read.All",
             "Reports.Read.All",
         ]
@@ -581,7 +581,7 @@ class TestScopeChecker:
     async def test_require_info_protection(self):
         user = UserContext(
             user_id="u1",
-            scopes=["InformationProtectionPolicy.Read.All"],
+            scopes=["InformationProtectionPolicy.Read"],
         )
         result = await require_info_protection(user=user)
         assert result.user_id == "u1"
