@@ -891,6 +891,32 @@ class TestManagedIdentityAuth:
             # DefaultAzureCredential would be used — verify config triggers it
             assert not mock_settings.azure_client_secret
 
+    def test_graph_client_prefers_user_token_over_app_creds(self):
+        """When graph_token is provided, app credentials are bypassed."""
+        from src.tools.graph_client import create_graph_client
+
+        with (
+            patch("src.tools.graph_client.create_graph_client_with_token") as mock_token_factory,
+        ):
+            mock_token_factory.return_value = "mock-client"
+            result = create_graph_client("test", graph_token="user-token-123")
+            mock_token_factory.assert_called_once_with("user-token-123", "test")
+            assert result == "mock-client"
+
+    def test_graph_client_ignores_empty_token(self):
+        """Empty graph_token falls through to credential-based logic."""
+        from src.tools.graph_client import create_graph_client
+
+        with (
+            patch("src.tools.graph_client.settings") as mock_settings,
+            patch("src.tools.graph_client.create_graph_client_with_token") as mock_token_factory,
+        ):
+            mock_settings.azure_tenant_id = ""
+            mock_settings.azure_client_id = ""
+            result = create_graph_client("test", graph_token="")
+            mock_token_factory.assert_not_called()
+            assert result is None
+
 
 # ── OAuth2 Scheme Configuration Tests ──────────────────────────────────────
 

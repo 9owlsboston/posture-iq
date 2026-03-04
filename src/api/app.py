@@ -115,6 +115,7 @@ async def favicon() -> FileResponse:
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(
     request: ChatRequest,
+    raw_request: Request,
     token: str | None = Depends(oauth2_scheme),
 ) -> ChatResponse:
     """Chat with the SecPostureIQ agent.
@@ -125,6 +126,11 @@ async def chat_endpoint(
     If a valid Bearer token is present, the response includes
     ``tenant_id`` and ``data_source`` from the authenticated user's context.
     Unauthenticated requests still work (demo / mock-data mode).
+
+    Headers:
+        Authorization: Bearer <id_token>  — identifies the user.
+        X-Graph-Token: <access_token>     — delegated Graph API token
+            used by tools to query the real tenant.
     """
     tenant_id = ""
     user_id = ""
@@ -135,7 +141,17 @@ async def chat_endpoint(
             user_id = user.user_id
         except Exception:  # noqa: S110
             pass  # Fall through to unauthenticated / mock mode
-    return await handle_chat(request, tenant_id=tenant_id, user_id=user_id)
+
+    # The SPA sends the Graph access_token (audience=graph.microsoft.com)
+    # as a separate header so tools can make delegated Graph API calls.
+    graph_token = raw_request.headers.get("X-Graph-Token", "")
+
+    return await handle_chat(
+        request,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        graph_token=graph_token,
+    )
 
 
 # ── Health Probes ──────────────────────────────────────────────────────────

@@ -1033,6 +1033,12 @@
         if (accessToken) {
           headers['Authorization'] = `Bearer ${accessToken}`;
         }
+        // Send the Graph API access token so backend tools can query the
+        // real tenant instead of returning mock data.
+        const graphToken = sessionStorage.getItem('graph_token');
+        if (graphToken) {
+          headers['X-Graph-Token'] = graphToken;
+        }
 
         const r = await fetch('/chat', {
           method: 'POST',

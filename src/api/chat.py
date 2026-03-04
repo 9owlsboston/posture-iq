@@ -57,29 +57,44 @@ def _session_key(session_id: str, tenant_id: str = "", user_id: str = "") -> str
 # ── Tool dispatcher for direct mode ──────────────────────────────────────
 
 
-async def _run_tool(name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Run a tool directly (bypass Copilot SDK) for demo / testing mode."""
+async def _run_tool(
+    name: str,
+    args: dict[str, Any] | None = None,
+    graph_token: str = "",
+) -> dict[str, Any]:
+    """Run a tool directly (bypass Copilot SDK) for demo / testing mode.
+
+    Args:
+        name: Tool function name to invoke.
+        args: Extra keyword arguments forwarded to the tool.
+        graph_token: User-delegated Graph access token (from the SPA).
+            Passed to tools that call the Microsoft Graph API so they
+            can query the real tenant instead of returning mock data.
+    """
     args = args or {}
 
     if name == "query_secure_score":
         from src.tools.secure_score import query_secure_score
 
-        return await query_secure_score(tenant_id=args.get("tenant_id", ""))
+        return await query_secure_score(
+            tenant_id=args.get("tenant_id", ""),
+            graph_token=graph_token,
+        )
 
     if name == "assess_defender_coverage":
         from src.tools.defender_coverage import assess_defender_coverage
 
-        return await assess_defender_coverage()
+        return await assess_defender_coverage(graph_token=graph_token)
 
     if name == "check_purview_policies":
         from src.tools.purview_policies import check_purview_policies
 
-        return await check_purview_policies()
+        return await check_purview_policies(graph_token=graph_token)
 
     if name == "get_entra_config":
         from src.tools.entra_config import get_entra_config
 
-        return await get_entra_config()
+        return await get_entra_config(graph_token=graph_token)
 
     if name == "generate_remediation_plan":
         from src.tools.remediation_plan import generate_remediation_plan
@@ -400,6 +415,7 @@ async def handle_chat(
     request: ChatRequest,
     tenant_id: str = "",
     user_id: str = "",
+    graph_token: str = "",
 ) -> ChatResponse:
     """Process a chat message by classifying intent → running tools → formatting response.
 
@@ -412,6 +428,9 @@ async def handle_chat(
         request: The chat request with message and optional session_id.
         tenant_id: The Entra ID tenant (from UserContext, if authenticated).
         user_id: The user's oid (from UserContext, if authenticated).
+        graph_token: User-delegated Graph API access token (from OAuth flow).
+            When present, tools will use this to query the real tenant via
+            the Microsoft Graph API instead of returning mock data.
     """
     sid = request.session_id or str(uuid.uuid4())
     skey = _session_key(sid, tenant_id, user_id)
@@ -456,7 +475,7 @@ async def handle_chat(
                     if tool_name in ("generate_remediation_plan", "create_adoption_scorecard"):
                         args["assessment_context"] = json.dumps(session["results"])
 
-                    result = await _run_tool(tool_name, args)
+                    result = await _run_tool(tool_name, args, graph_token=graph_token)
 
                     session["results"][tool_name] = result
                     tools_called.append(tool_name)
@@ -493,9 +512,10 @@ async def handle_chat(
     session["history"].append({"role": "assistant", "content": response_text})
 
     # Determine data source from tool results (mock vs live)
+    # Tools return "graph_api" for live Graph data, "mock" for demo data.
     data_source = "mock"
     for result in session["results"].values():
-        if isinstance(result, dict) and result.get("data_source") == "live":
+        if isinstance(result, dict) and result.get("data_source") not in ("mock", None):
             data_source = "live"
             break
 

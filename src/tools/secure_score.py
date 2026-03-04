@@ -50,12 +50,12 @@ class _SecureScoresQueryParameters:
 # ── Graph client factory ───────────────────────────────────────────────
 
 
-def _create_graph_client() -> Any:
+def _create_graph_client(graph_token: str = "") -> Any:
     """Create an authenticated Microsoft Graph client.
 
     Delegates to the shared factory in ``src.tools.graph_client``.
     """
-    return create_graph_client("secure_score")
+    return create_graph_client("secure_score", graph_token=graph_token)
 
 
 # ── Parsing helpers ────────────────────────────────────────────────────
@@ -267,7 +267,7 @@ def _generate_mock_response() -> dict[str, Any]:
 
 
 @trace_tool_call("query_secure_score")
-async def query_secure_score(tenant_id: str = "") -> dict[str, Any]:
+async def query_secure_score(tenant_id: str = "", graph_token: str = "") -> dict[str, Any]:
     """Query Microsoft Secure Score for the authenticated tenant.
 
     Calls ``GET /security/secureScores`` via the Microsoft Graph SDK.
@@ -276,6 +276,8 @@ async def query_secure_score(tenant_id: str = "") -> dict[str, Any]:
     Args:
         tenant_id: Optional tenant identifier for logging. Uses current
             auth context regardless — Graph API scopes are per-credential.
+        graph_token: User-delegated Graph API access token (preferred over
+            app-level credentials when present).
 
     Returns:
         dict with keys:
@@ -294,7 +296,7 @@ async def query_secure_score(tenant_id: str = "") -> dict[str, Any]:
     logger.info("tool.secure_score.start", tenant_id=redact_pii(tenant_id))
 
     # Try real Graph API first; fall back to mock if not configured
-    client = _create_graph_client()
+    client = _create_graph_client(graph_token=graph_token)
     if client is None:
         logger.info("tool.secure_score.fallback", source="mock")
         result = _generate_mock_response()
