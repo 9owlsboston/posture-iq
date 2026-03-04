@@ -36,6 +36,12 @@ param managedIdentityClientId string
 @description('ACR login server (e.g., secpostureiqdevacrabcdef.azurecr.io)')
 param acrLoginServer string = ''
 
+@description('Entra ID tenant ID for OAuth2 login flow')
+param azureTenantId string = ''
+
+@description('Entra ID app registration client ID for OAuth2 login flow')
+param entraAppClientId string = ''
+
 // ── Container Apps Environment ────────────────────────────
 resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: '${name}-env'
@@ -86,6 +92,8 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AZURE_KEYVAULT_URL', value: keyVaultUrl }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
             { name: 'AZURE_CLIENT_ID', value: managedIdentityClientId }
+            { name: 'AZURE_TENANT_ID', value: azureTenantId }
+            { name: 'ENTRA_APP_CLIENT_ID', value: entraAppClientId }
             { name: 'PORT', value: '8000' }
           ]
           probes: [

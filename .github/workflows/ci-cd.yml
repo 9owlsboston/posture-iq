@@ -208,6 +208,8 @@ jobs:
           parameters: >-
             ./infra/parameters/${{ env.DEPLOY_ENV }}.bicepparam
             containerImage=${{ needs.build.outputs.acr_login_server }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ needs.build.outputs.image_tag }}
+            azureTenantId=${{ secrets.AZURE_TENANT_ID }}
+            entraAppClientId=${{ vars.ENTRA_APP_CLIENT_ID }}
           failOnStdErr: false
 
       - name: Post-deploy health check

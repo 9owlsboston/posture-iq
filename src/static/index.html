@@ -848,6 +848,12 @@
       const domain = currentUser.email ? currentUser.email.split('@')[1] : '';
       document.getElementById('tenantDisplay').textContent =
         domain || currentUser.tenant_id || 'Unknown';
+
+      // If we have a Graph token, we'll get live data — set badge immediately
+      if (sessionStorage.getItem('graph_token')) {
+        lastDataSource = 'live';
+        updateDataSourceBadge('live');
+      }
     }
 
     function showUnauthenticatedUI() {
@@ -1050,13 +1056,15 @@
 
         if (r.ok) {
           sessionId = data.session_id || sessionId;
-          addMessage('agent', data.response, data.tools_called);
 
-          // Update data-source badge from response
+          // Update data-source BEFORE rendering the message so the
+          // per-message badge and header badge stay in sync.
           if (data.data_source) {
             lastDataSource = data.data_source;
             updateDataSourceBadge(data.data_source);
           }
+
+          addMessage('agent', data.response, data.tools_called);
         } else {
           addMessage('agent', `⚠️ Error: ${data.detail || data.error || 'Something went wrong'}`);
         }

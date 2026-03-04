@@ -165,7 +165,7 @@ async def validate_token(token: str) -> UserContext:
         HTTPException(401): For invalid, expired, or untrusted tokens.
         HTTPException(403): For tokens from disallowed tenants.
     """
-    client_id = settings.azure_client_id
+    client_id = settings.oauth_client_id
 
     # In multi-tenant mode, extract tenant from the token itself.
     # In single-tenant mode, use the configured tenant.
@@ -202,7 +202,9 @@ async def validate_token(token: str) -> UserContext:
     if not tenant_id or not client_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Auth configuration incomplete: AZURE_TENANT_ID and AZURE_CLIENT_ID required",
+            detail=(
+                "Auth configuration incomplete: AZURE_TENANT_ID and ENTRA_APP_CLIENT_ID (or AZURE_CLIENT_ID) required"
+            ),
         )
 
     # Decode header to get the key-ID (kid)
@@ -393,7 +395,7 @@ def build_auth_url(
     scope_str = " ".join({"openid", "profile", "email", *scope_list})
 
     params: dict[str, str] = {
-        "client_id": settings.azure_client_id,
+        "client_id": settings.oauth_client_id,
         "response_type": "code",
         "redirect_uri": redirect_uri,
         "scope": scope_str,
@@ -428,7 +430,7 @@ async def exchange_code_for_tokens(
     """
     token_url = f"{ENTRA_AUTHORITY}/{_get_oauth2_tenant_path()}/oauth2/v2.0/token"
     data = {
-        "client_id": settings.azure_client_id,
+        "client_id": settings.oauth_client_id,
         "client_secret": settings.azure_client_secret,
         "code": code,
         "redirect_uri": redirect_uri,
