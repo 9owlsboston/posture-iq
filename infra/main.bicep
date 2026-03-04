@@ -37,6 +37,9 @@ param azureTenantId string = ''
 @description('Entra ID app registration client ID for OAuth2 login flow')
 param entraAppClientId string = ''
 
+@description('Key Vault secret name for Entra app-registration client secret')
+param entraAppClientSecretName string = ''
+
 // ── Variables ─────────────────────────────────────────────
 var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
 var resourcePrefix = '${projectName}-${environment}'
@@ -113,6 +116,7 @@ module containerApp 'modules/container-app.bicep' = {
     acrLoginServer: !empty(acrLoginServerOverride) ? acrLoginServerOverride : containerRegistry.outputs.loginServer
     azureTenantId: azureTenantId
     entraAppClientId: entraAppClientId
+    entraAppClientSecretUri: !empty(entraAppClientSecretName) ? '${keyVault.outputs.vaultUri}secrets/${entraAppClientSecretName}' : ''
   }
 }
 

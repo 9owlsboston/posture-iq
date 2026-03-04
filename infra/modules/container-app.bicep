@@ -42,6 +42,9 @@ param azureTenantId string = ''
 @description('Entra ID app registration client ID for OAuth2 login flow')
 param entraAppClientId string = ''
 
+@description('Key Vault secret URI for the Entra app-registration client secret (OAuth2 token exchange)')
+param entraAppClientSecretUri string = ''
+
 // ── Container Apps Environment ────────────────────────────
 resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: '${name}-env'
@@ -64,6 +67,13 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
+      secrets: !empty(entraAppClientSecretUri) ? [
+        {
+          name: 'entra-app-client-secret'
+          keyVaultUrl: entraAppClientSecretUri
+          identity: managedIdentityId
+        }
+      ] : []
       ingress: {
         external: true
         targetPort: 8000
@@ -94,6 +104,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AZURE_CLIENT_ID', value: managedIdentityClientId }
             { name: 'AZURE_TENANT_ID', value: azureTenantId }
             { name: 'ENTRA_APP_CLIENT_ID', value: entraAppClientId }
+            !empty(entraAppClientSecretUri) ? { name: 'ENTRA_APP_CLIENT_SECRET', secretRef: 'entra-app-client-secret' } : { name: 'ENTRA_APP_CLIENT_SECRET', value: '' }
             { name: 'PORT', value: '8000' }
           ]
           probes: [
