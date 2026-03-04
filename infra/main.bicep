@@ -40,6 +40,9 @@ param entraAppClientId string = ''
 @description('Key Vault secret name for Entra app-registration client secret')
 param entraAppClientSecretName string = ''
 
+@description('Enable multi-tenant authentication (allows users from other Entra ID tenants)')
+param multiTenantEnabled bool = false
+
 // ── Variables ─────────────────────────────────────────────
 var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
 var resourcePrefix = '${projectName}-${environment}'
@@ -117,6 +120,7 @@ module containerApp 'modules/container-app.bicep' = {
     azureTenantId: azureTenantId
     entraAppClientId: entraAppClientId
     entraAppClientSecretUri: !empty(entraAppClientSecretName) ? '${keyVault.outputs.vaultUri}secrets/${entraAppClientSecretName}' : ''
+    multiTenantEnabled: multiTenantEnabled
   }
 }
 
