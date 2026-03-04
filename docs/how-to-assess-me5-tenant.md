@@ -185,7 +185,7 @@ The App Registration (identified by `AZURE_CLIENT_ID` in `.env`) needs
 | `Reports.Read.All` | `230c1aed-a721-4c5d-9cb4-a90514e508ef` | Adoption scorecard, usage reports |
 
 > **Note:** The Application-level permission for information protection is
-> `InformationProtectionPolicy.Read.All` (not `InformationProtection.Read.All`,
+> `InformationProtectionPolicy.Read.All` (not `InformationProtectionPolicy.Read`,
 > which is the Delegated version).
 
 ```bash
@@ -495,15 +495,15 @@ access — only ARM (management plane) access.
 
 ### 4. Application Permission Name Differs from Delegated
 
-**Symptom:** Can't find `InformationProtection.Read.All` in the Graph service
-principal's `appRoles`.
+**Symptom:** Can't find `InformationProtectionPolicy.Read.All` as a delegated
+scope — it only works as an Application role.
 
 **Root Cause:** The Delegated and Application versions of some permissions have
 different names:
 
 | Delegated (Scope) | Application (Role) |
 |---|---|
-| `InformationProtection.Read.All` | `InformationProtectionPolicy.Read.All` |
+| `InformationProtectionPolicy.Read` | `InformationProtectionPolicy.Read.All` |
 
 **Fix:** Always look up the correct permission IDs from the Microsoft Graph
 service principal's `appRoles` list, not the `oauth2PermissionScopes` list.

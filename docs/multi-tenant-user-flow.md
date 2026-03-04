@@ -47,7 +47,7 @@ They click it, get redirected to Entra ID's consent screen, and see:
 > - Read security actions (`SecurityActions.Read.All`)
 > - Read policies (`Policy.Read.All`)
 > - Read reports (`Reports.Read.All`)
-> - Read information protection config (`InformationProtectionPolicy.Read.All`)
+> - Read information protection config (`InformationProtectionPolicy.Read`)
 > - Read directory role assignments (`RoleManagement.Read.Directory`)
 > - Read risky user data (`IdentityRiskyUser.Read.All`)
 > - Read access reviews (`AccessReview.Read.All`)

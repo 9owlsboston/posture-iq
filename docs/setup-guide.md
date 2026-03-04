@@ -120,7 +120,7 @@ and only accesses data the user is authorized to see.
 |------------|------|---------|---------------|
 | `SecurityEvents.Read.All` | Delegated | Read Secure Score, security alerts | Yes |
 | `SecurityActions.Read.All` | Delegated | Read Defender security actions | Yes |
-| `InformationProtectionPolicy.Read.All` | Delegated | Read Purview/DLP policies | Yes |
+| `InformationProtectionPolicy.Read` | Delegated | Read Purview/DLP policies | Yes |
 | `Policy.Read.All` | Delegated | Read Conditional Access, Identity Protection | Yes |
 | `Reports.Read.All` | Delegated | Read usage and adoption reports | Yes |
 
