@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from src.api.chat import ChatRequest, ChatResponse, _classify_intent, handle_chat
@@ -180,3 +182,77 @@ class TestChatRequest:
     def test_message_required(self):
         with pytest.raises((TypeError, ValueError)):
             ChatRequest()
+
+
+# ── Graph Token Passthrough ───────────────────────────────────────────────
+
+
+class TestGraphTokenPassthrough:
+    """Verify that graph_token flows from handle_chat → _run_tool → tools."""
+
+    @pytest.mark.asyncio
+    async def test_graph_token_forwarded_to_run_tool(self):
+        """handle_chat passes graph_token to _run_tool."""
+        req = ChatRequest(message="What is the Secure Score?")
+
+        with patch("src.api.chat._run_tool", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = {
+                "current_score": 72,
+                "max_score": 100,
+                "score_percentage": 72,
+                "data_source": "graph_api",
+            }
+            resp = await handle_chat(req, graph_token="fake-graph-token")
+
+        # _run_tool should have been called with graph_token kwarg
+        mock_run.assert_called_once()
+        _, kwargs = mock_run.call_args
+        assert kwargs.get("graph_token") == "fake-graph-token"
+
+    @pytest.mark.asyncio
+    async def test_data_source_live_when_graph_api(self):
+        """Response data_source is 'live' when tools return 'graph_api'."""
+        req = ChatRequest(message="What is the Secure Score?")
+
+        with patch("src.api.chat._run_tool", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = {
+                "current_score": 72,
+                "max_score": 100,
+                "score_percentage": 72,
+                "data_source": "graph_api",
+            }
+            resp = await handle_chat(req, graph_token="token")
+
+        assert resp.data_source == "live"
+
+    @pytest.mark.asyncio
+    async def test_data_source_mock_without_token(self):
+        """Response data_source stays 'mock' when tools return mock data."""
+        req = ChatRequest(message="What is the Secure Score?")
+
+        with patch("src.api.chat._run_tool", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = {
+                "current_score": 47,
+                "max_score": 100,
+                "score_percentage": 47,
+                "data_source": "mock",
+            }
+            resp = await handle_chat(req)
+
+        assert resp.data_source == "mock"
+
+    @pytest.mark.asyncio
+    async def test_data_source_live_for_graph_api_empty(self):
+        """data_source 'graph_api_empty' is still treated as live (not mock)."""
+        req = ChatRequest(message="What is the Secure Score?")
+
+        with patch("src.api.chat._run_tool", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = {
+                "current_score": 0,
+                "max_score": 100,
+                "score_percentage": 0,
+                "data_source": "graph_api_empty",
+            }
+            resp = await handle_chat(req, graph_token="token")
+
+        assert resp.data_source == "live"

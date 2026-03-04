@@ -45,9 +45,9 @@ GLOBAL_ADMIN_ROLE_ID = "62e90394-69f5-4237-9190-012177145e10"
 # ── Graph client factory ───────────────────────────────────────────────
 
 
-def _create_graph_client() -> Any:
+def _create_graph_client(graph_token: str = "") -> Any:
     """Delegate to the shared Graph client factory."""
-    return create_graph_client("entra_config")
+    return create_graph_client("entra_config", graph_token=graph_token)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -292,7 +292,7 @@ def _generate_mock_response() -> dict[str, Any]:
 
 
 @trace_tool_call("get_entra_config")
-async def get_entra_config() -> dict[str, Any]:
+async def get_entra_config(graph_token: str = "") -> dict[str, Any]:
     """Review Entra ID P2 security configuration.
 
     Queries multiple Graph API endpoints for Conditional Access, PIM,
@@ -312,7 +312,7 @@ async def get_entra_config() -> dict[str, Any]:
     """
     logger.info("tool.entra_config.start")
 
-    client = _create_graph_client()
+    client = _create_graph_client(graph_token=graph_token)
     if client is None:
         logger.info("tool.entra_config.mock_fallback")
         return _generate_mock_response()

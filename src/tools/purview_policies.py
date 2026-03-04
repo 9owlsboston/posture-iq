@@ -79,9 +79,9 @@ class _SecureScoreControlProfilesQueryParameters:
 # ── Graph client factory ───────────────────────────────────────────────
 
 
-def _create_graph_client() -> Any:
+def _create_graph_client(graph_token: str = "") -> Any:
     """Delegate to the shared Graph client factory."""
-    return create_graph_client("purview_policies")
+    return create_graph_client("purview_policies", graph_token=graph_token)
 
 
 # ── Classification helpers ─────────────────────────────────────────────
@@ -291,7 +291,7 @@ def _generate_mock_response() -> dict[str, Any]:
 
 
 @trace_tool_call("check_purview_policies")
-async def check_purview_policies() -> dict[str, Any]:
+async def check_purview_policies(graph_token: str = "") -> dict[str, Any]:
     """Assess Purview Information Protection & Compliance policy coverage.
 
     Uses ``GET /security/secureScoreControlProfiles`` and filters for
@@ -310,7 +310,7 @@ async def check_purview_policies() -> dict[str, Any]:
     """
     logger.info("tool.purview_policies.start")
 
-    client = _create_graph_client()
+    client = _create_graph_client(graph_token=graph_token)
     if client is None:
         logger.info("tool.purview_policies.mock_fallback")
         return _generate_mock_response()
