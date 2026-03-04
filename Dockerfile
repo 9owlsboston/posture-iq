@@ -75,4 +75,6 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 EXPOSE 8000
 
 # Start the FastAPI server
-CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# --proxy-headers: honour X-Forwarded-Proto/For from the Container Apps ingress
+# --forwarded-allow-ips='*': trust any upstream proxy (ACA routes via internal LB)
+CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*"]
