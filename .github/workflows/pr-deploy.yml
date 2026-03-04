@@ -101,7 +101,40 @@ jobs:
             location=${{ env.LOCATION }}
             projectName=secpostureiq-pr${{ steps.meta.outputs.pr-num }}
             containerImage=${{ steps.acr.outputs.LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:pr-${{ steps.meta.outputs.pr-num }}
+            acrLoginServerOverride=${{ steps.acr.outputs.LOGIN_SERVER }}
           failOnStdErr: false
+
+      - name: Grant AcrPull on dev ACR to PR managed identity
+        run: |
+          DEV_ACR_ID=$(az acr show \
+            --name $(echo "${{ steps.acr.outputs.LOGIN_SERVER }}" | cut -d. -f1) \
+            --query id -o tsv)
+          IDENTITY_PRINCIPAL_ID=${{ steps.deploy.outputs.managedIdentityPrincipalId }}
+          az role assignment create \
+            --assignee-object-id "$IDENTITY_PRINCIPAL_ID" \
+            --assignee-principal-type ServicePrincipal \
+            --role AcrPull \
+            --scope "$DEV_ACR_ID"
+
+      - name: Restart Container App to pick up ACR permissions
+        run: |
+          APP_NAME="secpostureiq-pr${{ steps.meta.outputs.pr-num }}-dev-app"
+          az containerapp revision restart \
+            --name "$APP_NAME" \
+            --resource-group ${{ steps.meta.outputs.rg-name }} \
+            --revision "$(az containerapp revision list --name "$APP_NAME" --resource-group ${{ steps.meta.outputs.rg-name }} --query '[0].name' -o tsv)" \
+            2>/dev/null || \
+          az containerapp update \
+            --name "$APP_NAME" \
+            --resource-group ${{ steps.meta.outputs.rg-name }} \
+            --set-env-vars "DEPLOY_TIMESTAMP=$(date -u +%s)" \
+            2>/dev/null || true
+
+      - name: Get preview URL
+        id: preview
+        run: |
+          APP_FQDN=${{ steps.deploy.outputs.containerAppUrl }}
+          echo "url=https://${APP_FQDN}" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
         uses: actions/github-script@v7
@@ -109,6 +142,7 @@ jobs:
           script: |
             const prNum = ${{ steps.meta.outputs.pr-num }};
             const sha = '${{ steps.meta.outputs.git-sha }}';
+            const previewUrl = '${{ steps.preview.outputs.url }}';
             const body = [
               '## 🚀 Preview Environment',
               '',
@@ -116,9 +150,8 @@ jobs:
               `|--------|-------|`,
               `| **Commit** | \`${sha}\` |`,
               `| **Resource Group** | \`${{ steps.meta.outputs.rg-name }}\` |`,
-              `| **Status** | ✅ Built successfully |`,
-              '',
-              '> Preview URL will be available once Azure credentials are configured.',
+              `| **Preview URL** | ${previewUrl} |`,
+              `| **Status** | ✅ Deployed successfully |`,
               '',
               '_This environment will be automatically torn down when the PR is closed._'
             ].join('\n');
