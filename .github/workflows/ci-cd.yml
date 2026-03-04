@@ -211,6 +211,7 @@ jobs:
             azureTenantId=${{ secrets.AZURE_TENANT_ID }}
             entraAppClientId=${{ vars.ENTRA_APP_CLIENT_ID }}
             entraAppClientSecretName=${{ vars.ENTRA_APP_CLIENT_SECRET_NAME }}
+            multiTenantEnabled=${{ vars.MULTI_TENANT_ENABLED || 'false' }}
           failOnStdErr: false
 
       - name: Post-deploy health check
