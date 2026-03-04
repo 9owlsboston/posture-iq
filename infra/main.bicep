@@ -28,6 +28,9 @@ param containerImage string = ''
 @description('Principal ID of the CI/CD service principal (for AcrPush RBAC via OIDC)')
 param cicdPrincipalId string = ''
 
+@description('Override ACR login server for Container App registry auth (for PR previews using shared ACR)')
+param acrLoginServerOverride string = ''
+
 // ── Variables ─────────────────────────────────────────────
 var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
 var resourcePrefix = '${projectName}-${environment}'
@@ -101,7 +104,7 @@ module containerApp 'modules/container-app.bicep' = {
     environment: environment
     managedIdentityId: managedIdentity.id
     managedIdentityClientId: managedIdentity.properties.clientId
-    acrLoginServer: containerRegistry.outputs.loginServer
+    acrLoginServer: !empty(acrLoginServerOverride) ? acrLoginServerOverride : containerRegistry.outputs.loginServer
   }
 }
 
@@ -124,6 +127,7 @@ output appInsightsName string = appInsights.outputs.name
 output keyVaultName string = keyVault.outputs.name
 output managedIdentityName string = managedIdentity.name
 output managedIdentityClientId string = managedIdentity.properties.clientId
+output managedIdentityPrincipalId string = managedIdentity.properties.principalId
 output acrLoginServer string = containerRegistry.outputs.loginServer
 output acrName string = containerRegistry.outputs.name
 output availabilityTestName string = availabilityTest.outputs.name
