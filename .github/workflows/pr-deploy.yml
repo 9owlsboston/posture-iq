@@ -147,7 +147,6 @@ jobs:
             acrLoginServerOverride=${{ steps.acr.outputs.LOGIN_SERVER }}
             azureTenantId=${{ secrets.AZURE_TENANT_ID }}
             entraAppClientId=${{ vars.ENTRA_APP_CLIENT_ID }}
-            entraAppClientSecretName=${{ vars.ENTRA_APP_CLIENT_SECRET_NAME }}
           failOnStdErr: false
 
       - name: Get preview URL
