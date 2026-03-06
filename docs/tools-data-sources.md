@@ -119,35 +119,41 @@ category_percentage = (sum of achieved scores in category) / (sum of max scores 
 
 #### Issue 1: "Red" status on components with no data
 
-When no `SecureScoreControlProfiles` match a component's keywords, `_build_component_result` returns `status: "red"` with 0 gaps. This is misleading — it implies the component was assessed and failed, when in reality no controls were found.
+When no `SecureScoreControlProfiles` match a component's keywords, `_build_component_result` returns `status: "not_assessed"` with 0 gaps, distinguishing "no data" from "assessed and failing."
 
-| Component | Agent shows | Gaps found | Actual situation |
-|---|---|---|---|
-| DLP Policies | 🔴 red, 1 gap | "Ensure DLP policies are enabled" | Correct — control found and unresolved |
-| Sensitivity Labels | 🔴 red, 0 gaps | (none) | Misleading — no controls matched keywords |
-| Retention Policies | 🔴 red, 0 gaps | (none) | Misleading — no controls matched keywords |
-| Insider Risk Management | 🔴 red, 0 gaps | (none) | Misleading — no controls matched keywords |
+| Component | Status when no controls found | Meaning |
+|---|---|---|
+| Any component | ⚪ `not_assessed` | No matching controls in `secureScoreControlProfiles` — component was not evaluated |
+| Any component with controls | 🟢🟡🔴 green/yellow/red | Controls found and assessed based on coverage percentage |
 
-**Recommended fix:** Return `status: "not_assessed"` when the profile list is empty, distinguishing "no data" from "assessed and failing."
+> **Fixed:** Previously returned `status: "red"` for empty components, which was misleading. Now returns `"not_assessed"`.
 
-#### Issue 2: Category names don't match the portal
+#### Issue 2: Category names don't match the portal ✅ Fixed
 
-The Purview portal uses its own posture categories — **"Data Protection Baseline"** and **"Microsoft 365"** — which do not map 1:1 to the agent's four components (DLP Policies, Sensitivity Labels, Retention Policies, Insider Risk Management). The agent derives its categories from keyword matching on `SecureScoreControlProfiles`, while the portal uses Purview's native posture management taxonomy.
+The Purview portal uses its own posture categories — **"Data Protection Baseline"** and **"Microsoft 365"** — which do not map 1:1 to the agent's components. Each component result now includes a `portal_category` metadata field for cross-reference:
 
-| Agent component | Closest portal category |
+| Agent component | `portal_category` field |
 |---|---|
-| DLP Policies | Data Protection Baseline |
-| Sensitivity Labels | Data Protection Baseline |
-| Retention Policies | Microsoft 365 |
-| Insider Risk Management | Microsoft 365 |
+| DLP Policies | `Data Protection Baseline` |
+| Sensitivity Labels | `Data Protection Baseline` |
+| Retention Policies | `Microsoft 365` |
+| Insider Risk Management | `Microsoft 365` |
+| General Data Protection | `Data Protection Baseline` |
 
-**Recommended fix:** Add portal category name as metadata in the response for cross-reference. Optionally support both groupings.
+> **Fixed:** Added `PORTAL_CATEGORY_MAP` constant and `portal_category` field to every component in the response.
 
-#### Issue 3: Narrow keyword matching limits coverage
+#### Issue 3: Narrow keyword matching limits coverage ✅ Fixed
 
-Only 1 control profile matched out of potentially dozens in the tenant. The `PURVIEW_SERVICE_KEYWORDS` and `_COMPONENT_KEYWORDS` may be too narrow or too specific for the `service` / `title` / `control_category` values that Graph actually returns.
+Previously only 1 control profile matched because:
+- `control_category: "Data"` was not caught (the keyword `"data loss prevention"` is not a substring of `"data"`)
+- Service keywords were too narrow for the values Graph actually returns
 
-**Recommended fix:** Audit a real tenant's full `secureScoreControlProfiles` response to catalog all data-related control names, then expand the keyword sets accordingly.
+**Changes made:**
+- Added exact-match check for `control_category` values (`"data"`) via new `PURVIEW_CONTROL_CATEGORIES` set
+- Expanded `PURVIEW_SERVICE_KEYWORDS` with: `encryption`, `rights management`, `audit`, `eDiscovery`, `records management`, `communication compliance`
+- Expanded `_COMPONENT_KEYWORDS` with: `auto-label`, `classify`, `classification` (→ Sensitivity Labels), `records management` (→ Retention), `communication compliance` (→ Insider Risk)
+- Added **"General Data Protection"** as a 5th component for data-related controls that don't match a specific component (prevents silent drops into wrong bucket)
+- Changed the default classification bucket from "DLP Policies" to "General Data Protection"
 
 ### Getting the Purview Score to Green (0% → 70%+)
 

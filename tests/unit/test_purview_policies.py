@@ -162,6 +162,31 @@ class TestIsPurviewRelated:
         p = _make_profile(service="INFORMATION PROTECTION")
         assert _is_purview_related(p) is True
 
+    def test_control_category_data(self):
+        """Controls with control_category 'Data' should be Purview-related."""
+        from src.tools.purview_policies import _is_purview_related
+
+        p = _make_profile(service="SomeService", title="Turn on audit data", control_category="Data")
+        assert _is_purview_related(p) is True
+
+    def test_control_category_data_case_insensitive(self):
+        from src.tools.purview_policies import _is_purview_related
+
+        p = _make_profile(service="X", title="X", control_category="DATA")
+        assert _is_purview_related(p) is True
+
+    def test_encryption_keyword(self):
+        from src.tools.purview_policies import _is_purview_related
+
+        p = _make_profile(title="Enable email encryption")
+        assert _is_purview_related(p) is True
+
+    def test_audit_keyword(self):
+        from src.tools.purview_policies import _is_purview_related
+
+        p = _make_profile(title="Turn on audit log search")
+        assert _is_purview_related(p) is True
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 2. _classify_component
@@ -219,11 +244,11 @@ class TestClassifyComponent:
         p = _make_profile(title="Detect insider threat activities")
         assert _classify_component(p) == "Insider Risk Management"
 
-    def test_default_bucket_is_dlp(self):
+    def test_default_bucket_is_general(self):
         from src.tools.purview_policies import _classify_component
 
         p = _make_profile(title="Generic compliance control", service="Compliance")
-        assert _classify_component(p) == "DLP Policies"
+        assert _classify_component(p) == "General Data Protection"
 
     def test_control_category_matters(self):
         from src.tools.purview_policies import _classify_component
@@ -487,6 +512,28 @@ class TestAggregateComponents:
         for comp in result.values():
             assert comp["details"]["total_controls"] == 0
 
+    def test_portal_category_metadata(self):
+        """Each component result should include its portal category name."""
+        from src.tools.purview_policies import _aggregate_components
+
+        profiles = [_gap_profile(title="Enable DLP on Teams", service="DLP")]
+        result = _aggregate_components(profiles)
+        assert result["DLP Policies"]["portal_category"] == "Data Protection Baseline"
+        assert result["Sensitivity Labels"]["portal_category"] == "Data Protection Baseline"
+        assert result["Retention Policies"]["portal_category"] == "Microsoft 365"
+        assert result["Insider Risk Management"]["portal_category"] == "Microsoft 365"
+        assert result["General Data Protection"]["portal_category"] == "Data Protection Baseline"
+
+    def test_general_data_protection_bucket(self):
+        """Controls with category 'Data' but no specific keywords go to General Data Protection."""
+        from src.tools.purview_policies import _aggregate_components
+
+        profiles = [
+            _gap_profile(title="Turn on audit log", service="SomeService", control_category="Data"),
+        ]
+        result = _aggregate_components(profiles)
+        assert result["General Data Protection"]["details"]["total_controls"] == 1
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 9. _compute_overall
@@ -631,7 +678,7 @@ class TestPurviewMockFallback:
             assert "status" in component
             assert "details" in component
             assert "gaps" in component
-            assert component["status"] in ("green", "yellow", "red")
+            assert component["status"] in ("green", "yellow", "red", "not_assessed")
 
 
 # ═══════════════════════════════════════════════════════════════════════

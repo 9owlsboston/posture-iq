@@ -176,6 +176,7 @@ jobs:
           exit-code: 1
           format: table
           ignore-unfixed: true
+          trivyignores: .trivyignore
 
       - name: Push to ACR
         run: |

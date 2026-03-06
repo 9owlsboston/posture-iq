@@ -1,0 +1,12 @@
+# SecPostureIQ — Trivy vulnerability ignore list
+#
+# Only add CVEs here when they are confirmed as non-exploitable in our
+# deployment context. Each entry must include a justification.
+
+# CVE-2025-15558: docker/cli privilege escalation via malicious plugin binaries
+# Severity: HIGH | Affects: github.com/docker/cli (bundled in gh CLI binary)
+# Justification: This is a Windows-only vulnerability (malicious DLL sideloading).
+# Our container runs on Linux (python:3.11-slim). The gh binary is used only for
+# Copilot SDK runtime communication, not for Docker operations.
+# Will be resolved when GitHub CLI releases a version with docker/cli >= 29.2.0.
+CVE-2025-15558

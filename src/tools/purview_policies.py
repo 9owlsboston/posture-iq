@@ -41,8 +41,19 @@ PURVIEW_SERVICE_KEYWORDS = frozenset(
         "insider risk",
         "retention",
         "sensitivity",
+        "encryption",
+        "rights management",
+        "audit",
+        "eDiscovery",
+        "records management",
+        "communication compliance",
     }
 )
+
+# The control_category values that indicate a Purview-related control.
+# Checked separately because short values like "Data" would false-match
+# longer keywords in the substring check above.
+PURVIEW_CONTROL_CATEGORIES = frozenset({"data"})
 
 # Canonical Purview component names we report on
 ALL_COMPONENTS = (
@@ -50,14 +61,31 @@ ALL_COMPONENTS = (
     "Sensitivity Labels",
     "Retention Policies",
     "Insider Risk Management",
+    "General Data Protection",
 )
 
 # Keywords that map a control to a specific component
 _COMPONENT_KEYWORDS: dict[str, list[str]] = {
     "DLP Policies": ["dlp", "data loss prevention"],
-    "Sensitivity Labels": ["sensitivity label", "information protection label", "labeling"],
-    "Retention Policies": ["retention"],
-    "Insider Risk Management": ["insider risk", "insider threat"],
+    "Sensitivity Labels": [
+        "sensitivity label",
+        "information protection label",
+        "labeling",
+        "auto-label",
+        "classify",
+        "classification",
+    ],
+    "Retention Policies": ["retention", "records management"],
+    "Insider Risk Management": ["insider risk", "insider threat", "communication compliance"],
+}
+
+# Mapping from agent component names to Purview portal category names
+PORTAL_CATEGORY_MAP: dict[str, str] = {
+    "DLP Policies": "Data Protection Baseline",
+    "Sensitivity Labels": "Data Protection Baseline",
+    "Retention Policies": "Microsoft 365",
+    "Insider Risk Management": "Microsoft 365",
+    "General Data Protection": "Data Protection Baseline",
 }
 
 GREEN_THRESHOLD = 70.0
@@ -89,6 +117,11 @@ def _create_graph_client(graph_token: str = "") -> Any:
 
 def _is_purview_related(profile: Any) -> bool:
     """Return True when a control profile relates to Purview / data protection."""
+    # Check control_category for exact matches (e.g., "Data")
+    cat = (getattr(profile, "control_category", None) or "").lower()
+    if cat in PURVIEW_CONTROL_CATEGORIES:
+        return True
+    # Check service, control_category, and title for keyword substrings
     for field in ("service", "control_category", "title"):
         val = (getattr(profile, field, None) or "").lower()
         if any(kw in val for kw in PURVIEW_SERVICE_KEYWORDS):
@@ -110,8 +143,8 @@ def _classify_component(profile: Any) -> str:
         if any(kw in text for kw in keywords):
             return component
 
-    # Default bucket
-    return "DLP Policies"
+    # Default bucket for data-related controls that don't match specific components
+    return "General Data Protection"
 
 
 def _compute_status(pct: float) -> str:
@@ -196,7 +229,12 @@ def _aggregate_components(profiles: list[Any]) -> dict[str, dict[str, Any]]:
         comp = _classify_component(p)
         if comp in buckets:
             buckets[comp].append(p)
-    return {c: _build_component_result(profs) for c, profs in buckets.items()}
+    result = {}
+    for comp, profs in buckets.items():
+        comp_result = _build_component_result(profs)
+        comp_result["portal_category"] = PORTAL_CATEGORY_MAP.get(comp, "Unknown")
+        result[comp] = comp_result
+    return result
 
 
 def _compute_overall(components: dict[str, dict[str, Any]]) -> float:
@@ -220,6 +258,7 @@ def _generate_mock_response() -> dict[str, Any]:
         "components": {
             "DLP Policies": {
                 "status": "yellow",
+                "portal_category": "Data Protection Baseline",
                 "details": {
                     "total_controls": 4,
                     "achieved_controls": 1,
@@ -234,6 +273,7 @@ def _generate_mock_response() -> dict[str, Any]:
             },
             "Sensitivity Labels": {
                 "status": "red",
+                "portal_category": "Data Protection Baseline",
                 "details": {
                     "total_controls": 5,
                     "achieved_controls": 1,
@@ -249,6 +289,7 @@ def _generate_mock_response() -> dict[str, Any]:
             },
             "Retention Policies": {
                 "status": "yellow",
+                "portal_category": "Microsoft 365",
                 "details": {
                     "total_controls": 3,
                     "achieved_controls": 1,
@@ -262,6 +303,7 @@ def _generate_mock_response() -> dict[str, Any]:
             },
             "Insider Risk Management": {
                 "status": "red",
+                "portal_category": "Microsoft 365",
                 "details": {
                     "total_controls": 3,
                     "achieved_controls": 0,
@@ -274,13 +316,27 @@ def _generate_mock_response() -> dict[str, Any]:
                     "No risk policies defined (tier: Tier2)",
                 ],
             },
+            "General Data Protection": {
+                "status": "yellow",
+                "portal_category": "Data Protection Baseline",
+                "details": {
+                    "total_controls": 2,
+                    "achieved_controls": 1,
+                    "max_score": 8.0,
+                    "achieved_score": 4.0,
+                },
+                "gaps": [
+                    "Enable audit log search (tier: Tier1)",
+                ],
+            },
         },
-        "total_gaps": 12,
+        "total_gaps": 13,
         "critical_gaps": [
             "DLP policies not enforced on SharePoint, OneDrive, Teams (tier: Tier1)",
             "Auto-labeling not enabled (tier: Tier1)",
             "Mandatory labeling not enforced (tier: Tier1)",
             "Insider Risk Management not enabled (tier: Tier1)",
+            "Enable audit log search (tier: Tier1)",
         ],
         "assessed_at": datetime.now(UTC).isoformat(),
         "data_source": "mock",
