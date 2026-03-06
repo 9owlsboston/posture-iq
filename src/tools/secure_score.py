@@ -47,6 +47,18 @@ class _SecureScoresQueryParameters:
         return original_name
 
 
+@dataclass
+class _ControlProfilesQueryParameters:
+    """Graph query parameters for secureScoreControlProfiles."""
+
+    top: int | None = None
+
+    def get_query_parameter(self, original_name: str) -> str:
+        if original_name == "top":
+            return "%24top"
+        return original_name
+
+
 # ── Graph client factory ───────────────────────────────────────────────
 
 
@@ -63,6 +75,7 @@ def _create_graph_client(graph_token: str = "") -> Any:
 
 def _parse_category_breakdown(
     control_scores: list[Any],
+    profile_max_scores: dict[str, float] | None = None,
 ) -> dict[str, dict[str, float]]:
     """Aggregate control-level scores into category-level breakdown.
 
@@ -70,31 +83,46 @@ def _parse_category_breakdown(
     each tagged with a ``control_category`` (e.g., "Identity").
     We sum scores within each category to produce the category breakdown.
 
+    When ``profile_max_scores`` is provided (a mapping of control name → real
+    max score from ``secureScoreControlProfiles``), it is used for accurate
+    per-category max score calculation.  Without it the function falls back
+    to summing the ``score`` field on each ``ControlScore`` as ``max_score``
+    (i.e. max becomes the sum of all control scores in the category — which
+    is only useful for the achieved-score total, not the denominator).
+
     Args:
         control_scores: List of ControlScore objects from the Graph SDK.
+        profile_max_scores: Optional mapping of control name → max_score
+            from ``secureScoreControlProfiles``.
 
     Returns:
         Dict mapping category name → {score, max_score, percentage}.
     """
     category_totals: dict[str, float] = defaultdict(float)
-    category_counts: dict[str, int] = defaultdict(int)
+    category_max: dict[str, float] = defaultdict(float)
 
     for cs in control_scores:
         category = getattr(cs, "control_category", None) or "Unknown"
         score = getattr(cs, "score", 0.0) or 0.0
+        control_name = getattr(cs, "control_name", None) or ""
         category_totals[category] += score
-        category_counts[category] += 1
+
+        # Use real max_score from control profiles when available
+        if profile_max_scores and control_name in profile_max_scores:
+            category_max[category] += profile_max_scores[control_name]
+        else:
+            # Fallback: use the control's own score as a rough max
+            # (only reached when profiles were not fetched)
+            category_max[category] += max(score, 1.0)
 
     result: dict[str, dict[str, float]] = {}
     for category in sorted(category_totals):
         total = category_totals[category]
-        count = category_counts[category]
-        # Max score per control is typically 10.0; approximate category max
-        max_score = count * 10.0
-        percentage = round((total / max_score) * 100, 1) if max_score > 0 else 0.0
+        cat_max = category_max[category]
+        percentage = round((total / cat_max) * 100, 1) if cat_max > 0 else 0.0
         result[category] = {
             "score": round(total, 1),
-            "max_score": round(max_score, 1),
+            "max_score": round(cat_max, 1),
             "percentage": percentage,
         }
 
@@ -217,6 +245,40 @@ def _compute_status(
         return "red"
 
 
+# ── Control profile max-score fetcher ──────────────────────────────────
+
+
+async def _fetch_profile_max_scores(client: Any) -> dict[str, float] | None:
+    """Fetch secureScoreControlProfiles and build a control_name → max_score map.
+
+    Returns None if the fetch fails (caller falls back to heuristic scoring).
+    """
+    try:
+        from kiota_abstractions.base_request_configuration import RequestConfiguration
+
+        query = _ControlProfilesQueryParameters(top=200)
+        config = RequestConfiguration(query_parameters=query)
+        response = await client.security.secure_score_control_profiles.get(
+            request_configuration=config,
+        )
+        profiles = response.value if response and response.value else []
+        if not profiles:
+            logger.warning("tool.secure_score.profiles_empty")
+            return None
+
+        lookup: dict[str, float] = {}
+        for p in profiles:
+            ctrl_id = getattr(p, "id", None) or ""
+            ms = getattr(p, "max_score", None) or 0.0
+            if ctrl_id:
+                lookup[ctrl_id] = float(ms)
+        logger.info("tool.secure_score.profiles_fetched", count=len(lookup))
+        return lookup
+    except Exception as e:
+        logger.warning("tool.secure_score.profiles_fetch_error", error=str(e))
+        return None
+
+
 # ── Mock data (development fallback) ──────────────────────────────────
 
 
@@ -329,6 +391,9 @@ async def query_secure_score(tenant_id: str = "", graph_token: str = "") -> dict
             result["data_source"] = "graph_api_empty"
             return result
 
+        # ── Fetch control profiles for accurate per-category max scores
+        profile_max_scores = await _fetch_profile_max_scores(client)
+
         # Latest snapshot is the current score
         latest = snapshots[0]
         current_score = latest.current_score or 0.0
@@ -336,7 +401,10 @@ async def query_secure_score(tenant_id: str = "", graph_token: str = "") -> dict
         score_pct = round((current_score / max_score) * 100, 1) if max_score > 0 else 0.0
 
         # Parse components
-        categories = _parse_category_breakdown(latest.control_scores or [])
+        categories = _parse_category_breakdown(
+            latest.control_scores or [],
+            profile_max_scores=profile_max_scores,
+        )
         industry = _parse_industry_comparison(
             latest.average_comparative_scores,
             current_score,

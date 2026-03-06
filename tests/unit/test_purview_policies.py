@@ -399,7 +399,7 @@ class TestBuildComponentResult:
         from src.tools.purview_policies import _build_component_result
 
         r = _build_component_result([])
-        assert r["status"] == "red"
+        assert r["status"] == "not_assessed"
         assert r["details"]["total_controls"] == 0
         assert r["gaps"] == []
 

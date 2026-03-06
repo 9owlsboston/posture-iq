@@ -152,7 +152,7 @@ def _is_critical(profile: Any) -> bool:
 def _build_component_result(profiles: list[Any]) -> dict[str, Any]:
     if not profiles:
         return {
-            "status": "red",
+            "status": "not_assessed",
             "details": {
                 "total_controls": 0,
                 "achieved_controls": 0,

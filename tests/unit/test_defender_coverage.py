@@ -341,7 +341,7 @@ class TestBuildWorkloadResult:
 
         result = _build_workload_result([])
         assert result["coverage_pct"] == 0.0
-        assert result["status"] == "red"
+        assert result["status"] == "not_assessed"
         assert result["details"]["total_controls"] == 0
         assert result["gaps"] == []
 

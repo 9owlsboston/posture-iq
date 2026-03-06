@@ -34,6 +34,19 @@ def _make_control_score(
     )
 
 
+def _make_control_profile(
+    ctrl_id: str = "MFAForAdmin",
+    max_score: float = 10.0,
+    deprecated: bool = False,
+) -> SimpleNamespace:
+    """Build a fake SecureScoreControlProfile with id and max_score."""
+    return SimpleNamespace(
+        id=ctrl_id,
+        max_score=max_score,
+        deprecated=deprecated,
+    )
+
+
 def _make_comparative_score(
     basis: str = "IndustryTypes",
     average_score: float = 63.2,
@@ -78,16 +91,19 @@ class TestParseCategoryBreakdown:
             _make_control_score("CondAccess", "Identity", 6.0),
             _make_control_score("DLP", "Data", 4.0),
         ]
-        result = _parse_category_breakdown(controls)
+        # With profile max scores for accurate calculation
+        profile_max = {"MFA": 10.0, "CondAccess": 10.0, "DLP": 10.0}
+        result = _parse_category_breakdown(controls, profile_max_scores=profile_max)
 
         assert "Identity" in result
         assert "Data" in result
-        # Identity: 8 + 6 = 14, max = 2 * 10 = 20, pct = 70%
+        # Identity: 8 + 6 = 14, max = 10 + 10 = 20, pct = 70%
         assert result["Identity"]["score"] == 14.0
         assert result["Identity"]["max_score"] == 20.0
         assert result["Identity"]["percentage"] == 70.0
         # Data: 4, max = 10, pct = 40%
         assert result["Data"]["score"] == 4.0
+        assert result["Data"]["max_score"] == 10.0
         assert result["Data"]["percentage"] == 40.0
 
     def test_empty_controls(self):
@@ -109,7 +125,8 @@ class TestParseCategoryBreakdown:
         from src.tools.secure_score import _parse_category_breakdown
 
         controls = [_make_control_score("ZeroCtrl", "Device", 0.0)]
-        result = _parse_category_breakdown(controls)
+        profile_max = {"ZeroCtrl": 10.0}
+        result = _parse_category_breakdown(controls, profile_max_scores=profile_max)
         assert result["Device"]["score"] == 0.0
         assert result["Device"]["percentage"] == 0.0
 
@@ -117,10 +134,37 @@ class TestParseCategoryBreakdown:
         from src.tools.secure_score import _parse_category_breakdown
 
         controls = [_make_control_score("SingleCtrl", "Apps", 7.5)]
-        result = _parse_category_breakdown(controls)
+        profile_max = {"SingleCtrl": 10.0}
+        result = _parse_category_breakdown(controls, profile_max_scores=profile_max)
         assert result["Apps"]["score"] == 7.5
         assert result["Apps"]["max_score"] == 10.0
         assert result["Apps"]["percentage"] == 75.0
+
+    def test_uses_profile_max_scores_with_varying_weights(self):
+        """Controls have different max scores — not all 10.0."""
+        from src.tools.secure_score import _parse_category_breakdown
+
+        controls = [
+            _make_control_score("MFA", "Identity", 8.0),
+            _make_control_score("CondAccess", "Identity", 2.0),
+        ]
+        # MFA is worth 10 points, CondAccess only worth 5
+        profile_max = {"MFA": 10.0, "CondAccess": 5.0}
+        result = _parse_category_breakdown(controls, profile_max_scores=profile_max)
+
+        assert result["Identity"]["score"] == 10.0  # 8 + 2
+        assert result["Identity"]["max_score"] == 15.0  # 10 + 5
+        assert result["Identity"]["percentage"] == 66.7  # 10/15 * 100
+
+    def test_without_profile_max_scores_uses_fallback(self):
+        """Without profile data, uses fallback heuristic."""
+        from src.tools.secure_score import _parse_category_breakdown
+
+        controls = [_make_control_score("MFA", "Identity", 8.0)]
+        result = _parse_category_breakdown(controls)  # no profile_max_scores
+        assert result["Identity"]["score"] == 8.0
+        # Fallback: max(score, 1.0) = 8.0
+        assert result["Identity"]["max_score"] == 8.0
 
     def test_none_score_treated_as_zero(self):
         from src.tools.secure_score import _parse_category_breakdown
@@ -522,11 +566,20 @@ class TestQuerySecureScoreMockPath:
 class TestQuerySecureScoreGraphPath:
     """Tests for query_secure_score with a mocked Graph API client."""
 
-    def _make_mock_client(self, snapshots: list) -> MagicMock:
-        """Create a mock GraphServiceClient that returns given snapshots."""
+    def _make_mock_client(
+        self,
+        snapshots: list,
+        profiles: list | None = None,
+    ) -> MagicMock:
+        """Create a mock GraphServiceClient that returns given snapshots and profiles."""
         client = MagicMock()
         response = _make_graph_response(snapshots)
         client.security.secure_scores.get = AsyncMock(return_value=response)
+        # Mock the control profiles endpoint
+        profile_response = _make_graph_response(profiles or [])
+        client.security.secure_score_control_profiles.get = AsyncMock(
+            return_value=profile_response,
+        )
         return client
 
     @pytest.mark.asyncio
@@ -621,6 +674,9 @@ class TestQuerySecureScoreGraphPath:
     async def test_graph_api_empty_response_falls_back(self):
         client = MagicMock()
         client.security.secure_scores.get = AsyncMock(return_value=SimpleNamespace(value=[]))
+        client.security.secure_score_control_profiles.get = AsyncMock(
+            return_value=SimpleNamespace(value=[]),
+        )
 
         with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
@@ -633,6 +689,9 @@ class TestQuerySecureScoreGraphPath:
     async def test_graph_api_none_response_falls_back(self):
         client = MagicMock()
         client.security.secure_scores.get = AsyncMock(return_value=SimpleNamespace(value=None))
+        client.security.secure_score_control_profiles.get = AsyncMock(
+            return_value=SimpleNamespace(value=[]),
+        )
 
         with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
@@ -645,6 +704,9 @@ class TestQuerySecureScoreGraphPath:
     async def test_graph_api_error_raises(self):
         client = MagicMock()
         client.security.secure_scores.get = AsyncMock(side_effect=RuntimeError("Graph API unavailable"))
+        client.security.secure_score_control_profiles.get = AsyncMock(
+            return_value=SimpleNamespace(value=[]),
+        )
 
         with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
@@ -669,9 +731,7 @@ class TestQuerySecureScoreGraphPath:
     @pytest.mark.asyncio
     async def test_graph_api_uses_query_params(self):
         """Verify the Graph call passes $top and $orderby params."""
-        client = MagicMock()
-        response = _make_graph_response([_make_secure_score_snapshot(50.0, 100.0)])
-        client.security.secure_scores.get = AsyncMock(return_value=response)
+        client = self._make_mock_client([_make_secure_score_snapshot(50.0, 100.0)])
 
         with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
@@ -728,7 +788,15 @@ class TestQuerySecureScoreGraphPath:
                 ],
             ),
         ]
-        client = self._make_mock_client(snapshots)
+        profiles = [
+            _make_control_profile("MFA", 10.0),
+            _make_control_profile("SSO", 10.0),
+            _make_control_profile("BitLocker", 10.0),
+            _make_control_profile("DLP", 10.0),
+            _make_control_profile("AppConsent", 10.0),
+            _make_control_profile("Firewall", 10.0),
+        ]
+        client = self._make_mock_client(snapshots, profiles=profiles)
 
         with patch("src.tools.secure_score._create_graph_client", return_value=client):
             from src.tools.secure_score import query_secure_score
@@ -738,10 +806,45 @@ class TestQuerySecureScoreGraphPath:
         cats = result["categories"]
         assert len(cats) == 5
         assert cats["Identity"]["score"] == 14.0  # 8 + 6
+        assert cats["Identity"]["max_score"] == 20.0  # 10 + 10
+        assert cats["Identity"]["percentage"] == 70.0
         assert cats["Device"]["score"] == 9.0
         assert cats["Data"]["score"] == 3.0
         assert cats["Apps"]["score"] == 7.0
         assert cats["Infrastructure"]["score"] == 5.0
+
+    @pytest.mark.asyncio
+    async def test_graph_api_category_pct_with_varied_max_scores(self):
+        """Controls with different max_score values produce correct percentages."""
+        snapshots = [
+            _make_secure_score_snapshot(
+                current_score=56.2,
+                max_score=271.0,
+                control_scores=[
+                    _make_control_score("MFA", "Identity", 10.0),
+                    _make_control_score("CondAccess", "Identity", 5.0),
+                    _make_control_score("PasswordPolicy", "Identity", 2.0),
+                ],
+            ),
+        ]
+        # These controls have different weights (not all 10.0)
+        profiles = [
+            _make_control_profile("MFA", 10.0),
+            _make_control_profile("CondAccess", 5.0),
+            _make_control_profile("PasswordPolicy", 5.0),
+        ]
+        client = self._make_mock_client(snapshots, profiles=profiles)
+
+        with patch("src.tools.secure_score._create_graph_client", return_value=client):
+            from src.tools.secure_score import query_secure_score
+
+            result = await query_secure_score()
+
+        cats = result["categories"]
+        # Identity: 17/20 = 85%
+        assert cats["Identity"]["score"] == 17.0
+        assert cats["Identity"]["max_score"] == 20.0
+        assert cats["Identity"]["percentage"] == 85.0
 
     @pytest.mark.asyncio
     async def test_graph_api_assessed_at_is_iso(self):

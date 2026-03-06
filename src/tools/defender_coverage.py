@@ -151,7 +151,7 @@ def _build_workload_result(
     if not profiles:
         return {
             "coverage_pct": 0.0,
-            "status": "red",
+            "status": "not_assessed",
             "details": {
                 "total_controls": 0,
                 "achieved_controls": 0,

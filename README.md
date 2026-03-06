@@ -255,6 +255,38 @@ posture-iq/
 - **Audit logging** — all tool calls and interactions logged
 - **Managed Identity** — no secrets in code or environment variables (production)
 
+## Tenant Terminology
+
+SecPostureIQ assesses a **single tenant** — the Entra ID directory backing an organization's Microsoft cloud services. The terms "M365 tenant", "Azure tenant", and "Entra ID tenant" all refer to the same underlying directory (one tenant GUID), just in different contexts:
+
+| Term | Context | What It Emphasizes |
+|------|---------|-------------------|
+| **Entra ID tenant** | Identity & access management | Users, groups, app registrations, Conditional Access, PIM — the identity plane |
+| **Azure tenant** | Azure resource management | The trust relationship between the directory and Azure subscriptions |
+| **M365 tenant** | Microsoft 365 / productivity | Exchange Online, SharePoint, Teams, Defender, Purview — the M365 services plane |
+
+```
+                 ┌──────────────────────────────┐
+                 │     Entra ID Tenant           │
+                 │     (the single directory)    │
+                 │     Tenant ID: abc-123...     │
+                 └──────────┬───────────────────┘
+                            │
+              ┌─────────────┼─────────────────┐
+              │             │                 │
+     ┌────────▼───┐  ┌──────▼──────┐  ┌───────▼──────┐
+     │  Azure     │  │   M365      │  │  Other SaaS  │
+     │ Subs &     │  │ Exchange,   │  │ Power BI,    │
+     │ Resources  │  │ Teams,      │  │ Dynamics,    │
+     │            │  │ Defender,   │  │ Fabric       │
+     │            │  │ Purview     │  │              │
+     └────────────┘  └─────────────┘  └──────────────┘
+```
+
+When the agent calls Microsoft Graph API with a user-delegated token, it authenticates against the Entra ID tenant and queries M365 services (Secure Score, Defender, Purview). All portals — `security.microsoft.com`, `entra.microsoft.com`, `portal.azure.com`, `compliance.microsoft.com` — operate against the same tenant.
+
+In multi-tenant scenarios (e.g., a CSP partner managing a customer), the `graph_token` determines which tenant is assessed.
+
 ## Scoring Alignment
 
 | Category | Points | SecPostureIQ Coverage |
