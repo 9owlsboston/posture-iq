@@ -631,13 +631,25 @@ az ad app permission admin-consent --id $APP_ID
 - Sensitivity labels endpoints (`/informationProtection/policy/labels`, `/beta/security/informationProtection/sensitivityLabels`) → 400/404 (endpoints moved or deprecated)
 - No public Graph API currently exposes the Purview Posture Management data
 
-**Research needed:**
-- Determine if Microsoft Purview Posture Management has a public/preview REST API
-- Check if granting `eDiscovery.Read.All` unlocks useful compliance data
-- Evaluate whether the Security & Compliance PowerShell module (`Connect-IPPSSession`) can be used as an alternative data source
-- Consider using the Purview portal's internal API (if documented) as a supplementary source
+**What was addressed:**
+- Added a `disclaimer` field to the Purview tool's JSON output explaining that the portal uses a separate scoring engine (Purview Posture Management) not available via Graph API
+- Expanded keyword matching to capture more data controls: `MIP` service, `control_category: "Data"`, encryption, audit, records management, eDiscovery, communication compliance
+- Added `General Data Protection` as a 5th component so data controls not matching specific keywords are still captured
 
-**Impact:** Would close the gap between agent (0%) and portal (56%) for Purview assessment. Currently blocked pending API availability research.
+**Outstanding gap — three Purview scoring systems exist:**
+
+| Scoring System | Agent Access | Example Score | API |
+|---|---|---|---|
+| Secure Score "Data" category | ✅ Accessed | 0% | `GET /security/secureScoreControlProfiles` |
+| Compliance Manager | ❌ Not accessed | Unknown | `GET /beta/compliance/...` — needs `ComplianceManager.Read.All` |
+| Purview Posture Management | ❌ No API exists | 56% | Portal-only (purview.microsoft.com) |
+
+**To fully close this gap (future work):**
+1. **Grant `ComplianceManager.Read.All`** scope and integrate the Compliance Manager API — would add improvement actions and assessment coverage data
+2. **Wait for Microsoft** to expose the Purview Posture Management REST API — this is the 56% score and currently has no public Graph surface
+3. **Alternative: PowerShell data source** — `Connect-IPPSSession` can enumerate DLP policies, sensitivity labels, and retention policies directly, but requires an architectural change to invoke PowerShell from the Python agent
+
+**Current mitigation impact:** The disclaimer sets accurate user expectations. Expanded keywords improved control matching. Full parity with the portal requires API availability from Microsoft.
 
 ### AI-4: Fix Defender `WORKLOAD_SERVICE_MAP` with real service values ✅ Fixed
 
@@ -674,6 +686,28 @@ az ad app permission admin-consent --id $APP_ID
 
 **Problem:** Several service values from the live API are not mapped to any tool: `Admincenter`, `AppG`, `EXO`, `SPO`, `MS Teams`, `FORMS`, `SWAY`. These controls fall through all tool filters and are only visible in the overall Secure Score.
 
+**What was addressed:**
+- Added `AppG` (App Governance) → Defender for Cloud Apps in `WORKLOAD_SERVICE_MAP`
+
+**Outstanding gap — 7 unmapped service values:**
+
+| Service | What it is | Category | Why not mapped | Impact |
+|---|---|---|---|---|
+| `EXO` | Exchange Online security controls | Apps | No dedicated Exchange tool — M365-wide controls | Low — covered by overall Secure Score |
+| `SPO` | SharePoint Online controls | Apps | Same — M365-wide | Low |
+| `MS Teams` | Teams security controls | Apps | Same | Low |
+| `AzureAD` | Entra ID controls (from Secure Score) | Identity | `get_entra_config` uses direct Graph APIs instead | Would duplicate data |
+| `Admincenter` | M365 admin center controls | Apps | General admin hygiene settings | Low |
+| `FORMS` | Microsoft Forms (~1-2 controls) | Apps | Very few controls | Negligible |
+| `SWAY` | Microsoft Sway (~1-2 controls) | Apps | Very few controls | Negligible |
+
+**Key insight:** These 7 services already contribute to the **overall Secure Score** percentage correctly (47%). They are only missing from the **per-workload** breakdowns in `assess_defender_coverage` and `check_purview_policies`. The overall score is accurate; the gap is in granularity, not accuracy.
+
+**To fully close (future work):**
+- Create an "M365 Services" tool that reports on `EXO`, `SPO`, `MS Teams`, `Admincenter` controls
+- Or add them to existing tools: `EXO`/`SPO`/`MS Teams` → Purview (data protection context) or a new general M365 component
+- `AzureAD` could be cross-referenced with `get_entra_config` for validation, but would likely duplicate findings
+
 **Full service value inventory (440 profiles, 26 unique services):**
 ```
 Admincenter, AppG, Azure ATP, AzureAD, EXO, FORMS, MCAS, MDATP,
@@ -683,5 +717,3 @@ MDA_Zendesk, MDA_Zoom, MDO, MIP, MS Teams, SPO, SWAY
 ```
 
 **4 categories:** Apps, Data, Device, Identity
-
-**Impact:** Low — these services contribute to the overall Secure Score (which is already accurate), but mapping them would enable more granular service-level reporting.
