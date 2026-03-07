@@ -631,25 +631,41 @@ az ad app permission admin-consent --id $APP_ID
 - Sensitivity labels endpoints (`/informationProtection/policy/labels`, `/beta/security/informationProtection/sensitivityLabels`) → 400/404 (endpoints moved or deprecated)
 - No public Graph API currently exposes the Purview Posture Management data
 
+**Extended probing (March 2026):** After granting `eDiscovery.Read.All`, `InformationProtectionConfig.Read.All`, and `SensitivityLabels.Read.All` permissions, retested all compliance endpoints:
+
+| Endpoint | Status | Finding |
+|---|---|---|
+| `GET /v1.0/compliance/ediscovery/cases` | 401 | "Invalid scopes" — eDiscovery requires **delegated** (interactive) auth, not application-only |
+| `GET /beta/security/cases/ediscoveryCases` | 401 | Same — delegated only |
+| `GET /beta/compliance` | 200 | Returns only navigation link to `ediscovery` — no posture/compliance score data |
+| `GET /v1.0/informationProtection` | 200 | Returns `bitlocker` and `threatAssessmentRequests` links — no DLP/labels/compliance data |
+| `GET /beta/security/informationProtection/sensitivityLabels` | 404 | Endpoint removed or relocated |
+| `GET /beta/informationProtection/sensitivityLabels` | 404 | Same |
+| `GET /beta/informationProtection/policy/labels` | 404 | Same |
+| `GET /beta/informationProtection/dataLossPreventionPolicies` | 404 | Endpoint does not exist |
+| `GET /beta/dataClassification/sensitiveTypes` | 403 | Unauthorized — needs additional permissions not available |
+| `GET /beta/security/labels/sensitivityLabels` | 400 | Segment not found |
+
+**Conclusion:** No Compliance Manager or Purview posture data is accessible via Microsoft Graph API with application credentials as of March 2026. The `ComplianceManager.Read.All` permission does not exist as an app role in Graph. eDiscovery endpoints require delegated (interactive user) auth. Sensitivity labels and DLP policy endpoints have been removed or relocated without public successors.
+
 **What was addressed:**
 - Added a `disclaimer` field to the Purview tool's JSON output explaining that the portal uses a separate scoring engine (Purview Posture Management) not available via Graph API
 - Expanded keyword matching to capture more data controls: `MIP` service, `control_category: "Data"`, encryption, audit, records management, eDiscovery, communication compliance
 - Added `General Data Protection` as a 5th component so data controls not matching specific keywords are still captured
+- Granted all available compliance-related permissions (`eDiscovery.Read.All`, `InformationProtectionConfig.Read.All`, `InformationProtectionPolicy.Read.All`, `SensitivityLabels.Read.All`)
 
 **Outstanding gap — three Purview scoring systems exist:**
 
-| Scoring System | Agent Access | Example Score | API |
+| Scoring System | Agent Access | Example Score | API Status |
 |---|---|---|---|
-| Secure Score "Data" category | ✅ Accessed | 0% | `GET /security/secureScoreControlProfiles` |
-| Compliance Manager | ❌ Not accessed | Unknown | `GET /beta/compliance/...` — needs `ComplianceManager.Read.All` |
-| Purview Posture Management | ❌ No API exists | 56% | Portal-only (purview.microsoft.com) |
+| Secure Score "Data" category | ✅ Accessed | 0% | `GET /security/secureScoreControlProfiles` — working |
+| Compliance Manager | ❌ Not accessible | Unknown | No app-only API. eDiscovery requires delegated auth. `ComplianceManager.Read.All` does not exist as a Graph app role |
+| Purview Posture Management | ❌ No API exists | 56% | Portal-only (purview.microsoft.com) — no Graph API surface |
 
-**To fully close this gap (future work):**
-1. **Grant `ComplianceManager.Read.All`** scope and integrate the Compliance Manager API — would add improvement actions and assessment coverage data
-2. **Wait for Microsoft** to expose the Purview Posture Management REST API — this is the 56% score and currently has no public Graph surface
-3. **Alternative: PowerShell data source** — `Connect-IPPSSession` can enumerate DLP policies, sensitivity labels, and retention policies directly, but requires an architectural change to invoke PowerShell from the Python agent
+**Remaining option (future work):**
+- **PowerShell data source** — `Connect-IPPSSession` can enumerate DLP policies, sensitivity labels, and retention policies directly, but requires an architectural change to invoke PowerShell from the Python agent via subprocess or a sidecar service. This is the only viable path to richer Purview data without waiting for Microsoft to ship new Graph APIs.
 
-**Current mitigation impact:** The disclaimer sets accurate user expectations. Expanded keywords improved control matching. Full parity with the portal requires API availability from Microsoft.
+**Current mitigation impact:** The disclaimer sets accurate user expectations. Expanded keywords improved control matching. Full parity with the portal is blocked by Graph API limitations — not by our agent code.
 
 ### AI-4: Fix Defender `WORKLOAD_SERVICE_MAP` with real service values ✅ Fixed
 
