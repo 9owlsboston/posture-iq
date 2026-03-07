@@ -54,6 +54,26 @@ category_percentage = (sum of achieved scores in category) / (sum of max scores 
 
 **Important distinction:** The _percentage_ returned here is the **Microsoft Secure Score** percentage, which spans the entire M365 environment (identity + devices + apps + data + infrastructure). This is **not** the same as the **Identity Secure Score** shown in the Entra portal, which only measures identity-related controls.
 
+### Scoring — Microsoft-Defined vs. Agent-Computed
+
+| Metric | Source | Definition |
+|---|---|---|
+| **Overall score** (127.2 / 271.0) | Microsoft Graph API | Returned directly from `secureScores.currentScore` and `secureScores.maxScore`. **Not computed by the agent.** |
+| **Overall percentage** (47%) | Agent-computed | `currentScore / maxScore × 100`. Simple division — matches the portal exactly. |
+| **Category percentages** (Identity 88.2%, Apps 60.7%) | Agent-computed | Joins `controlScores` (achieved) with `secureScoreControlProfiles` (max) by control name, groups by `controlCategory`, sums achieved and max per category. |
+| **Status** (green/yellow/red) | Agent-defined | Based on agent thresholds: green ≥ 70%, yellow ≥ 60%, red < 60%. **Not a Microsoft metric.** |
+| **30-day trend** | Microsoft Graph API | Derived from multiple `secureScores` snapshots (one per day). Score values are from Microsoft. |
+| **Industry comparison** | Microsoft Graph API | From `averageComparativeScores` on the snapshot. **Not computed by the agent.** |
+
+### Live Validation (March 2026)
+
+| Metric | Agent | Portal (security.microsoft.com) | Match? |
+|---|---|---|---|
+| Overall score | 127.2 / 271.0 = 47% | 47% | ✅ Exact |
+| Identity | 56.2 / 63.8 = 88.2% | 85.23% | ✅ Close (~3% — minor rounding from profile set) |
+| Data | 0.0 / 8.0 = 0% | 0% | ✅ Exact |
+| Apps | 71.0 / 117.0 = 60.7% | 36.22% | ⚠️ Still off — `$top=999` fetches all 440 profiles but the `controlScores` on the snapshot may not include all controls present in `controlProfiles` |
+
 ---
 
 ## 2. `assess_defender_coverage`
@@ -72,10 +92,10 @@ category_percentage = (sum of achieved scores in category) / (sum of max scores 
 
 | Workload | Service field values matched |
 |---|---|
-| Defender for Endpoint | `MDE`, `Microsoft Defender for Endpoint` |
+| Defender for Endpoint | `MDATP`, `MDE`, `Microsoft Defender for Endpoint` |
 | Defender for Office 365 | `MDO`, `Microsoft Defender for Office 365` |
-| Defender for Identity | `MDI`, `Microsoft Defender for Identity` |
-| Defender for Cloud Apps | `MDA`, `Microsoft Defender for Cloud Apps`, `Microsoft Cloud App Security` |
+| Defender for Identity | `Azure ATP`, `MDI`, `Microsoft Defender for Identity` |
+| Defender for Cloud Apps | `MCAS`, `MDA`, `AppG`, `MDA_*` (prefix match for app connectors), `Microsoft Defender for Cloud Apps`, `Microsoft Cloud App Security` |
 
 **How it works:**
 - Groups `SecureScoreControlProfile` records by their `service` field
@@ -83,6 +103,32 @@ category_percentage = (sum of achieved scores in category) / (sum of max scores 
 - Identifies gaps — controls whose latest `control_state_updates` is neither `Resolved` nor `ThirdParty`
 - Critical gaps flagged when tier is `Tier1`/`MandatoryTier` or `max_score ≥ 5`
 - Status: 🟢 ≥ 70% · 🟡 ≥ 40% · 🔴 < 40%
+
+### Scoring — Agent-Computed (No Direct Portal Equivalent)
+
+The Defender portal does **not** show a single "Defender coverage percentage". The agent **computes** this metric from `SecureScoreControlProfiles`:
+
+| Metric | Source | Definition |
+|---|---|---|
+| **Per-workload coverage %** | Agent-computed | For each workload: counts controls where `control_state_updates` latest state is `Resolved` or `ThirdParty` as "achieved", sums their `maxScore`, divides by total `maxScore` of all controls in that workload. |
+| **Overall coverage %** | Agent-computed | Weighted average across all 4 workloads (weighted by `maxScore`). |
+| **Status** (green/yellow/red/not_assessed) | Agent-defined | green ≥ 70%, yellow ≥ 40%, red < 40%, not_assessed = no controls found for that service. **Not a Microsoft metric.** |
+| **Gap list** | Agent-derived | Controls where latest `control_state_updates` is not `Resolved`/`ThirdParty`. Gap descriptions include the control title and tier. |
+| **Critical gaps** | Agent-derived | Gaps where tier is `Tier1`/`MandatoryTier` or `maxScore ≥ 5`. |
+
+**Portal equivalent for comparison:** security.microsoft.com → Exposure management → Secure Score → Improvement actions → filter by Service dropdown (e.g., "Microsoft Defender for Endpoint"). The filtered view shows the same controls and their statuses, but does not compute a coverage percentage.
+
+### Live Validation (March 2026)
+
+| Workload | Controls Found | Coverage | Portal Comparison |
+|---|---|---|---|
+| Defender for Endpoint | 169 (`MDATP`) | 0% (0/169 resolved) | No portal % — Improvement actions show 169 "To address" |
+| Defender for Office 365 | 38 (`MDO`) | 0% (0/38 resolved) | No portal % — 38 "To address" |
+| Defender for Identity | 74 (`Azure ATP`) | 0% (0/74 resolved) | No portal % — 74 "To address" |
+| Defender for Cloud Apps | 107 (`MCAS` + `MDA_*` + `AppG`) | 0% (0/107 resolved) | No portal % — 107 "To address" |
+| **Overall** | **388** | **0%** | Consistent — all improvement actions in "To address" state |
+
+> **Note:** 0% means no Defender improvement actions have been completed — not that Defender is uninstalled. The tenant has E5 licensing but has not configured/resolved any Defender controls.
 
 ---
 
@@ -108,10 +154,40 @@ category_percentage = (sum of achieved scores in category) / (sum of max scores 
 | Insider Risk Management | Controls with keywords: `insider risk`, `insider threat` |
 
 **How it works:**
-- Filters `SecureScoreControlProfiles` where `service`, `control_category`, or `title` match Purview-related keywords (`information protection`, `purview`, `compliance`, `dlp`, `insider risk`, `retention`, `sensitivity`)
+- Filters `SecureScoreControlProfiles` where `service`, `control_category`, or `title` match Purview-related keywords (`information protection`, `purview`, `compliance`, `dlp`, `insider risk`, `retention`, `sensitivity`, `encryption`, `audit`, `eDiscovery`, `records management`, `communication compliance`) or exact service match (`MIP`) or exact category match (`Data`)
 - Classifies each matching profile to a canonical component
 - Computes per-component and overall coverage percentage
 - Falls back to `SecureScoreControlProfiles` analysis when direct Purview endpoints return 403
+
+### Scoring — Agent-Computed (No Direct Portal Equivalent)
+
+The Purview tool computes coverage using the same methodology as the Defender tool:
+
+| Metric | Source | Definition |
+|---|---|---|
+| **Per-component coverage %** | Agent-computed | For controls classified into each component: counts resolved controls, sums their `maxScore`, divides by total `maxScore`. |
+| **Overall coverage %** | Agent-computed | Weighted average across all 5 components (weighted by `maxScore`). |
+| **Status** | Agent-defined | green ≥ 70%, yellow ≥ 40%, red < 40%, not_assessed = no controls matched that component. **Not a Microsoft metric.** |
+| **Gap list** | Agent-derived | Controls where latest `control_state_updates` is not `Resolved`/`ThirdParty`. |
+| **Disclaimer** | Agent-added | Output includes a disclaimer noting that purview.microsoft.com may show a higher Compliance Posture score — it uses a separate scoring engine not available via Graph API. |
+
+**Portal equivalent for comparison:** The Purview portal has **three** different scoring systems:
+
+| Purview Scoring System | Agent Access | What It Measures |
+|---|---|---|
+| Secure Score "Data" category (security.microsoft.com → Secure Score → Breakdown → Data) | ✅ Accessed via `secureScoreControlProfiles` | Improvement actions for data protection |
+| Compliance Manager (purview.microsoft.com → Compliance Manager) | ❌ No app-only API available | Compliance improvement actions and assessments |
+| Compliance Posture (purview.microsoft.com → Posture Management) | ❌ No API exists | Auto-detected configuration state (AI Baseline, M365, Data Protection) |
+
+### Live Validation (March 2026)
+
+| Source | Score | Controls Found |
+|---|---|---|
+| **Agent** (`check_purview_policies`) | 0% | 3 data-related controls (1 DLP + 2 General Data Protection), all unresolved gaps |
+| **Purview Portal** (Compliance Posture) | 56% | Uses different engine — AI Baseline 63%, M365 56%, Data Protection 57% |
+| **Secure Score** (Data category) | 0% | 0 / 8 points achieved |
+
+> **Key insight:** The agent's 0% and the portal's 56% are both "correct" — they measure different things. The agent scores resolution of `SecureScoreControlProfiles`; the portal auto-detects built-in tenant configurations. The gap is in the data source, not the computation.
 
 ### Known Limitations & Improvement Plan
 
@@ -227,6 +303,32 @@ DLP + labels + retention alone should reach 50-65%. Adding auto-labeling and Ins
 
 **Note:** This tool evaluates the same identity controls that feed the **Identity Secure Score** in the Entra portal, but reports them in the context of SecPostureIQ's own scoring model (green ≥ 70% / yellow ≥ 40% / red < 40%).
 
+### Scoring — Agent-Computed Heuristics (Not from Microsoft)
+
+The Entra tool queries direct Graph API endpoints (not `SecureScoreControlProfiles`) and applies its own scoring heuristics:
+
+| Component | How Score Is Computed | Status Thresholds |
+|---|---|---|
+| **Conditional Access** | Heuristic: scores 4 boolean factors (MFA enforced for all, legacy auth blocked, ≥3 active policies, no report-only policies). `pct = factors_met / 4 × 100` | green ≥ 70%, yellow ≥ 40%, red < 40% |
+| **PIM** | Heuristic: green if ≤2 permanent Global Admins and ≤10 total role assignments; yellow if ≤4 Global Admins; red otherwise | Agent-defined thresholds |
+| **Identity Protection** | Heuristic: green if 0 risky users; yellow if <10; red if ≥10 | Agent-defined thresholds |
+| **Access Reviews** | Checks if any access review definitions exist. Red if none. | Binary: configured or not |
+| **SSO & App Registrations** | Heuristic assessment of app registration hygiene | Agent-defined |
+| **Overall %** | Weighted average across components (by max_score when available, otherwise equal weight) | green ≥ 70%, yellow ≥ 40%, red < 40% |
+
+> **Important:** These percentages are **agent-defined heuristics**, not Microsoft metrics. The Entra portal's **Identity Secure Score** uses its own scoring model with different weights and controls. The agent's percentages should not be directly compared to the Identity Secure Score percentage.
+
+### Live Validation (March 2026)
+
+| Component | Agent Result | Portal (entra.microsoft.com) | Notes |
+|---|---|---|---|
+| Conditional Access | yellow (2 gaps: MFA not enforced for all, legacy auth not blocked) | Policies visible in Protection → Conditional Access | Agent correctly identifies policy gaps |
+| PIM | unknown (403 → now working with `RoleManagement.Read.Directory`) | Identity governance → PIM | May need `Directory.Read.All` for app-only credentials |
+| Identity Protection | yellow (1 risky user detected) | Protection → Identity Protection → Risky users | Correctly detects risky users |
+| Access Reviews | red (no reviews configured, 3 gaps) | Identity governance → Access Reviews | Correctly identifies missing reviews |
+| SSO & App Registrations | yellow (1 gap) | Applications → App registrations | Partial assessment |
+| **Overall** | **46.2%** (yellow) | **Identity Secure Score: 77.04%** | Expected gap — different scoring models |
+
 ---
 
 ## 5. `generate_remediation_plan`
@@ -259,6 +361,19 @@ DLP + labels + retention alone should reach 50-65%. Adding auto-labeling and Ins
 
 **Fallback:** When Azure OpenAI is not configured, returns built-in mock remediation steps.
 
+### Scoring — Agent-Computed (LLM-Generated)
+
+| Metric | Source | Definition |
+|---|---|---|
+| **Priority** (P0/P1/P2) | LLM-generated | GPT-4o assigns priority based on impact and effort. P0 = critical/quick-win. |
+| **Impact on score** (0–10) | LLM-estimated | GPT-4o's estimate of Secure Score improvement per step. **Not a Microsoft metric.** |
+| **Effort** | LLM-estimated | "Low (X hours)" / "Medium (X hours)" / "High (X days)" |
+| **Confidence** | LLM-assigned | "high" / "medium" / "low" |
+| **Days to green** | Agent-computed | Sums effort estimates across all steps, divides by 4 productive hours/day |
+| **Total score improvement** | Agent-computed | Sum of all steps' `impact_on_score` values |
+
+> **All values are AI-estimated, not Microsoft-calculated.** Remediation plans should be reviewed by a security team before implementation.
+
 ---
 
 ## 6. `create_adoption_scorecard`
@@ -279,6 +394,17 @@ DLP + labels + retention alone should reach 50-65%. Adding auto-labeling and Ins
 - Produces a markdown-formatted scorecard report with gap priorities and time-to-green estimates
 
 This is a **pure computation tool** — it does not call any external APIs. It depends on assessments already gathered by tools 1–4.
+
+### Scoring — Agent-Computed Aggregation
+
+| Metric | Source | Definition |
+|---|---|---|
+| **Per-workload status** (green/yellow/red) | Agent-computed | Reads `coverage_pct` from each tool's output. green ≥ 70%, yellow ≥ 40%, red < 40%. |
+| **Sub-workload scores** | Pass-through | Taken directly from tools 2–4 output. |
+| **Critical gaps** | Agent-aggregated | Collects all gaps from tools 2–4 with priority labels. |
+| **Overall scorecard** | Agent-formatted | Markdown table combining all workload statuses. **No external data.** |
+
+> **All status thresholds (70%/40%) are agent-defined.** Microsoft does not define a "green/yellow/red" status for these workloads.
 
 ---
 
@@ -315,6 +441,17 @@ This is a **pure computation tool** — it does not call any external APIs. It d
 - Customer onboarding checklist
 - Estimated effort and impact on Secure Score
 
+### Scoring — Foundry IQ-Defined (Not Agent-Computed)
+
+| Metric | Source | Definition |
+|---|---|---|
+| **Remediation steps** | Foundry IQ or built-in content | Step-by-step actions per workload area. Not computed by the agent. |
+| **Estimated effort** | Foundry IQ-defined | "3–5 days", "1–2 days" etc. Based on Foundry IQ engagement data. |
+| **Impact on score** | Foundry IQ-defined | Estimated Secure Score point improvement (e.g., 8.0). Not a guarantee. |
+| **Offer recommendations** | Foundry IQ catalog | Workshop/engagement IDs mapped to gaps. |
+
+> **Playbook content is static** — it does not reflect the tenant's current state. It provides general remediation guidance per workload area.
+
 ---
 
 ## 8. `push_posture_snapshot`
@@ -343,6 +480,20 @@ This is a **pure computation tool** — it does not call any external APIs. It d
 | `assessment_summary` | Free-text summary |
 
 **When to call:** After a full assessment cycle (tools 1–6) is complete, this tool persists the results for trend tracking.
+
+### Data — Pass-Through (Not Computed)
+
+All values in the snapshot are taken from previous tool outputs:
+
+| Field | Source |
+|---|---|
+| `secure_score_current` / `secure_score_max` | From `query_secure_score` (Microsoft Graph) |
+| `workload_scores` | From tools 2–4 (agent-computed percentages) |
+| `gap_count` / `top_gaps` | From tools 2–4 (agent-derived) |
+| `estimated_days_to_green` | From `generate_remediation_plan` (LLM-estimated) |
+| `tenant_id_hash` | SHA-256 of tenant GUID (agent-computed for anonymization) |
+
+> **The snapshot does not compute new metrics.** It persists existing values for longitudinal tracking.
 
 ---
 
