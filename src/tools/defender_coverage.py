@@ -41,6 +41,8 @@ WORKLOAD_SERVICE_MAP: dict[str, str] = {
     "MDE": "Defender for Endpoint",
     "MDI": "Defender for Identity",
     "MDA": "Defender for Cloud Apps",
+    # App Governance (add-on for Cloud Apps)
+    "AppG": "Defender for Cloud Apps",
     # Full display strings returned by some Graph tenants
     "Microsoft Defender for Endpoint": "Defender for Endpoint",
     "Microsoft Defender for Office 365": "Defender for Office 365",

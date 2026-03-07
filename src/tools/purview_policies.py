@@ -412,6 +412,13 @@ async def check_purview_policies(graph_token: str = "") -> dict[str, Any]:
             "critical_gaps": critical_gaps,
             "assessed_at": datetime.now(UTC).isoformat(),
             "data_source": "graph_api",
+            "disclaimer": (
+                "This assessment uses SecureScoreControlProfiles from the Graph "
+                "Security API. The Purview portal (purview.microsoft.com) may show "
+                "a higher Compliance Posture score — it uses a separate scoring "
+                "engine (Purview Posture Management) that auto-detects built-in "
+                "tenant configurations and is not yet available via Graph API."
+            ),
         }
 
         logger.info(

@@ -153,6 +153,11 @@ class TestClassifyWorkload:
         assert _classify_workload("MDA") == "Defender for Cloud Apps"  # exact match
         assert _classify_workload("MDAX") is None  # not MDA_ prefix
 
+    def test_app_governance(self):
+        from src.tools.defender_coverage import _classify_workload
+
+        assert _classify_workload("AppG") == "Defender for Cloud Apps"
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 2. _compute_status

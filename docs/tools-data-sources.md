@@ -600,7 +600,7 @@ The Purview portal's "Compliance Posture" uses **Microsoft Purview Posture Manag
 
 **Impact:** Will fix the Apps category percentage discrepancy and ensure all Defender/Purview controls are captured.
 
-### AI-2: Grant missing Entra ID permissions (Medium Priority)
+### AI-2: Grant missing Entra ID permissions ✅ Done
 
 **Problem:** The app registration is missing 3 API permissions, causing PIM, Identity Protection, and Access Reviews to return 403.
 
@@ -622,7 +622,7 @@ az ad app permission admin-consent --id $APP_ID
 
 **Impact:** Will enable full Entra ID assessment (currently only getting Conditional Access data).
 
-### AI-3: Investigate Purview Posture Management API (Low Priority — Research)
+### AI-3: Investigate Purview Posture Management API ✅ Mitigated
 
 **Problem:** The Purview portal's "Compliance Posture" (56%) uses a different scoring engine than the Graph Security API's `SecureScoreControlProfiles` (0%). The agent's Purview assessment fundamentally undercounts because it relies on the wrong data source.
 
@@ -670,7 +670,7 @@ az ad app permission admin-consent --id $APP_ID
 
 **Impact:** Will capture additional Purview-related controls that are currently missed.
 
-### AI-6: Add remaining service values for full coverage (Low Priority)
+### AI-6: Add remaining service values for full coverage ✅ Partial (AppG added)
 
 **Problem:** Several service values from the live API are not mapped to any tool: `Admincenter`, `AppG`, `EXO`, `SPO`, `MS Teams`, `FORMS`, `SWAY`. These controls fall through all tool filters and are only visible in the overall Secure Score.
 
