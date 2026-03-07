@@ -583,7 +583,7 @@ The Purview portal's "Compliance Posture" uses **Microsoft Purview Posture Manag
 
 ## Action Items
 
-### AI-1: Increase `$top` to 999 for `secureScoreControlProfiles` (High Priority)
+### AI-1: Increase `$top` to 999 for `secureScoreControlProfiles` ✅ Fixed
 
 **Problem:** The `_fetch_profile_max_scores()` function in `secure_score.py` uses `$top=200`, but the tenant has **440 control profiles**. This truncates the profile list, causing incorrect `max_score` totals for categories with many controls (especially Apps: agent shows 60.7% vs. portal's 36.22%).
 
@@ -639,7 +639,7 @@ az ad app permission admin-consent --id $APP_ID
 
 **Impact:** Would close the gap between agent (0%) and portal (56%) for Purview assessment. Currently blocked pending API availability research.
 
-### AI-4: Fix Defender `WORKLOAD_SERVICE_MAP` with real service values (High Priority)
+### AI-4: Fix Defender `WORKLOAD_SERVICE_MAP` with real service values ✅ Fixed
 
 **Problem:** All 4 Defender workloads returned `not_assessed` from live data because the `service` field values in the tenant's control profiles don't match our `WORKLOAD_SERVICE_MAP`.
 
@@ -660,7 +660,7 @@ az ad app permission admin-consent --id $APP_ID
 
 **Impact:** Will enable Defender workload assessment from live data — currently shows 0% for all workloads.
 
-### AI-5: Add `MIP` to Purview service keywords (High Priority)
+### AI-5: Add `MIP` to Purview service keywords ✅ Fixed
 
 **Problem:** Microsoft Information Protection controls use service value `MIP`, which is not in `PURVIEW_SERVICE_KEYWORDS`. These controls are silently skipped by the Purview tool.
 
