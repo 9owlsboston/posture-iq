@@ -187,6 +187,19 @@ class TestIsPurviewRelated:
         p = _make_profile(title="Turn on audit log search")
         assert _is_purview_related(p) is True
 
+    def test_service_mip_exact_match(self):
+        """MIP (Microsoft Information Protection) service value from live tenants."""
+        from src.tools.purview_policies import _is_purview_related
+
+        p = _make_profile(service="MIP", title="Some MIP control")
+        assert _is_purview_related(p) is True
+
+    def test_service_mip_case_insensitive(self):
+        from src.tools.purview_policies import _is_purview_related
+
+        p = _make_profile(service="mip", title="X")
+        assert _is_purview_related(p) is True
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 2. _classify_component

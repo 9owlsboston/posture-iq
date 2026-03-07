@@ -255,6 +255,17 @@ posture-iq/
 - **Audit logging** — all tool calls and interactions logged
 - **Managed Identity** — no secrets in code or environment variables (production)
 
+## Known Limitations
+
+Validated against a live E5 tenant (March 2026). See [docs/tools-data-sources.md](docs/tools-data-sources.md) for full details.
+
+| Area | Limitation | Status |
+|------|-----------|--------|
+| **Control profiles** | Graph API returns up to 999 profiles per page (`$top=999`). Previous versions used `$top=200`, truncating results (440 profiles exist in a typical E5 tenant). Pagination via `@odata.nextLink` is not implemented but is unnecessary at `$top=999`. | Fixed |
+| **Defender service mapping** | Real `service` values (`MDATP`, `Azure ATP`, `MCAS`, `MDA_*`) differ from documented aliases (`MDE`, `MDI`, `MDA`). Agent was missing all Defender workload controls. | Fixed |
+| **Purview coverage** | Agent uses `SecureScoreControlProfiles` (Graph Security API) which returns ~3 data-related controls. The Purview portal's "Compliance Posture" (56%) uses a separate scoring engine with no public Graph API. | Known gap |
+| **Entra permissions** | PIM, Identity Protection, and Access Reviews require additional admin-consented scopes (`RoleManagement.Read.Directory`, `IdentityRiskyUser.Read.All`, `AccessReview.Read.All`). Without them, these components show as "unknown". | Requires admin consent |
+
 ## Tenant Terminology
 
 SecPostureIQ assesses a **single tenant** — the Entra ID directory backing an organization's Microsoft cloud services. The terms "M365 tenant", "Azure tenant", and "Entra ID tenant" all refer to the same underlying directory (one tenant GUID), just in different contexts:

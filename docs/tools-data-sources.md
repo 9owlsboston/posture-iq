@@ -537,3 +537,151 @@ This is a synthesized view unique to SecPostureIQ. The closest portal equivalent
    - Per-workload coverage trends
    - Gap closure velocity
 5. If Fabric is not configured, snapshots are only stored in-memory (local dev mode) and are not persisted
+
+---
+
+## Live Tenant Validation (March 2026)
+
+The following results were obtained by running all 4 assessment tools against a live E5 test tenant using client credentials flow. This section documents the findings alongside portal values and identifies remaining action items.
+
+### Secure Score — Agent vs. Portal
+
+| Category | Agent (old, count×10) | Agent (fixed, real maxScore) | Portal (security.microsoft.com) | Match? |
+|---|---|---|---|---|
+| **Overall** | 127.2/271.0 = 47% | 127.2/271.0 = **47%** | 47% | ✅ Exact |
+| **Identity** | 56.2/120.0 = 46.8% | 56.2/63.8 = **88.2%** | 85.23% | ✅ Close (~3% delta from profile pagination) |
+| **Data** | 0.0/40.0 = 0% | 0.0/8.0 = **0%** | 0% | ✅ Exact |
+| **Apps** | 71.0/510.0 = 13.9% | 71.0/117.0 = **60.7%** | 36.22% | ⚠️ Off — see pagination issue below |
+
+> The category fix (using real `maxScore` from `secureScoreControlProfiles`) significantly improved accuracy. Identity went from 46.8% → 88.2%, matching the portal's 85.23%.
+
+### Defender Coverage
+
+All 4 workloads returned `not_assessed` — no Defender-specific control profiles matched the `service` field filter. This is expected when the app registration doesn't have Defender workload controls in `SecureScoreControlProfiles`, or when the tenant hasn't onboarded Defender services.
+
+### Purview — Agent vs. Portal
+
+| Source | Score | Category System |
+|---|---|---|
+| **Agent** (`check_purview_policies`) | 0% (3 controls found, all gaps) | DLP, Sensitivity Labels, Retention, Insider Risk, General Data Protection |
+| **Purview Portal** (Compliance Posture) | **56%** | AI Baseline (63%), Microsoft 365 (56%), Data Protection Baseline (57%) |
+| **Secure Score** (Data category) | 0% | Data category within Microsoft Secure Score |
+
+The Purview portal's "Compliance Posture" uses **Microsoft Purview Posture Management** — a completely different scoring engine from `SecureScoreControlProfiles`. It auto-detects built-in tenant configurations and credits them, while `SecureScoreControlProfiles` only shows a narrow set of improvement actions.
+
+### Entra Config — Permission Gaps
+
+| Component | Result | Issue |
+|---|---|---|
+| Conditional Access | ✅ yellow (working) | Returned policy data successfully |
+| PIM | ❌ 403 Forbidden | Missing `RoleManagement.Read.Directory` |
+| Identity Protection | ❌ 403 Forbidden | Missing `IdentityRiskyUser.Read.All` |
+| Access Reviews | ❌ 403 Forbidden | Missing `AccessReview.Read.All` |
+| Overall | 55% (partial) | Only Conditional Access + SSO data available |
+
+---
+
+## Action Items
+
+### AI-1: Increase `$top` to 999 for `secureScoreControlProfiles` (High Priority)
+
+**Problem:** The `_fetch_profile_max_scores()` function in `secure_score.py` uses `$top=200`, but the tenant has **440 control profiles**. This truncates the profile list, causing incorrect `max_score` totals for categories with many controls (especially Apps: agent shows 60.7% vs. portal's 36.22%).
+
+**Root cause:** The same issue exists in `defender_coverage.py` and `purview_policies.py` — all use `$top=200`.
+
+**Validated finding:** A live API call with `$top=999` returned all 440 profiles in a single response with no `@odata.nextLink` — pagination is not needed, just a higher `$top` value.
+
+**Fix:** Change `$top=200` → `$top=999` in all three tools. The Graph API accepts up to 999 per page, and typical tenants have 300–500 profiles.
+
+**Files to change:**
+- `src/tools/secure_score.py` — `_fetch_profile_max_scores()` and `_ControlProfilesQueryParameters`
+- `src/tools/defender_coverage.py` — `assess_defender_coverage()` query params
+- `src/tools/purview_policies.py` — `check_purview_policies()` query params
+
+**Impact:** Will fix the Apps category percentage discrepancy and ensure all Defender/Purview controls are captured.
+
+### AI-2: Grant missing Entra ID permissions (Medium Priority)
+
+**Problem:** The app registration is missing 3 API permissions, causing PIM, Identity Protection, and Access Reviews to return 403.
+
+**Fix:**
+```bash
+APP_ID="<your-app-registration-client-id>"
+
+# Add missing permissions
+az ad app permission add --id $APP_ID \
+  --api 00000003-0000-0000-c000-000000000000 \
+  --api-permissions \
+    49981c42-fd7b-4530-be03-e77b21aed25e=Role \  # RoleManagement.Read.Directory
+    dc5007c0-2d7d-4c42-879c-2dab87571379=Role \  # IdentityRiskyUser.Read.All
+    ebfcd32b-babb-40f4-a14b-42706e83bd28=Role     # AccessReview.Read.All
+
+# Grant admin consent
+az ad app permission admin-consent --id $APP_ID
+```
+
+**Impact:** Will enable full Entra ID assessment (currently only getting Conditional Access data).
+
+### AI-3: Investigate Purview Posture Management API (Low Priority — Research)
+
+**Problem:** The Purview portal's "Compliance Posture" (56%) uses a different scoring engine than the Graph Security API's `SecureScoreControlProfiles` (0%). The agent's Purview assessment fundamentally undercounts because it relies on the wrong data source.
+
+**Validated finding:** Probing the Graph API confirmed:
+- Compliance Manager API (`/beta/compliance/ediscovery/cases`) → 401 (missing `eDiscovery.Read.All` scope)
+- Sensitivity labels endpoints (`/informationProtection/policy/labels`, `/beta/security/informationProtection/sensitivityLabels`) → 400/404 (endpoints moved or deprecated)
+- No public Graph API currently exposes the Purview Posture Management data
+
+**Research needed:**
+- Determine if Microsoft Purview Posture Management has a public/preview REST API
+- Check if granting `eDiscovery.Read.All` unlocks useful compliance data
+- Evaluate whether the Security & Compliance PowerShell module (`Connect-IPPSSession`) can be used as an alternative data source
+- Consider using the Purview portal's internal API (if documented) as a supplementary source
+
+**Impact:** Would close the gap between agent (0%) and portal (56%) for Purview assessment. Currently blocked pending API availability research.
+
+### AI-4: Fix Defender `WORKLOAD_SERVICE_MAP` with real service values (High Priority)
+
+**Problem:** All 4 Defender workloads returned `not_assessed` from live data because the `service` field values in the tenant's control profiles don't match our `WORKLOAD_SERVICE_MAP`.
+
+**Validated finding:** The live API returned 26 unique service values. The actual values vs. what the agent expects:
+
+| Defender Workload | Agent expects | Actual service value(s) | Matched? |
+|---|---|---|---|
+| Defender for Endpoint | `MDE`, `Microsoft Defender for Endpoint` | **`MDATP`** | ❌ |
+| Defender for Office 365 | `MDO`, `Microsoft Defender for Office 365` | **`MDO`** | ✅ |
+| Defender for Identity | `MDI`, `Microsoft Defender for Identity` | **`Azure ATP`** | ❌ |
+| Defender for Cloud Apps | `MDA`, `Microsoft Defender for Cloud Apps` | **`MCAS`**, `MDA_Atlassian`, `MDA_CitrixSF`, `MDA_DocuSign`, `MDA_Dropbox`, `MDA_GitHub`, `MDA_Google`, `MDA_NetDocuments`, `MDA_Okta`, `MDA_SF`, `MDA_SNOW`, `MDA_Workplace`, `MDA_Zendesk`, `MDA_Zoom` | ❌ |
+
+**Fix:** Update `WORKLOAD_SERVICE_MAP` in `defender_coverage.py` to include the real service values:
+- Add `MDATP` → Defender for Endpoint
+- Add `Azure ATP` → Defender for Identity
+- Add `MCAS` → Defender for Cloud Apps
+- Add `MDA_*` prefix matching → Defender for Cloud Apps (app connectors)
+
+**Impact:** Will enable Defender workload assessment from live data — currently shows 0% for all workloads.
+
+### AI-5: Add `MIP` to Purview service keywords (High Priority)
+
+**Problem:** Microsoft Information Protection controls use service value `MIP`, which is not in `PURVIEW_SERVICE_KEYWORDS`. These controls are silently skipped by the Purview tool.
+
+**Validated finding:** The live API returned `MIP` as a service value for information protection controls. Our current keyword set checks for substrings like `"information protection"` but the short abbreviation `"mip"` would false-match other words. Needs to be added as an exact service match.
+
+**Fix:** Add `"mip"` to `PURVIEW_SERVICE_KEYWORDS` in `purview_policies.py`.
+
+**Impact:** Will capture additional Purview-related controls that are currently missed.
+
+### AI-6: Add remaining service values for full coverage (Low Priority)
+
+**Problem:** Several service values from the live API are not mapped to any tool: `Admincenter`, `AppG`, `EXO`, `SPO`, `MS Teams`, `FORMS`, `SWAY`. These controls fall through all tool filters and are only visible in the overall Secure Score.
+
+**Full service value inventory (440 profiles, 26 unique services):**
+```
+Admincenter, AppG, Azure ATP, AzureAD, EXO, FORMS, MCAS, MDATP,
+MDA_Atlassian, MDA_CitrixSF, MDA_DocuSign, MDA_Dropbox, MDA_GitHub,
+MDA_Google, MDA_NetDocuments, MDA_Okta, MDA_SF, MDA_SNOW, MDA_Workplace,
+MDA_Zendesk, MDA_Zoom, MDO, MIP, MS Teams, SPO, SWAY
+```
+
+**4 categories:** Apps, Data, Device, Identity
+
+**Impact:** Low — these services contribute to the overall Secure Score (which is already accurate), but mapping them would enable more granular service-level reporting.

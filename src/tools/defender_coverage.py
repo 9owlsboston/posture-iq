@@ -32,8 +32,13 @@ logger = structlog.get_logger(__name__)
 # Mapping of *service* field values in SecureScoreControlProfile to the
 # display name we expose in our JSON response.
 WORKLOAD_SERVICE_MAP: dict[str, str] = {
-    "MDE": "Defender for Endpoint",
+    # Short codes observed in live E5 tenants (March 2026)
+    "MDATP": "Defender for Endpoint",
     "MDO": "Defender for Office 365",
+    "Azure ATP": "Defender for Identity",
+    "MCAS": "Defender for Cloud Apps",
+    # Legacy short codes (documented in older Graph API references)
+    "MDE": "Defender for Endpoint",
     "MDI": "Defender for Identity",
     "MDA": "Defender for Cloud Apps",
     # Full display strings returned by some Graph tenants
@@ -86,7 +91,14 @@ def _classify_workload(service: str | None) -> str | None:
     """
     if not service:
         return None
-    return WORKLOAD_SERVICE_MAP.get(service)
+    # Direct lookup first
+    result = WORKLOAD_SERVICE_MAP.get(service)
+    if result:
+        return result
+    # Prefix match for MDA_ app connectors (e.g., MDA_Dropbox, MDA_GitHub)
+    if service.startswith("MDA_"):
+        return "Defender for Cloud Apps"
+    return None
 
 
 def _compute_status(pct: float) -> str:
@@ -345,7 +357,7 @@ async def assess_defender_coverage(graph_token: str = "") -> dict[str, Any]:
         from kiota_abstractions.base_request_configuration import RequestConfiguration
 
         query = _SecureScoreControlProfilesQueryParameters(
-            top=200,  # Fetch all profiles in one page (typical tenants have < 100)
+            top=999,  # Fetch all profiles in one page (typical E5 tenants have ~440)
         )
         config = RequestConfiguration(query_parameters=query)
         response = await client.security.secure_score_control_profiles.get(

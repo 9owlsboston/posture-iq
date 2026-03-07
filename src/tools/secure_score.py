@@ -256,7 +256,7 @@ async def _fetch_profile_max_scores(client: Any) -> dict[str, float] | None:
     try:
         from kiota_abstractions.base_request_configuration import RequestConfiguration
 
-        query = _ControlProfilesQueryParameters(top=200)
+        query = _ControlProfilesQueryParameters(top=999)
         config = RequestConfiguration(query_parameters=query)
         response = await client.security.secure_score_control_profiles.get(
             request_configuration=config,

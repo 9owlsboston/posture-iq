@@ -121,6 +121,38 @@ class TestClassifyWorkload:
 
         assert _classify_workload("") is None
 
+    def test_real_service_mdatp(self):
+        """Real service value observed in live E5 tenants."""
+        from src.tools.defender_coverage import _classify_workload
+
+        assert _classify_workload("MDATP") == "Defender for Endpoint"
+
+    def test_real_service_azure_atp(self):
+        """Real service value observed in live E5 tenants."""
+        from src.tools.defender_coverage import _classify_workload
+
+        assert _classify_workload("Azure ATP") == "Defender for Identity"
+
+    def test_real_service_mcas(self):
+        """Real service value observed in live E5 tenants."""
+        from src.tools.defender_coverage import _classify_workload
+
+        assert _classify_workload("MCAS") == "Defender for Cloud Apps"
+
+    def test_mda_prefix_app_connector(self):
+        """MDA_ prefixed services are Cloud Apps connectors."""
+        from src.tools.defender_coverage import _classify_workload
+
+        assert _classify_workload("MDA_Dropbox") == "Defender for Cloud Apps"
+        assert _classify_workload("MDA_GitHub") == "Defender for Cloud Apps"
+        assert _classify_workload("MDA_Okta") == "Defender for Cloud Apps"
+
+    def test_non_mda_prefix_not_matched(self):
+        from src.tools.defender_coverage import _classify_workload
+
+        assert _classify_workload("MDA") == "Defender for Cloud Apps"  # exact match
+        assert _classify_workload("MDAX") is None  # not MDA_ prefix
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 2. _compute_status

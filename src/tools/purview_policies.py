@@ -55,6 +55,11 @@ PURVIEW_SERVICE_KEYWORDS = frozenset(
 # longer keywords in the substring check above.
 PURVIEW_CONTROL_CATEGORIES = frozenset({"data"})
 
+# Exact service values that indicate a Purview-related control.
+# Checked separately because short abbreviations like "MIP" would
+# false-match in a substring scan.
+PURVIEW_SERVICE_EXACT = frozenset({"mip"})
+
 # Canonical Purview component names we report on
 ALL_COMPONENTS = (
     "DLP Policies",
@@ -120,6 +125,10 @@ def _is_purview_related(profile: Any) -> bool:
     # Check control_category for exact matches (e.g., "Data")
     cat = (getattr(profile, "control_category", None) or "").lower()
     if cat in PURVIEW_CONTROL_CATEGORIES:
+        return True
+    # Check service for exact matches (e.g., "MIP")
+    svc = (getattr(profile, "service", None) or "").lower()
+    if svc in PURVIEW_SERVICE_EXACT:
         return True
     # Check service, control_category, and title for keyword substrings
     for field in ("service", "control_category", "title"):
@@ -374,7 +383,7 @@ async def check_purview_policies(graph_token: str = "") -> dict[str, Any]:
     try:
         from kiota_abstractions.base_request_configuration import RequestConfiguration
 
-        query = _SecureScoreControlProfilesQueryParameters(top=200)
+        query = _SecureScoreControlProfilesQueryParameters(top=999)
         config = RequestConfiguration(query_parameters=query)
         response = await client.security.secure_score_control_profiles.get(
             request_configuration=config,
