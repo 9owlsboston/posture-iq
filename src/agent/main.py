@@ -53,13 +53,43 @@ logger = structlog.get_logger(__name__)
 
 
 def _tool_result(text: str) -> ToolResult:
-    """Create a ToolResult with the LLM text, compatible across SDK versions."""
+    """Create a ToolResult with the LLM text, compatible across SDK versions.
+
+    SDK v0.1.x uses dict-style (ToolResult is a dict subclass).
+    Newer versions use a pydantic model with ``text_result_for_llm`` attribute.
+    """
+    # Try dict-style (v0.1.x)
     try:
-        return ToolResult(textResultForLlm=text)  # type: ignore[call-arg]
-    except TypeError:
-        r = ToolResult()
-        r["textResultForLlm"] = text  # type: ignore[index]
+        r = ToolResult(textResultForLlm=text)  # type: ignore[call-arg]
         return r
+    except TypeError:
+        pass
+
+    # Try pydantic-style (newer SDK)
+    try:
+        r = ToolResult(text_result_for_llm=text)  # type: ignore[call-arg]
+        return r
+    except TypeError:
+        pass
+
+    # Final fallback: construct empty and set via setattr
+    r = ToolResult()
+    r.textResultForLlm = text
+    return r
+
+
+def _get_tool_result_text(result: ToolResult) -> str:
+    """Extract the LLM text from a ToolResult across SDK versions."""
+    # Dict-style (v0.1.x)
+    try:
+        return result["textResultForLlm"]  # type: ignore[index]
+    except (TypeError, KeyError):
+        pass
+    # Attribute-style (newer SDK)
+    for attr in ("textResultForLlm", "text_result_for_llm"):
+        if hasattr(result, attr):
+            return getattr(result, attr)
+    return ""
 
 
 # ── Tool Handler Adapters ──────────────────────────────────────────────────
