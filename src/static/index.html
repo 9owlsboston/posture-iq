@@ -1092,9 +1092,14 @@
           const data = await r.json();
 
           if (data.status === 'disabled') {
-            signOut();
             addMessage('agent', `\u2705 ${data.message}`);
-            addMessage('agent', 'To re-enable: go to **entra.microsoft.com** \u2192 Enterprise Applications \u2192 SecPostureIQ \u2192 Properties \u2192 set **Enabled for users to sign-in** to **Yes**.');
+            addMessage('agent', '\u26a0\ufe0f **Important:** If you close this browser tab, you will need to re-enable from **entra.microsoft.com** \u2192 Enterprise Applications \u2192 SecPostureIQ \u2192 Properties \u2192 set **Enabled for users to sign-in** to **Yes**.');
+            // Show enable button inline (works only in current session)
+            const enableDiv = document.createElement('div');
+            enableDiv.style.cssText = 'max-width:800px;margin:0 auto 20px;padding:0 44px;';
+            enableDiv.innerHTML = '<button class="admin-action-btn" style="max-width:400px;" onclick="this.parentElement.remove(); _doRevoke(\'enable_sp\');"><span class="action-label">\u21a9 Undo — Enable sign-in</span><span class="action-desc">Re-enable SecPostureIQ for all users in your tenant. Only works in this browser session.</span></button>';
+            document.getElementById('messages').appendChild(enableDiv);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
             return;
           }
 
