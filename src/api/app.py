@@ -460,10 +460,30 @@ async def revoke_consent(
             },
         )
 
-    deleted = await revoke_user_consent(
-        graph_token=graph_token,
-        user_id=user.user_id,
-    )
+    try:
+        deleted = await revoke_user_consent(
+            graph_token=graph_token,
+            user_id=user.user_id,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 403:
+            # Graph token lacks DelegatedPermissionGrant.ReadWrite.All —
+            # redirect the user to incremental consent.
+            redirect_uri = str(request.url_for("auth_callback"))
+            consent_url = build_incremental_consent_url(
+                redirect_uri=redirect_uri,
+                additional_scopes=[REVOCATION_SCOPE],
+                login_hint=user.email,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "insufficient_scope",
+                    "required_scope": REVOCATION_SCOPE,
+                    "consent_url": consent_url,
+                },
+            ) from exc
+        raise
 
     if not deleted:
         raise HTTPException(

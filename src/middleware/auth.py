@@ -534,6 +534,11 @@ async def revoke_user_consent(
         grants_url = f"{graph_base}/oauth2PermissionGrants?$filter=clientId eq '{sp_id}'"
         grants_resp = await client.get(grants_url, headers=headers)
 
+        if grants_resp.status_code == 403:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Graph token lacks required scope for consent revocation",
+            )
         if grants_resp.status_code != 200:
             logger.error(
                 "auth.consent.grants_list_failed",
