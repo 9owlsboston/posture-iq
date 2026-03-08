@@ -1015,6 +1015,14 @@
       ) {
         document.getElementById('revokeConsentBtn').style.display = 'inline-flex';
       }
+
+      // Auto-retry a pending revoke action after consent redirect
+      const pendingAction = sessionStorage.getItem('pending_revoke_action');
+      if (pendingAction) {
+        sessionStorage.removeItem('pending_revoke_action');
+        // Small delay to let the UI render first
+        setTimeout(() => _doRevoke(pendingAction), 500);
+      }
     }
 
     function showUnauthenticatedUI() {
@@ -1112,6 +1120,8 @@
 
         // Handle incremental consent redirect
         if (r.status === 403 && data.detail && data.detail.consent_url) {
+          // Store the action so we auto-retry after consent
+          sessionStorage.setItem('pending_revoke_action', action);
           window.location.href = data.detail.consent_url;
           return;
         }
