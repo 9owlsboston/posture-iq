@@ -614,3 +614,149 @@ def build_incremental_consent_url(
         login_hint=login_hint,
         prompt="consent",
     )
+
+
+# ── Service Principal Management ───────────────────────────────────────────
+
+
+async def _resolve_service_principal(
+    graph_token: str,
+) -> str | None:
+    """Resolve SecPostureIQ's service principal object ID in the caller's tenant.
+
+    Returns:
+        The service principal object ID, or None if not found.
+
+    Raises:
+        HTTPException(403): If the Graph token lacks required scope.
+        HTTPException(502): If Graph API call fails.
+    """
+    app_id = settings.oauth_client_id
+    graph_base = "https://graph.microsoft.com/v1.0"
+    headers = {"Authorization": f"Bearer {graph_token}"}
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        sp_url = f"{graph_base}/servicePrincipals?$filter=appId eq '{app_id}'&$select=id"
+        sp_resp = await client.get(sp_url, headers=headers)
+
+        if sp_resp.status_code == 403:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Graph token lacks required scope",
+            )
+        if sp_resp.status_code != 200:
+            logger.error(
+                "auth.consent.sp_lookup_failed",
+                status_code=sp_resp.status_code,
+                body=sp_resp.text[:500],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to resolve service principal in tenant",
+            )
+
+        sp_values = sp_resp.json().get("value", [])
+        if not sp_values:
+            return None
+        return sp_values[0]["id"]
+
+
+async def delete_service_principal(graph_token: str) -> bool:
+    """Delete SecPostureIQ's service principal from the caller's tenant.
+
+    This fully revokes access for ALL users in the tenant. Users will
+    need to re-consent to use SecPostureIQ again.
+
+    Requires ``Application.ReadWrite.All`` delegated scope.
+
+    Returns:
+        True if deleted, False if service principal not found.
+
+    Raises:
+        HTTPException(403/502): On Graph API errors.
+    """
+    sp_id = await _resolve_service_principal(graph_token)
+    if not sp_id:
+        return False
+
+    graph_base = "https://graph.microsoft.com/v1.0"
+    headers = {"Authorization": f"Bearer {graph_token}"}
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        del_resp = await client.delete(
+            f"{graph_base}/servicePrincipals/{sp_id}",
+            headers=headers,
+        )
+
+        if del_resp.status_code == 204:
+            logger.info("auth.consent.sp_deleted", sp_id=sp_id)
+            return True
+        if del_resp.status_code == 403:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Graph token lacks Application.ReadWrite.All scope",
+            )
+
+        logger.error(
+            "auth.consent.sp_delete_failed",
+            sp_id=sp_id,
+            status_code=del_resp.status_code,
+            body=del_resp.text[:500],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to delete service principal",
+        )
+
+
+async def disable_service_principal(graph_token: str) -> bool:
+    """Disable SecPostureIQ's service principal in the caller's tenant.
+
+    This blocks sign-in for ALL users in the tenant without deleting the
+    service principal. Re-enable by setting ``accountEnabled=true`` in
+    Entra ID → Enterprise Applications.
+
+    Requires ``Application.ReadWrite.All`` delegated scope.
+
+    Returns:
+        True if disabled, False if service principal not found.
+
+    Raises:
+        HTTPException(403/502): On Graph API errors.
+    """
+    sp_id = await _resolve_service_principal(graph_token)
+    if not sp_id:
+        return False
+
+    graph_base = "https://graph.microsoft.com/v1.0"
+    headers = {
+        "Authorization": f"Bearer {graph_token}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        patch_resp = await client.patch(
+            f"{graph_base}/servicePrincipals/{sp_id}",
+            headers=headers,
+            json={"accountEnabled": False},
+        )
+
+        if patch_resp.status_code == 204:
+            logger.info("auth.consent.sp_disabled", sp_id=sp_id)
+            return True
+        if patch_resp.status_code == 403:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Graph token lacks Application.ReadWrite.All scope",
+            )
+
+        logger.error(
+            "auth.consent.sp_disable_failed",
+            sp_id=sp_id,
+            status_code=patch_resp.status_code,
+            body=patch_resp.text[:500],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to disable service principal",
+        )

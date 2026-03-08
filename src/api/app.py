@@ -42,6 +42,8 @@ from src.middleware.auth import (
     UserContext,
     build_auth_url,
     build_incremental_consent_url,
+    delete_service_principal,
+    disable_service_principal,
     exchange_code_for_tokens,
     get_current_user,
     oauth2_scheme,
@@ -425,13 +427,19 @@ async def auth_me(user: UserContext = Depends(get_current_user)) -> AuthMeRespon
 async def revoke_consent(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    action: str = "revoke_grants",
 ) -> dict[str, str]:
     """Revoke the current external-tenant user's delegated consent.
 
+    Query params:
+        action: The revocation action to perform.
+            - ``revoke_grants`` (default): Delete user-level consent grants.
+            - ``delete_sp``: Delete the service principal entirely (all users).
+            - ``disable_sp``: Disable the service principal (all users, reversible).
+
     Requires:
       - Valid Bearer token (Authorization header)
-      - Graph API access token with DelegatedPermissionGrant.ReadWrite.All
-        scope (X-Graph-Token header)
+      - Graph API access token (X-Graph-Token header)
       - User must be from an external tenant (not the hosting tenant)
     """
     # Only allow external-tenant users to revoke consent
@@ -442,9 +450,14 @@ async def revoke_consent(
             detail="Consent revocation is only available for external-tenant users",
         )
 
+    if action not in ("revoke_grants", "delete_sp", "disable_sp"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid action: {action}. Must be revoke_grants, delete_sp, or disable_sp",
+        )
+
     graph_token = request.headers.get("X-Graph-Token", "")
     if not graph_token:
-        # No Graph token — construct incremental consent URL
         redirect_uri = str(request.url_for("auth_callback"))
         consent_url = build_incremental_consent_url(
             redirect_uri=redirect_uri,
@@ -460,6 +473,91 @@ async def revoke_consent(
             },
         )
 
+    def _log_revocation(action_name: str) -> None:
+        audit = AuditLogger(session_id="consent-revocation")
+        audit.log_tool_call(
+            tool_name="revoke_consent",
+            input_params={"user": user.email, "tenant": user.tenant_id, "action": action_name},
+            output_summary=f"consent_{action_name}",
+            user_identity=user.email,
+        )
+        logger.info(
+            "auth.consent.revoked",
+            user_id=user.user_id,
+            tenant_id=user.tenant_id,
+            email=user.email,
+            action=action_name,
+        )
+
+    # ── Action: Delete service principal ───────────────────
+    if action == "delete_sp":
+        try:
+            deleted = await delete_service_principal(graph_token)
+        except HTTPException as exc:
+            if exc.status_code == 403:
+                redirect_uri = str(request.url_for("auth_callback"))
+                consent_url = build_incremental_consent_url(
+                    redirect_uri=redirect_uri,
+                    additional_scopes=["Application.ReadWrite.All"],
+                    login_hint=user.email,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": "insufficient_scope",
+                        "required_scope": "Application.ReadWrite.All",
+                        "consent_url": consent_url,
+                    },
+                ) from exc
+            raise
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Service principal not found in your tenant",
+            )
+        _log_revocation("delete_sp")
+        return {
+            "status": "revoked",
+            "message": "SecPostureIQ has been completely removed from your tenant. All users will need to re-consent.",
+        }
+
+    # ── Action: Disable service principal ──────────────────
+    if action == "disable_sp":
+        try:
+            disabled = await disable_service_principal(graph_token)
+        except HTTPException as exc:
+            if exc.status_code == 403:
+                redirect_uri = str(request.url_for("auth_callback"))
+                consent_url = build_incremental_consent_url(
+                    redirect_uri=redirect_uri,
+                    additional_scopes=["Application.ReadWrite.All"],
+                    login_hint=user.email,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": "insufficient_scope",
+                        "required_scope": "Application.ReadWrite.All",
+                        "consent_url": consent_url,
+                    },
+                ) from exc
+            raise
+        if not disabled:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Service principal not found in your tenant",
+            )
+        _log_revocation("disable_sp")
+        return {
+            "status": "disabled",
+            "message": (
+                "SecPostureIQ has been disabled in your tenant. "
+                "Sign-in is blocked for all users. "
+                "Re-enable from Entra ID \u2192 Enterprise Applications."
+            ),
+        }
+
+    # ── Action: Revoke grants (default) ────────────────────
     try:
         result = await revoke_user_consent(
             graph_token=graph_token,
@@ -467,8 +565,6 @@ async def revoke_consent(
         )
     except HTTPException as exc:
         if exc.status_code == 403:
-            # Graph token lacks DelegatedPermissionGrant.ReadWrite.All —
-            # redirect the user to incremental consent.
             redirect_uri = str(request.url_for("auth_callback"))
             consent_url = build_incremental_consent_url(
                 redirect_uri=redirect_uri,
@@ -486,31 +582,44 @@ async def revoke_consent(
         raise
 
     if result == "deleted":
-        # Audit log
-        audit = AuditLogger(session_id="consent-revocation")
-        audit.log_tool_call(
-            tool_name="revoke_consent",
-            input_params={"user": user.email, "tenant": user.tenant_id},
-            output_summary="consent_revoked",
-            user_identity=user.email,
-        )
-        logger.info(
-            "auth.consent.revoked",
-            user_id=user.user_id,
-            tenant_id=user.tenant_id,
-            email=user.email,
-        )
+        _log_revocation("revoke_grants")
         return {"status": "revoked", "message": "Your consent has been revoked successfully"}
 
     if result == "admin_only":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Your access was granted via admin consent by your tenant administrator, "
-                "not by individual user consent. Only your tenant admin can revoke it. "
-                "You can also remove it yourself at https://myapplications.microsoft.com "
-                "\u2192 right-click SecPostureIQ \u2192 Remove."
-            ),
+            detail={
+                "error": "admin_consent_only",
+                "message": (
+                    "Your access was granted via admin consent (organization-wide), "
+                    "which applies to all users in your tenant. Choose an action:"
+                ),
+                "actions": [
+                    {
+                        "id": "delete_sp",
+                        "label": "Remove completely",
+                        "description": (
+                            "Deletes SecPostureIQ from your tenant entirely. All users lose access and must re-consent."
+                        ),
+                        "destructive": True,
+                    },
+                    {
+                        "id": "disable_sp",
+                        "label": "Disable sign-in",
+                        "description": (
+                            "Blocks sign-in for all users without deleting. "
+                            "Re-enable anytime from Entra ID \u2192 Enterprise Applications."
+                        ),
+                        "destructive": False,
+                    },
+                    {
+                        "id": "manual",
+                        "label": "Do it manually",
+                        "description": "Go to myapplications.microsoft.com → right-click SecPostureIQ → Remove.",
+                        "destructive": False,
+                    },
+                ],
+            },
         )
 
     # result == "not_found"

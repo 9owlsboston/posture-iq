@@ -685,6 +685,37 @@
     }
 
     .modal-actions .btn-confirm-revoke:hover { opacity: 0.9; }
+
+    .admin-action-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+
+    .admin-action-btn:hover { border-color: var(--primary); background: rgba(59,130,246,0.05); }
+
+    .admin-action-btn.destructive { border-color: rgba(239,68,68,0.3); }
+    .admin-action-btn.destructive:hover { border-color: var(--red); background: rgba(239,68,68,0.05); }
+
+    .admin-action-btn .action-label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .admin-action-btn .action-desc {
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -745,6 +776,21 @@
       <div class="modal-actions">
         <button class="btn-cancel" onclick="hideRevokeModal()">Cancel</button>
         <button class="btn-confirm-revoke" onclick="revokeConsent()">Revoke</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Admin Consent Options Modal ─────────────────── -->
+  <div class="modal-overlay" id="adminConsentModal">
+    <div class="modal-box" style="max-width:520px;text-align:left;">
+      <h3 style="text-align:center;">Admin Consent Detected</h3>
+      <p style="text-align:center;">
+        Your access was granted via admin consent (organization-wide).
+        Choose how to proceed:
+      </p>
+      <div id="adminConsentActions" style="display:flex;flex-direction:column;gap:10px;margin-top:16px;"></div>
+      <div class="modal-actions" style="margin-top:16px;">
+        <button class="btn-cancel" onclick="hideAdminConsentModal()">Cancel</button>
       </div>
     </div>
   </div>
@@ -1019,22 +1065,25 @@
 
     async function revokeConsent() {
       hideRevokeModal();
+      await _doRevoke('revoke_grants');
+    }
 
+    async function _doRevoke(action) {
       const headers = {};
       if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
       const graphToken = sessionStorage.getItem('graph_token');
       if (graphToken) headers['X-Graph-Token'] = graphToken;
 
       try {
-        const r = await fetch('/auth/revoke-consent', {
+        const r = await fetch(`/auth/revoke-consent?action=${action}`, {
           method: 'POST',
           headers,
         });
 
         if (r.ok) {
-          // Success — sign the user out
           signOut();
-          addMessage('agent', 'Your consent has been revoked. SecPostureIQ no longer has access to your tenant. To use it again, you will need to re-consent.');
+          const data = await r.json();
+          addMessage('agent', `\u2705 ${data.message}`);
           return;
         }
 
@@ -1046,16 +1095,43 @@
           return;
         }
 
-        // Handle admin-consent-only case with a clear message
-        if (r.status === 409) {
-          addMessage('agent', `\u2139\ufe0f ${data.detail}`);
+        // Handle admin-consent — show the three-option modal
+        if (r.status === 409 && data.detail && data.detail.error === 'admin_consent_only') {
+          showAdminConsentModal(data.detail);
           return;
         }
 
-        addMessage('agent', `\u26a0\ufe0f Could not revoke consent: ${data.detail || 'Unknown error'}. You can revoke manually at https://myapplications.microsoft.com`);
+        addMessage('agent', `\u26a0\ufe0f Could not revoke consent: ${data.detail?.message || data.detail || 'Unknown error'}.`);
       } catch (err) {
-        addMessage('agent', `\u26a0\ufe0f Connection error during consent revocation: ${err.message}. Try again or revoke manually at https://myapplications.microsoft.com`);
+        addMessage('agent', `\u26a0\ufe0f Connection error during consent revocation: ${err.message}.`);
       }
+    }
+
+    function showAdminConsentModal(detail) {
+      const container = document.getElementById('adminConsentActions');
+      container.innerHTML = '';
+      for (const action of detail.actions) {
+        const btn = document.createElement('button');
+        btn.className = 'admin-action-btn' + (action.destructive ? ' destructive' : '');
+        btn.innerHTML = `<span class="action-label">${action.label}</span><span class="action-desc">${action.description}</span>`;
+        if (action.id === 'manual') {
+          btn.onclick = () => {
+            hideAdminConsentModal();
+            window.open('https://myapplications.microsoft.com', '_blank');
+          };
+        } else {
+          btn.onclick = () => {
+            hideAdminConsentModal();
+            _doRevoke(action.id);
+          };
+        }
+        container.appendChild(btn);
+      }
+      document.getElementById('adminConsentModal').classList.add('visible');
+    }
+
+    function hideAdminConsentModal() {
+      document.getElementById('adminConsentModal').classList.remove('visible');
     }
 
     function updateDataSourceBadge(source) {
