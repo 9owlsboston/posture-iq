@@ -509,7 +509,7 @@ async def revoke_consent(
                 "Your access was granted via admin consent by your tenant administrator, "
                 "not by individual user consent. Only your tenant admin can revoke it. "
                 "You can also remove it yourself at https://myapplications.microsoft.com "
-                "\u2192 SecPostureIQ \u2192 Revoke permissions."
+                "\u2192 right-click SecPostureIQ \u2192 Remove."
             ),
         )
 
