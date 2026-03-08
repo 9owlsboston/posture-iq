@@ -1055,6 +1055,7 @@
       currentUser = null;
       sessionStorage.removeItem('id_token');
       sessionStorage.removeItem('graph_token');
+      sessionStorage.removeItem('pending_revoke_action');
       sessionId = null;
       document.getElementById('revokeConsentBtn').style.display = 'none';
       showUnauthenticatedUI();
