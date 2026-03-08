@@ -18,12 +18,13 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from copilot import Tool, ToolInvocation
+from copilot import Tool, ToolInvocation, ToolResult
 from copilot.generated.session_events import SessionEventType
 
 from src.agent.main import (
     TOOLS,
     SecPostureIQAgent,
+    _get_tool_result_text,
     _handle_adoption_scorecard,
     _handle_defender_coverage,
     _handle_entra_config,
@@ -75,15 +76,15 @@ class TestHandleSecureScore:
         inv = _make_invocation(tool_name="query_secure_score")
         with patch("src.tools.secure_score._create_graph_client", return_value=None):
             result = await _handle_secure_score(inv)
-        assert isinstance(result, dict)
-        assert "textResultForLlm" in result
+        assert isinstance(result, dict | ToolResult)
+        assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
     async def test_result_contains_valid_json(self):
         inv = _make_invocation(tool_name="query_secure_score")
         with patch("src.tools.secure_score._create_graph_client", return_value=None):
             result = await _handle_secure_score(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert "current_score" in parsed
         assert "categories" in parsed
 
@@ -95,7 +96,7 @@ class TestHandleSecureScore:
         )
         with patch("src.tools.secure_score._create_graph_client", return_value=None):
             result = await _handle_secure_score(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert parsed["current_score"] > 0
 
     @pytest.mark.asyncio
@@ -103,7 +104,7 @@ class TestHandleSecureScore:
         inv = _make_invocation(arguments=None, tool_name="query_secure_score")
         with patch("src.tools.secure_score._create_graph_client", return_value=None):
             result = await _handle_secure_score(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert "current_score" in parsed
 
 
@@ -115,15 +116,15 @@ class TestHandleDefenderCoverage:
     async def test_returns_tool_result_dict(self, _mock_client):
         inv = _make_invocation(tool_name="assess_defender_coverage")
         result = await _handle_defender_coverage(inv)
-        assert isinstance(result, dict)
-        assert "textResultForLlm" in result
+        assert isinstance(result, dict | ToolResult)
+        assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
     @patch("src.tools.defender_coverage._create_graph_client", return_value=None)
     async def test_result_is_valid_json(self, _mock_client):
         inv = _make_invocation(tool_name="assess_defender_coverage")
         result = await _handle_defender_coverage(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert isinstance(parsed, dict)
 
 
@@ -135,15 +136,15 @@ class TestHandlePurviewPolicies:
     async def test_returns_tool_result_dict(self, _mock_client):
         inv = _make_invocation(tool_name="check_purview_policies")
         result = await _handle_purview_policies(inv)
-        assert isinstance(result, dict)
-        assert "textResultForLlm" in result
+        assert isinstance(result, dict | ToolResult)
+        assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
     @patch("src.tools.purview_policies._create_graph_client", return_value=None)
     async def test_result_is_valid_json(self, _mock_client):
         inv = _make_invocation(tool_name="check_purview_policies")
         result = await _handle_purview_policies(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert isinstance(parsed, dict)
 
 
@@ -155,15 +156,15 @@ class TestHandleEntraConfig:
     async def test_returns_tool_result_dict(self, _mock_client):
         inv = _make_invocation(tool_name="get_entra_config")
         result = await _handle_entra_config(inv)
-        assert isinstance(result, dict)
-        assert "textResultForLlm" in result
+        assert isinstance(result, dict | ToolResult)
+        assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
     @patch("src.tools.entra_config._create_graph_client", return_value=None)
     async def test_result_is_valid_json(self, _mock_client):
         inv = _make_invocation(tool_name="get_entra_config")
         result = await _handle_entra_config(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert isinstance(parsed, dict)
 
 
@@ -178,8 +179,8 @@ class TestHandleRemediationPlan:
             tool_name="generate_remediation_plan",
         )
         result = await _handle_remediation_plan(inv)
-        assert isinstance(result, dict)
-        assert "textResultForLlm" in result
+        assert isinstance(result, dict | ToolResult)
+        assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
     @patch("src.tools.remediation_plan._create_openai_client", return_value=None)
@@ -189,7 +190,7 @@ class TestHandleRemediationPlan:
             tool_name="generate_remediation_plan",
         )
         result = await _handle_remediation_plan(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert isinstance(parsed, dict)
 
     @pytest.mark.asyncio
@@ -197,7 +198,7 @@ class TestHandleRemediationPlan:
     async def test_defaults_to_empty_context(self, _mock_client):
         inv = _make_invocation(arguments=None, tool_name="generate_remediation_plan")
         result = await _handle_remediation_plan(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert isinstance(parsed, dict)
 
 
@@ -211,8 +212,8 @@ class TestHandleAdoptionScorecard:
             tool_name="create_adoption_scorecard",
         )
         result = await _handle_adoption_scorecard(inv)
-        assert isinstance(result, dict)
-        assert "textResultForLlm" in result
+        assert isinstance(result, dict | ToolResult)
+        assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
     async def test_result_is_valid_json(self):
@@ -221,14 +222,14 @@ class TestHandleAdoptionScorecard:
             tool_name="create_adoption_scorecard",
         )
         result = await _handle_adoption_scorecard(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert isinstance(parsed, dict)
 
     @pytest.mark.asyncio
     async def test_defaults_to_empty_context(self):
         inv = _make_invocation(arguments=None, tool_name="create_adoption_scorecard")
         result = await _handle_adoption_scorecard(inv)
-        parsed = json.loads(result["textResultForLlm"])
+        parsed = json.loads(_get_tool_result_text(result))
         assert isinstance(parsed, dict)
 
 

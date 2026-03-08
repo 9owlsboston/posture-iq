@@ -237,7 +237,7 @@ posture-iq/
 │   ├── agent/          # Agent host, config, system prompt
 │   ├── tools/          # 8 assessment tools (Graph API, Fabric, Foundry IQ)
 │   ├── middleware/      # Tracing, content safety, PII redaction, audit, auth
-│   └── api/            # FastAPI health probes and HTTP endpoints
+│   └── api/            # FastAPI app (health probes, auth, chat, consent revocation)
 ├── infra/              # Bicep IaC templates (ACR, Container Apps, OpenAI, etc.)
 ├── tests/              # Unit (1151) and integration (41) tests — 1192 total
 ├── docs/               # Architecture, setup guide, SDK feedback
@@ -254,6 +254,7 @@ posture-iq/
 - **Prompt injection detection** — heuristic + Azure Prompt Shield
 - **Audit logging** — all tool calls and interactions logged
 - **Managed Identity** — no secrets in code or environment variables (production)
+- **User consent revocation** — external-tenant users can revoke delegated permissions directly from the UI
 
 ## Known Limitations
 
@@ -298,6 +299,21 @@ When the agent calls Microsoft Graph API with a user-delegated token, it authent
 
 In multi-tenant scenarios (e.g., a CSP partner managing a customer), the `graph_token` determines which tenant is assessed.
 
+### Multi-Tenant Consent Management
+
+When `MULTI_TENANT_ENABLED=true`, users from external tenants are prompted for
+consent on first sign-in. SecPostureIQ provides self-service consent management:
+
+- **Revoke consent** — External-tenant users see a "Revoke Consent" button in the
+  header. Clicking it calls `POST /auth/revoke-consent`, which deletes the user's
+  `oauth2PermissionGrants` via the Graph API (admin-consent grants are never
+  affected). The user is signed out and must re-consent to use the app again.
+- **`GET /config`** — Public endpoint returning `{ multi_tenant_enabled, hosting_tenant_id }`
+  so the SPA can determine whether to show external-tenant features.
+
+See [Consent Revocation Plan](docs/consent-revocation-plan.md) and
+[Multi-Tenant User Flow](docs/multi-tenant-user-flow.md) for full details.
+
 ## Scoring Alignment
 
 | Category | Points | SecPostureIQ Coverage |
@@ -314,7 +330,7 @@ In multi-tenant scenarios (e.g., a CSP partner managing a customer), the `graph_
 
 This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
 
-**SecPostureIQ™** is a trademark of 9 Owls Boston. The license does not grant permission
+**SecPostureIQ™** is a trademark of 9owlsboston. The license does not grant permission
 to use the SecPostureIQ name or branding. See [TRADEMARKS.md](TRADEMARKS.md) for details.
 
 ---

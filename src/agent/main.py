@@ -1,3 +1,4 @@
+# mypy: disable-error-code="call-arg, no-any-return"
 """SecPostureIQ — Agent host entry point.
 
 This is the main application that initializes the Copilot SDK, registers tools,
@@ -46,6 +47,52 @@ from src.tools.secure_score import query_secure_score
 logger = structlog.get_logger(__name__)
 
 
+# ── SDK Compatibility ──────────────────────────────────────────────────────
+# The Copilot SDK's ToolResult constructor differs between versions.
+# Older versions accept kwargs (textResultForLlm=...); newer versions
+# only accept dict-style assignment.  This helper works with both.
+
+
+def _tool_result(text: str) -> Any:
+    """Create a ToolResult with the LLM text, compatible across SDK versions.
+
+    SDK v0.1.x uses dict-style (ToolResult is a dict subclass).
+    Newer versions use a pydantic model with ``text_result_for_llm`` attribute.
+    """
+    # Try dict-style (v0.1.x)
+    try:
+        return ToolResult(textResultForLlm=text)
+    except TypeError:
+        pass
+
+    # Try pydantic-style (newer SDK)
+    try:
+        return ToolResult(text_result_for_llm=text)
+    except TypeError:
+        pass
+
+    # Final fallback: construct empty and set via setattr
+    r: Any = ToolResult()
+    r.textResultForLlm = text
+    return r
+
+
+def _get_tool_result_text(result: Any) -> str:
+    """Extract the LLM text from a ToolResult across SDK versions."""
+    r: Any = result
+    # Dict-style (v0.1.x)
+    try:
+        return r["textResultForLlm"]
+    except (TypeError, KeyError):
+        pass
+    # Attribute-style (newer SDK)
+    for attr in ("textResultForLlm", "text_result_for_llm"):
+        val = getattr(r, attr, None)
+        if val is not None:
+            return val
+    return ""
+
+
 # ── Tool Handler Adapters ──────────────────────────────────────────────────
 # The Copilot SDK expects handlers with signature:
 #   (ToolInvocation) → ToolResult | Awaitable[ToolResult]
@@ -54,49 +101,49 @@ logger = structlog.get_logger(__name__)
 
 async def _handle_secure_score(invocation: ToolInvocation) -> ToolResult:
     """Adapter: query_secure_score → ToolResult."""
-    args = invocation.get("arguments") or {}
+    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
     tenant_id = args.get("tenant_id", "")
     result = await query_secure_score(tenant_id=tenant_id)
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_defender_coverage(invocation: ToolInvocation) -> ToolResult:
     """Adapter: assess_defender_coverage → ToolResult."""
     result = await assess_defender_coverage()
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_purview_policies(invocation: ToolInvocation) -> ToolResult:
     """Adapter: check_purview_policies → ToolResult."""
     result = await check_purview_policies()
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_entra_config(invocation: ToolInvocation) -> ToolResult:
     """Adapter: get_entra_config → ToolResult."""
     result = await get_entra_config()
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_remediation_plan(invocation: ToolInvocation) -> ToolResult:
     """Adapter: generate_remediation_plan → ToolResult."""
-    args = invocation.get("arguments") or {}
+    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
     assessment_context = args.get("assessment_context", "{}")
     result = await generate_remediation_plan(assessment_context=assessment_context)
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_adoption_scorecard(invocation: ToolInvocation) -> ToolResult:
     """Adapter: create_adoption_scorecard → ToolResult."""
-    args = invocation.get("arguments") or {}
+    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
     assessment_context = args.get("assessment_context", "{}")
     result = await create_adoption_scorecard(assessment_context=assessment_context)
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
     """Adapter: get_green_playbook → ToolResult."""
-    args = invocation.get("arguments") or {}
+    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
     gaps_raw = args.get("gaps", [])
     workload_areas_raw = args.get("workload_areas", [])
     # Ensure lists (the SDK may pass JSON strings)
@@ -106,12 +153,12 @@ async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
         gaps=gaps or None,
         workload_areas=workload_areas or None,
     )
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_fabric_telemetry(invocation: ToolInvocation) -> ToolResult:
     """Adapter: push_posture_snapshot → ToolResult."""
-    args = invocation.get("arguments") or {}
+    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
     result = await push_posture_snapshot(
         tenant_id=args.get("tenant_id", ""),
         secure_score_current=float(args.get("secure_score_current", 0)),
@@ -122,7 +169,7 @@ async def _handle_fabric_telemetry(invocation: ToolInvocation) -> ToolResult:
         top_gaps=args.get("top_gaps"),
         assessment_summary=args.get("assessment_summary", ""),
     )
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 # ── Tool Registry ──────────────────────────────────────────────────────────

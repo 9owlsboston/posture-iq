@@ -26,9 +26,11 @@ from httpx import ASGITransport, AsyncClient
 from src.middleware.auth import (
     ENTRA_AUTHORITY,
     JWKS_CACHE_TTL_SECONDS,
+    REVOCATION_SCOPE,
     JWKSKeyCache,
     UserContext,
     build_auth_url,
+    build_incremental_consent_url,
     exchange_code_for_tokens,
     get_current_user,
     get_jwks_cache,
@@ -38,6 +40,7 @@ from src.middleware.auth import (
     require_reports_read,
     require_security_actions,
     require_security_events,
+    revoke_user_consent,
     scope_checker,
     validate_token,
 )
@@ -946,3 +949,276 @@ class TestAuthConstants:
         from src.middleware.auth import OPENID_CONFIG_PATH
 
         assert OPENID_CONFIG_PATH == "/.well-known/openid-configuration"
+
+
+# ── Consent Revocation Tests ───────────────────────────────────────────────
+
+EXTERNAL_TENANT_ID = "external-tenant-00000000-0000-0000-0000-999999999999"
+SP_OBJECT_ID = "sp-object-00000000-0000-0000-0000-000000000001"
+GRANT_ID = "grant-00000000-0000-0000-0000-000000000001"
+
+
+class TestRevokeUserConsent:
+    """Tests for the revoke_user_consent helper."""
+
+    @pytest.mark.asyncio
+    async def test_revoke_success(self, _mock_settings):
+        """Should delete the user's consent grant and return True."""
+        sp_resp = MagicMock(status_code=200, json=lambda: {"value": [{"id": SP_OBJECT_ID}]})
+        grants_resp = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "value": [
+                    {
+                        "id": GRANT_ID,
+                        "clientId": SP_OBJECT_ID,
+                        "principalId": USER_OID,
+                        "consentType": "Principal",
+                    }
+                ]
+            },
+        )
+        delete_resp = MagicMock(status_code=204)
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=[sp_resp, grants_resp])
+        mock_client.delete = AsyncMock(return_value=delete_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.middleware.auth.httpx.AsyncClient", return_value=mock_client):
+            result = await revoke_user_consent(
+                graph_token="graph-token",
+                user_id=USER_OID,
+            )
+
+        assert result is True
+        mock_client.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_revoke_skips_admin_consent(self, _mock_settings):
+        """Should skip grants with consentType=AllPrincipals (admin consent)."""
+        sp_resp = MagicMock(status_code=200, json=lambda: {"value": [{"id": SP_OBJECT_ID}]})
+        grants_resp = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "value": [
+                    {
+                        "id": GRANT_ID,
+                        "clientId": SP_OBJECT_ID,
+                        "principalId": USER_OID,
+                        "consentType": "AllPrincipals",
+                    }
+                ]
+            },
+        )
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=[sp_resp, grants_resp])
+        mock_client.delete = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.middleware.auth.httpx.AsyncClient", return_value=mock_client):
+            result = await revoke_user_consent(
+                graph_token="graph-token",
+                user_id=USER_OID,
+            )
+
+        assert result is False
+        mock_client.delete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_revoke_skips_other_users_grants(self, _mock_settings):
+        """Should not delete grants belonging to a different user."""
+        sp_resp = MagicMock(status_code=200, json=lambda: {"value": [{"id": SP_OBJECT_ID}]})
+        grants_resp = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "value": [
+                    {
+                        "id": GRANT_ID,
+                        "clientId": SP_OBJECT_ID,
+                        "principalId": "other-user-oid",
+                        "consentType": "Principal",
+                    }
+                ]
+            },
+        )
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=[sp_resp, grants_resp])
+        mock_client.delete = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.middleware.auth.httpx.AsyncClient", return_value=mock_client):
+            result = await revoke_user_consent(
+                graph_token="graph-token",
+                user_id=USER_OID,
+            )
+
+        assert result is False
+        mock_client.delete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_revoke_no_service_principal(self, _mock_settings):
+        """Should return False when service principal not found."""
+        sp_resp = MagicMock(status_code=200, json=lambda: {"value": []})
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=sp_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.middleware.auth.httpx.AsyncClient", return_value=mock_client):
+            result = await revoke_user_consent(
+                graph_token="graph-token",
+                user_id=USER_OID,
+            )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_revoke_graph_403_raises(self, _mock_settings):
+        """Should raise 403 when Graph token lacks required scope."""
+        from fastapi import HTTPException
+
+        sp_resp = MagicMock(status_code=403)
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=sp_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.middleware.auth.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(HTTPException) as exc_info:
+                await revoke_user_consent(
+                    graph_token="bad-token",
+                    user_id=USER_OID,
+                )
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_revoke_graph_500_raises_502(self, _mock_settings):
+        """Should raise 502 when Graph API returns a server error."""
+        from fastapi import HTTPException
+
+        sp_resp = MagicMock(status_code=500, text="Internal Server Error")
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=sp_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.middleware.auth.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(HTTPException) as exc_info:
+                await revoke_user_consent(
+                    graph_token="graph-token",
+                    user_id=USER_OID,
+                )
+        assert exc_info.value.status_code == 502
+
+
+class TestBuildIncrementalConsentUrl:
+    """Tests for the incremental consent URL builder."""
+
+    def test_includes_additional_scopes(self, _mock_settings):
+        url = build_incremental_consent_url(
+            redirect_uri="http://localhost:8000/auth/callback",
+            additional_scopes=["DelegatedPermissionGrant.ReadWrite.All"],
+        )
+        assert "DelegatedPermissionGrant.ReadWrite.All" in url
+        assert "SecurityEvents.Read.All" in url  # default scopes still present
+
+    def test_uses_consent_prompt(self, _mock_settings):
+        url = build_incremental_consent_url(
+            redirect_uri="http://localhost:8000/auth/callback",
+            additional_scopes=["DelegatedPermissionGrant.ReadWrite.All"],
+        )
+        assert "prompt=consent" in url
+
+    def test_includes_login_hint(self, _mock_settings):
+        url = build_incremental_consent_url(
+            redirect_uri="http://localhost:8000/auth/callback",
+            additional_scopes=["DelegatedPermissionGrant.ReadWrite.All"],
+            login_hint="user@contoso.com",
+        )
+        assert "login_hint=user" in url
+
+
+class TestRevokeConsentEndpoint:
+    """Integration tests for POST /auth/revoke-consent endpoint."""
+
+    @pytest_asyncio.fixture()
+    async def client(self):
+        from src.api.app import app
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+
+    @pytest.mark.asyncio
+    async def test_revoke_requires_auth(self, client):
+        """POST /auth/revoke-consent without token should return 401."""
+        resp = await client.post("/auth/revoke-consent")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_revoke_hosting_tenant_rejected(self, client, _mock_settings):
+        """POST /auth/revoke-consent from hosting tenant should return 400."""
+        from src.api.app import app
+
+        hosting_user = UserContext(
+            user_id=USER_OID,
+            email=USER_EMAIL,
+            tenant_id=TENANT_ID,
+        )
+        app.dependency_overrides[get_current_user] = lambda: hosting_user
+        try:
+            with patch("src.api.app.settings") as app_settings:
+                app_settings.azure_tenant_id = TENANT_ID
+                resp = await client.post(
+                    "/auth/revoke-consent",
+                    headers={"X-Graph-Token": "some-graph-token"},
+                )
+            assert resp.status_code == 400
+            assert "external-tenant" in resp.json()["detail"].lower()
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
+    @pytest.mark.asyncio
+    async def test_revoke_no_graph_token_returns_consent_url(self, client, _mock_settings):
+        """When Graph token is missing, should return 403 with a consent URL."""
+        from src.api.app import app
+
+        external_user = UserContext(
+            user_id=USER_OID,
+            email=USER_EMAIL,
+            tenant_id=EXTERNAL_TENANT_ID,
+        )
+        app.dependency_overrides[get_current_user] = lambda: external_user
+        try:
+            resp = await client.post("/auth/revoke-consent")
+            assert resp.status_code == 403
+            data = resp.json()["detail"]
+            assert data["error"] == "insufficient_scope"
+            assert "consent_url" in data
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
+    @pytest.mark.asyncio
+    async def test_config_endpoint(self, client):
+        """GET /config should return multi-tenant configuration."""
+        resp = await client.get("/config")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "multi_tenant_enabled" in data
+        assert "hosting_tenant_id" in data
+
+
+class TestRevocationScope:
+    """Tests for the REVOCATION_SCOPE constant."""
+
+    def test_revocation_scope_value(self):
+        assert REVOCATION_SCOPE == "DelegatedPermissionGrant.ReadWrite.All"

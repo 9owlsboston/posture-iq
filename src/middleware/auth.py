@@ -467,3 +467,131 @@ async def exchange_code_for_tokens(
 def get_jwks_cache() -> JWKSKeyCache:
     """Return the module-level JWKS cache (for testability)."""
     return _jwks_cache
+
+
+# ── Consent Revocation ─────────────────────────────────────────────────────
+
+REVOCATION_SCOPE = "DelegatedPermissionGrant.ReadWrite.All"
+
+
+async def revoke_user_consent(
+    graph_token: str,
+    user_id: str,
+) -> bool:
+    """Revoke the calling user's OAuth2 delegated permission grant for SecPostureIQ.
+
+    Steps:
+      1. Resolve SecPostureIQ's service principal object ID in the user's tenant.
+      2. List oauth2PermissionGrants filtered by that service principal.
+      3. Delete only grants where principalId matches the current user
+         and consentType is 'Principal' (skip admin-consent grants).
+
+    Args:
+        graph_token: A Graph API access token with
+            DelegatedPermissionGrant.ReadWrite.All scope.
+        user_id: The authenticated user's oid (object ID).
+
+    Returns:
+        True if at least one grant was deleted, False if no matching grant found.
+
+    Raises:
+        HTTPException(403): If the Graph token lacks the required scope.
+        HTTPException(502): If Graph API calls fail.
+    """
+    app_id = settings.oauth_client_id
+    graph_base = "https://graph.microsoft.com/v1.0"
+    headers = {"Authorization": f"Bearer {graph_token}"}
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        # Step 1: Resolve the service principal object ID from the app ID
+        sp_url = f"{graph_base}/servicePrincipals?$filter=appId eq '{app_id}'&$select=id"
+        sp_resp = await client.get(sp_url, headers=headers)
+
+        if sp_resp.status_code == 403:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Graph token lacks required scope for consent revocation",
+            )
+        if sp_resp.status_code != 200:
+            logger.error(
+                "auth.consent.sp_lookup_failed",
+                status_code=sp_resp.status_code,
+                body=sp_resp.text[:500],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to resolve service principal in tenant",
+            )
+
+        sp_data = sp_resp.json()
+        sp_values = sp_data.get("value", [])
+        if not sp_values:
+            return False  # Service principal not found — no consent exists
+
+        sp_id = sp_values[0]["id"]
+
+        # Step 2: List oauth2PermissionGrants for this service principal
+        grants_url = f"{graph_base}/oauth2PermissionGrants?$filter=clientId eq '{sp_id}'"
+        grants_resp = await client.get(grants_url, headers=headers)
+
+        if grants_resp.status_code != 200:
+            logger.error(
+                "auth.consent.grants_list_failed",
+                status_code=grants_resp.status_code,
+                body=grants_resp.text[:500],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to list consent grants",
+            )
+
+        grants = grants_resp.json().get("value", [])
+
+        # Step 3: Delete only the user's own grants (consentType=Principal)
+        deleted = False
+        for grant in grants:
+            if grant.get("consentType") == "Principal" and grant.get("principalId") == user_id:
+                del_url = f"{graph_base}/oauth2PermissionGrants/{grant['id']}"
+                del_resp = await client.delete(del_url, headers=headers)
+                if del_resp.status_code == 204:
+                    deleted = True
+                    logger.info(
+                        "auth.consent.grant_deleted",
+                        grant_id=grant["id"],
+                        user_id=user_id,
+                    )
+                else:
+                    logger.warning(
+                        "auth.consent.grant_delete_failed",
+                        grant_id=grant["id"],
+                        status_code=del_resp.status_code,
+                    )
+
+    return deleted
+
+
+def build_incremental_consent_url(
+    redirect_uri: str,
+    additional_scopes: list[str],
+    state: str = "",
+    login_hint: str = "",
+) -> str:
+    """Build an auth URL that requests additional scopes via incremental consent.
+
+    Args:
+        redirect_uri: Where Entra ID should redirect after consent.
+        additional_scopes: Extra scopes to request beyond the default Graph scopes.
+        state: CSRF-prevention state value.
+        login_hint: Pre-fill the username.
+
+    Returns:
+        Fully-qualified authorization URL requesting the combined scopes.
+    """
+    all_scopes = [*settings.graph_scope_list, *additional_scopes]
+    return build_auth_url(
+        redirect_uri=redirect_uri,
+        scopes=all_scopes,
+        state=state,
+        login_hint=login_hint,
+        prompt="consent",
+    )

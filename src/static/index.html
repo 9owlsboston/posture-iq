@@ -609,6 +609,82 @@
     }
 
     .btn-switch:hover { border-color: var(--primary); color: var(--primary); }
+
+    .btn-revoke {
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+
+    .btn-revoke:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── Consent Revocation Modal ───────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.visible { display: flex; }
+
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 440px;
+      width: 90%;
+      text-align: center;
+    }
+
+    .modal-box h3 {
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .modal-box p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .modal-actions .btn-cancel {
+      padding: 8px 20px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .modal-actions .btn-confirm-revoke {
+      padding: 8px 20px;
+      border: 1px solid var(--red);
+      border-radius: 6px;
+      background: var(--red);
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .modal-actions .btn-confirm-revoke:hover { opacity: 0.9; }
   </style>
 </head>
 <body>
@@ -633,6 +709,7 @@
           <span class="user-name" id="userName"></span>
           <span class="user-email" id="userEmail"></span>
         </div>
+        <button class="btn-revoke" id="revokeConsentBtn" onclick="showRevokeModal()" style="display:none" title="Revoke consent for this app">Revoke Consent</button>
         <button class="btn-switch" onclick="switchAccount()" title="Sign in with a different account">Switch</button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
@@ -654,6 +731,22 @@
     <span>🏢 Assessing:</span>
     <span class="tenant-name" id="tenantDisplay"></span>
     <span class="data-source-badge mock" id="dataSourceBadge">● Mock Data</span>
+  </div>
+
+  <!-- ── Consent Revocation Modal ────────────────────── -->
+  <div class="modal-overlay" id="revokeModal">
+    <div class="modal-box">
+      <h3>Revoke Consent?</h3>
+      <p>
+        This will remove SecPostureIQ's access to your tenant data.
+        You will be signed out. To use SecPostureIQ again, you will
+        need to re-consent.
+      </p>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="hideRevokeModal()">Cancel</button>
+        <button class="btn-confirm-revoke" onclick="revokeConsent()">Revoke</button>
+      </div>
+    </div>
   </div>
 
   <!-- ── Main ───────────────────────────────────────────── -->
@@ -777,6 +870,7 @@
     let isProcessing = false;
     let accessToken = null;
     let currentUser = null;  // { user_id, email, name, tenant_id, scopes }
+    let appConfig = null;    // { multi_tenant_enabled, hosting_tenant_id }
 
     // ── Auth: Token Management ───────────────────────────
 
@@ -786,7 +880,18 @@
       return Object.fromEntries(hash.split('&').map(p => p.split('=')));
     }
 
+    async function fetchAppConfig() {
+      try {
+        const r = await fetch('/config');
+        if (r.ok) appConfig = await r.json();
+      } catch (e) {
+        console.warn('Failed to fetch app config:', e);
+      }
+    }
+
     async function initAuth() {
+      await fetchAppConfig();
+
       // Check for token in URL fragment (from /auth/callback redirect)
       const params = parseHashParams();
       if (params.id_token) {
@@ -854,6 +959,16 @@
         lastDataSource = 'live';
         updateDataSourceBadge('live');
       }
+
+      // Show "Revoke Consent" button for external-tenant users
+      if (
+        appConfig &&
+        appConfig.multi_tenant_enabled &&
+        appConfig.hosting_tenant_id &&
+        currentUser.tenant_id !== appConfig.hosting_tenant_id
+      ) {
+        document.getElementById('revokeConsentBtn').style.display = 'inline-flex';
+      }
     }
 
     function showUnauthenticatedUI() {
@@ -887,8 +1002,54 @@
       sessionStorage.removeItem('id_token');
       sessionStorage.removeItem('graph_token');
       sessionId = null;
+      document.getElementById('revokeConsentBtn').style.display = 'none';
       showUnauthenticatedUI();
       clearChat();
+    }
+
+    // ── Consent Revocation ────────────────────────────────
+
+    function showRevokeModal() {
+      document.getElementById('revokeModal').classList.add('visible');
+    }
+
+    function hideRevokeModal() {
+      document.getElementById('revokeModal').classList.remove('visible');
+    }
+
+    async function revokeConsent() {
+      hideRevokeModal();
+
+      const headers = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      const graphToken = sessionStorage.getItem('graph_token');
+      if (graphToken) headers['X-Graph-Token'] = graphToken;
+
+      try {
+        const r = await fetch('/auth/revoke-consent', {
+          method: 'POST',
+          headers,
+        });
+
+        if (r.ok) {
+          // Success — sign the user out
+          signOut();
+          addMessage('agent', 'Your consent has been revoked. SecPostureIQ no longer has access to your tenant. To use it again, you will need to re-consent.');
+          return;
+        }
+
+        const data = await r.json();
+
+        // Handle incremental consent redirect
+        if (r.status === 403 && data.detail && data.detail.consent_url) {
+          window.location.href = data.detail.consent_url;
+          return;
+        }
+
+        addMessage('agent', `\u26a0\ufe0f Could not revoke consent: ${data.detail || 'Unknown error'}. You can revoke manually at https://myapplications.microsoft.com`);
+      } catch (err) {
+        addMessage('agent', `\u26a0\ufe0f Connection error during consent revocation: ${err.message}. Try again or revoke manually at https://myapplications.microsoft.com`);
+      }
     }
 
     function updateDataSourceBadge(source) {
