@@ -18,7 +18,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from copilot import Tool, ToolInvocation
+from copilot import Tool, ToolInvocation, ToolResult
 from copilot.generated.session_events import SessionEventType
 
 from src.agent.main import (
@@ -76,7 +76,7 @@ class TestHandleSecureScore:
         inv = _make_invocation(tool_name="query_secure_score")
         with patch("src.tools.secure_score._create_graph_client", return_value=None):
             result = await _handle_secure_score(inv)
-        assert isinstance(result, dict)
+        assert isinstance(result, dict | ToolResult)
         assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
@@ -116,7 +116,7 @@ class TestHandleDefenderCoverage:
     async def test_returns_tool_result_dict(self, _mock_client):
         inv = _make_invocation(tool_name="assess_defender_coverage")
         result = await _handle_defender_coverage(inv)
-        assert isinstance(result, dict)
+        assert isinstance(result, dict | ToolResult)
         assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
@@ -136,7 +136,7 @@ class TestHandlePurviewPolicies:
     async def test_returns_tool_result_dict(self, _mock_client):
         inv = _make_invocation(tool_name="check_purview_policies")
         result = await _handle_purview_policies(inv)
-        assert isinstance(result, dict)
+        assert isinstance(result, dict | ToolResult)
         assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
@@ -156,7 +156,7 @@ class TestHandleEntraConfig:
     async def test_returns_tool_result_dict(self, _mock_client):
         inv = _make_invocation(tool_name="get_entra_config")
         result = await _handle_entra_config(inv)
-        assert isinstance(result, dict)
+        assert isinstance(result, dict | ToolResult)
         assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
@@ -179,7 +179,7 @@ class TestHandleRemediationPlan:
             tool_name="generate_remediation_plan",
         )
         result = await _handle_remediation_plan(inv)
-        assert isinstance(result, dict)
+        assert isinstance(result, dict | ToolResult)
         assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
@@ -212,7 +212,7 @@ class TestHandleAdoptionScorecard:
             tool_name="create_adoption_scorecard",
         )
         result = await _handle_adoption_scorecard(inv)
-        assert isinstance(result, dict)
+        assert isinstance(result, dict | ToolResult)
         assert _get_tool_result_text(result)
 
     @pytest.mark.asyncio
