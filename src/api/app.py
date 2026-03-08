@@ -44,6 +44,7 @@ from src.middleware.auth import (
     build_incremental_consent_url,
     delete_service_principal,
     disable_service_principal,
+    enable_service_principal,
     exchange_code_for_tokens,
     get_current_user,
     oauth2_scheme,
@@ -436,6 +437,7 @@ async def revoke_consent(
             - ``revoke_grants`` (default): Delete user-level consent grants.
             - ``delete_sp``: Delete the service principal entirely (all users).
             - ``disable_sp``: Disable the service principal (all users, reversible).
+            - ``enable_sp``: Re-enable a previously disabled service principal.
 
     Requires:
       - Valid Bearer token (Authorization header)
@@ -450,10 +452,10 @@ async def revoke_consent(
             detail="Consent revocation is only available for external-tenant users",
         )
 
-    if action not in ("revoke_grants", "delete_sp", "disable_sp"):
+    if action not in ("revoke_grants", "delete_sp", "disable_sp", "enable_sp"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid action: {action}. Must be revoke_grants, delete_sp, or disable_sp",
+            detail=(f"Invalid action: {action}. Must be revoke_grants, delete_sp, disable_sp, or enable_sp"),
         )
 
     graph_token = request.headers.get("X-Graph-Token", "")
@@ -555,6 +557,38 @@ async def revoke_consent(
                 "Sign-in is blocked for all users. "
                 "Re-enable from Entra ID \u2192 Enterprise Applications."
             ),
+        }
+
+    # ── Action: Enable service principal ─────────────────────
+    if action == "enable_sp":
+        try:
+            enabled = await enable_service_principal(graph_token)
+        except HTTPException as exc:
+            if exc.status_code == 403:
+                redirect_uri = str(request.url_for("auth_callback"))
+                consent_url = build_incremental_consent_url(
+                    redirect_uri=redirect_uri,
+                    additional_scopes=["Application.ReadWrite.All"],
+                    login_hint=user.email,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": "insufficient_scope",
+                        "required_scope": "Application.ReadWrite.All",
+                        "consent_url": consent_url,
+                    },
+                ) from exc
+            raise
+        if not enabled:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Service principal not found in your tenant",
+            )
+        _log_revocation("enable_sp")
+        return {
+            "status": "enabled",
+            "message": ("SecPostureIQ has been re-enabled in your tenant. Users can sign in again."),
         }
 
     # ── Action: Revoke grants (default) ────────────────────

@@ -1081,8 +1081,29 @@
         });
 
         if (r.ok) {
-          signOut();
           const data = await r.json();
+
+          if (data.status === 'disabled') {
+            // Don't sign out — show message with re-enable option
+            addMessage('agent', `\u2705 ${data.message}`);
+            addMessage('agent', 'Click **Enable sign-in** below if you want to reverse this.');
+            // Show enable button inline
+            const enableDiv = document.createElement('div');
+            enableDiv.style.cssText = 'max-width:800px;margin:0 auto 20px;padding:0 44px;';
+            enableDiv.innerHTML = '<button class="admin-action-btn" style="max-width:400px;" onclick="this.parentElement.remove(); _doRevoke(\'enable_sp\');"><span class="action-label">Enable sign-in</span><span class="action-desc">Re-enable SecPostureIQ for all users in your tenant.</span></button>';
+            document.getElementById('messages').appendChild(enableDiv);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            return;
+          }
+
+          if (data.status === 'enabled') {
+            // Just show success, no sign-out
+            addMessage('agent', `\u2705 ${data.message}`);
+            return;
+          }
+
+          // For delete_sp and revoke_grants, sign out
+          signOut();
           addMessage('agent', `\u2705 ${data.message}`);
           return;
         }

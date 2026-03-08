@@ -761,3 +761,55 @@ async def disable_service_principal(graph_token: str) -> bool:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to disable service principal",
         )
+
+
+async def enable_service_principal(graph_token: str) -> bool:
+    """Re-enable SecPostureIQ's service principal in the caller's tenant.
+
+    Reverses the effect of :func:`disable_service_principal` by setting
+    ``accountEnabled=true``.
+
+    Requires ``Application.ReadWrite.All`` delegated scope.
+
+    Returns:
+        True if enabled, False if service principal not found.
+
+    Raises:
+        HTTPException(403/502): On Graph API errors.
+    """
+    sp_id = await _resolve_service_principal(graph_token)
+    if not sp_id:
+        return False
+
+    graph_base = "https://graph.microsoft.com/v1.0"
+    headers = {
+        "Authorization": f"Bearer {graph_token}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        patch_resp = await client.patch(
+            f"{graph_base}/servicePrincipals/{sp_id}",
+            headers=headers,
+            json={"accountEnabled": True},
+        )
+
+        if patch_resp.status_code == 204:
+            logger.info("auth.consent.sp_enabled", sp_id=sp_id)
+            return True
+        if patch_resp.status_code == 403:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Graph token lacks Application.ReadWrite.All scope",
+            )
+
+        logger.error(
+            "auth.consent.sp_enable_failed",
+            sp_id=sp_id,
+            status_code=patch_resp.status_code,
+            body=patch_resp.text[:500],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to enable service principal",
+        )
