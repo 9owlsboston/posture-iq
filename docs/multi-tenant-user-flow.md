@@ -299,6 +299,8 @@ Operators can filter audit logs by `tenant_id` to get per-tenant views.
 | Bob's heavy usage slows Alice down | **Possible today** (shared OpenAI quota). Mitigated in Phase 2 of the [scaling plan](scaling-strategy.md) with APIM per-tenant rate limiting. |
 | Tenant X revokes consent | Alice can no longer sign in. Existing tokens expire naturally (within hours). No action needed by SecPostureIQ. |
 | Tenant X admin grants consent but a regular user tries to sign in without the required licenses | Entra ID blocks the sign-in or Graph returns 403. SecPostureIQ surfaces the error to the user. |
+| User clicks "Revoke Consent" but Graph token lacks required scope | SecPostureIQ returns a `consent_url` for incremental consent. The SPA redirects the user to re-authorize with `DelegatedPermissionGrant.ReadWrite.All`. |
+| User revokes consent and tries to use the app again | User must re-consent on next sign-in. The same consent prompt from Step 1 is shown. |
 
 ---
 
@@ -332,6 +334,87 @@ Alice signs in (Entra ID, Tenant X)      Bob signs in (Entra ID, Tenant Y)
         │                                   │                │
 Alice sees Tenant X report          Bob sees Tenant Y report
 ```
+
+---
+
+## Step 8 — Consent Revocation (Self-Service)
+
+Alice decides she no longer wants SecPostureIQ to access Tenant X's data.
+
+### Alice's revocation flow
+
+1. Alice sees a **"Revoke Consent"** button in the SecPostureIQ header
+   (visible because her `tenant_id` differs from the hosting tenant).
+
+2. She clicks it and sees a confirmation dialog:
+   > **Revoke consent?**
+   > This will remove SecPostureIQ's access to your tenant data.
+   > You will be signed out. To use SecPostureIQ again, you will
+   > need to re-consent.
+
+3. Alice confirms. The SPA calls:
+
+   ```
+   POST /auth/revoke-consent
+     Authorization: Bearer <alice-id-token>
+     X-Graph-Token: <alice-graph-token>
+   ```
+
+4. The backend:
+   - Validates Alice's identity via the Bearer token
+   - Confirms Alice is from an external tenant (not the hosting tenant)
+   - Uses `alice-graph-token` to call the Graph API:
+     ```
+     GET /servicePrincipals?$filter=appId eq '{SecPostureIQ-app-id}'
+     → resolves service principal object ID in Tenant X
+
+     GET /oauth2PermissionGrants?$filter=clientId eq '{sp-id}'
+     → finds Alice's grant (consentType=Principal, principalId=alice-oid)
+
+     DELETE /oauth2PermissionGrants/{grant-id}
+     → removes Alice's delegated permission grant
+     ```
+   - Admin-consent grants (`consentType=AllPrincipals`) are **never deleted**
+
+5. The SPA clears all stored tokens, signs Alice out, and displays:
+   > "Your consent has been revoked. SecPostureIQ no longer has access to
+   > your tenant."
+
+### What happens next
+
+- Alice's existing JWT tokens expire naturally (within ~1 hour).
+- If Alice tries to sign in again, Entra ID prompts her for consent
+  (same flow as Step 1).
+- The tenant admin's consent (if granted via admin consent) is unaffected.
+- Bob's access to Tenant Y is completely unaffected.
+
+### Audit trail
+
+```json
+{
+  "event_type": "consent_revoked",
+  "tenant_id": "tenantX-guid",
+  "user_id": "alice-object-id",
+  "tool": "revoke_consent",
+  "timestamp": "2026-02-26T15:00:00Z"
+}
+```
+
+### Incremental consent fallback
+
+If Alice's current Graph token doesn't include the
+`DelegatedPermissionGrant.ReadWrite.All` scope, the backend returns:
+
+```json
+{
+  "error": "insufficient_scope",
+  "required_scope": "DelegatedPermissionGrant.ReadWrite.All",
+  "consent_url": "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize?..."
+}
+```
+
+The SPA redirects Alice to `consent_url`, she grants the additional scope,
+and the revocation proceeds on the next attempt.
 
 ---
 

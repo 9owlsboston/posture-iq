@@ -9,6 +9,8 @@ Provides:
   - GET /auth/login    — initiate OAuth2 authorization code flow
   - GET /auth/callback — handle Entra ID redirect with auth code
   - GET /auth/me       — return current user identity (protected)
+  - POST /auth/revoke-consent — revoke external-tenant user consent (protected)
+  - GET /config        — public app configuration (multi-tenant info)
   - POST /assess       — HTTP-triggered assessment endpoint (protected)
 """
 
@@ -36,11 +38,14 @@ from src.middleware.audit_logger import (
     check_audit_access,
 )
 from src.middleware.auth import (
+    REVOCATION_SCOPE,
     UserContext,
     build_auth_url,
+    build_incremental_consent_url,
     exchange_code_for_tokens,
     get_current_user,
     oauth2_scheme,
+    revoke_user_consent,
     validate_token,
 )
 from src.middleware.tracing import setup_tracing
@@ -413,6 +418,92 @@ async def auth_me(user: UserContext = Depends(get_current_user)) -> AuthMeRespon
         name=user.name,
         tenant_id=user.tenant_id,
         scopes=user.scopes,
+    )
+
+
+@app.post("/auth/revoke-consent")
+async def revoke_consent(
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+) -> dict[str, str]:
+    """Revoke the current external-tenant user's delegated consent.
+
+    Requires:
+      - Valid Bearer token (Authorization header)
+      - Graph API access token with DelegatedPermissionGrant.ReadWrite.All
+        scope (X-Graph-Token header)
+      - User must be from an external tenant (not the hosting tenant)
+    """
+    # Only allow external-tenant users to revoke consent
+    hosting_tenant = settings.azure_tenant_id
+    if hosting_tenant and user.tenant_id == hosting_tenant:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Consent revocation is only available for external-tenant users",
+        )
+
+    graph_token = request.headers.get("X-Graph-Token", "")
+    if not graph_token:
+        # No Graph token — construct incremental consent URL
+        redirect_uri = str(request.url_for("auth_callback"))
+        consent_url = build_incremental_consent_url(
+            redirect_uri=redirect_uri,
+            additional_scopes=[REVOCATION_SCOPE],
+            login_hint=user.email,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "insufficient_scope",
+                "required_scope": REVOCATION_SCOPE,
+                "consent_url": consent_url,
+            },
+        )
+
+    deleted = await revoke_user_consent(
+        graph_token=graph_token,
+        user_id=user.user_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No user-level consent grant found to revoke",
+        )
+
+    # Audit log
+    audit = AuditLogger(session_id="consent-revocation")
+    audit.log_event(
+        event_type="consent_revoked",
+        tool_name="revoke_consent",
+        input_summary=f"user={user.email} tenant={user.tenant_id}",
+        output_summary="consent_revoked",
+    )
+    logger.info(
+        "auth.consent.revoked",
+        user_id=user.user_id,
+        tenant_id=user.tenant_id,
+        email=user.email,
+    )
+
+    return {"status": "revoked", "message": "Your consent has been revoked successfully"}
+
+
+class AppConfigResponse(BaseModel):
+    multi_tenant_enabled: bool
+    hosting_tenant_id: str
+
+
+@app.get("/config", response_model=AppConfigResponse)
+async def app_config() -> AppConfigResponse:
+    """Return public application configuration.
+
+    The SPA uses this to determine whether to show external-tenant
+    features like the consent revocation button.
+    """
+    return AppConfigResponse(
+        multi_tenant_enabled=settings.multi_tenant_enabled,
+        hosting_tenant_id=settings.azure_tenant_id,
     )
 
 
