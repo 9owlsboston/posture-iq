@@ -55,7 +55,7 @@ logger = structlog.get_logger(__name__)
 def _tool_result(text: str) -> ToolResult:
     """Create a ToolResult with the LLM text, compatible across SDK versions."""
     try:
-        return ToolResult(textResultForLlm=text)
+        return ToolResult(textResultForLlm=text)  # type: ignore[call-arg]
     except TypeError:
         r = ToolResult()
         r["textResultForLlm"] = text  # type: ignore[index]
