@@ -46,6 +46,22 @@ from src.tools.secure_score import query_secure_score
 logger = structlog.get_logger(__name__)
 
 
+# ── SDK Compatibility ──────────────────────────────────────────────────────
+# The Copilot SDK's ToolResult constructor differs between versions.
+# Older versions accept kwargs (textResultForLlm=...); newer versions
+# only accept dict-style assignment.  This helper works with both.
+
+
+def _tool_result(text: str) -> ToolResult:
+    """Create a ToolResult with the LLM text, compatible across SDK versions."""
+    try:
+        return ToolResult(textResultForLlm=text)
+    except TypeError:
+        r = ToolResult()
+        r["textResultForLlm"] = text  # type: ignore[index]
+        return r
+
+
 # ── Tool Handler Adapters ──────────────────────────────────────────────────
 # The Copilot SDK expects handlers with signature:
 #   (ToolInvocation) → ToolResult | Awaitable[ToolResult]
@@ -57,25 +73,25 @@ async def _handle_secure_score(invocation: ToolInvocation) -> ToolResult:
     args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
     tenant_id = args.get("tenant_id", "")
     result = await query_secure_score(tenant_id=tenant_id)
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))  # type: ignore[call-arg]
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_defender_coverage(invocation: ToolInvocation) -> ToolResult:
     """Adapter: assess_defender_coverage → ToolResult."""
     result = await assess_defender_coverage()
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))  # type: ignore[call-arg]
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_purview_policies(invocation: ToolInvocation) -> ToolResult:
     """Adapter: check_purview_policies → ToolResult."""
     result = await check_purview_policies()
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))  # type: ignore[call-arg]
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_entra_config(invocation: ToolInvocation) -> ToolResult:
     """Adapter: get_entra_config → ToolResult."""
     result = await get_entra_config()
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))  # type: ignore[call-arg]
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_remediation_plan(invocation: ToolInvocation) -> ToolResult:
@@ -83,7 +99,7 @@ async def _handle_remediation_plan(invocation: ToolInvocation) -> ToolResult:
     args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
     assessment_context = args.get("assessment_context", "{}")
     result = await generate_remediation_plan(assessment_context=assessment_context)
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))  # type: ignore[call-arg]
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_adoption_scorecard(invocation: ToolInvocation) -> ToolResult:
@@ -91,7 +107,7 @@ async def _handle_adoption_scorecard(invocation: ToolInvocation) -> ToolResult:
     args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
     assessment_context = args.get("assessment_context", "{}")
     result = await create_adoption_scorecard(assessment_context=assessment_context)
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))  # type: ignore[call-arg]
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
@@ -106,7 +122,7 @@ async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
         gaps=gaps or None,
         workload_areas=workload_areas or None,
     )
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))  # type: ignore[call-arg]
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_fabric_telemetry(invocation: ToolInvocation) -> ToolResult:
@@ -122,7 +138,7 @@ async def _handle_fabric_telemetry(invocation: ToolInvocation) -> ToolResult:
         top_gaps=args.get("top_gaps"),
         assessment_summary=args.get("assessment_summary", ""),
     )
-    return ToolResult(textResultForLlm=json.dumps(result, indent=2, default=str))  # type: ignore[call-arg]
+    return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 # ── Tool Registry ──────────────────────────────────────────────────────────
