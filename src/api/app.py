@@ -642,7 +642,10 @@ async def revoke_consent(
                         "label": "Disable sign-in",
                         "description": (
                             "Blocks sign-in for all users without deleting. "
-                            "Re-enable anytime from Entra ID \u2192 Enterprise Applications."
+                            "To re-enable: Entra ID portal \u2192 Enterprise Applications "
+                            "\u2192 SecPostureIQ \u2192 Properties \u2192 set 'Enabled for "
+                            "users to sign-in' to Yes. You will NOT be able to "
+                            "re-enable from within this app."
                         ),
                         "destructive": False,
                     },
