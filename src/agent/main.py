@@ -60,14 +60,14 @@ def _tool_result(text: str) -> ToolResult:
     """
     # Try dict-style (v0.1.x)
     try:
-        r = ToolResult(textResultForLlm=text)  # type: ignore[call-arg]
+        r: Any = ToolResult(textResultForLlm=text)
         return r
     except TypeError:
         pass
 
     # Try pydantic-style (newer SDK)
     try:
-        r = ToolResult(text_result_for_llm=text)  # type: ignore[call-arg]
+        r = ToolResult(text_result_for_llm=text)
         return r
     except TypeError:
         pass
@@ -80,15 +80,17 @@ def _tool_result(text: str) -> ToolResult:
 
 def _get_tool_result_text(result: ToolResult) -> str:
     """Extract the LLM text from a ToolResult across SDK versions."""
+    r: Any = result
     # Dict-style (v0.1.x)
     try:
-        return result["textResultForLlm"]  # type: ignore[index]
+        return r["textResultForLlm"]
     except (TypeError, KeyError):
         pass
     # Attribute-style (newer SDK)
     for attr in ("textResultForLlm", "text_result_for_llm"):
-        if hasattr(result, attr):
-            return getattr(result, attr)
+        val = getattr(r, attr, None)
+        if val is not None:
+            return val
     return ""
 
 
