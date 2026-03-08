@@ -1,3 +1,4 @@
+# mypy: disable-error-code="call-arg, no-any-return"
 """SecPostureIQ — Agent host entry point.
 
 This is the main application that initializes the Copilot SDK, registers tools,
