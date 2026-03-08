@@ -52,7 +52,7 @@ logger = structlog.get_logger(__name__)
 # only accept dict-style assignment.  This helper works with both.
 
 
-def _tool_result(text: str) -> ToolResult:
+def _tool_result(text: str) -> Any:
     """Create a ToolResult with the LLM text, compatible across SDK versions.
 
     SDK v0.1.x uses dict-style (ToolResult is a dict subclass).
@@ -60,25 +60,23 @@ def _tool_result(text: str) -> ToolResult:
     """
     # Try dict-style (v0.1.x)
     try:
-        r: Any = ToolResult(textResultForLlm=text)
-        return r
+        return ToolResult(textResultForLlm=text)
     except TypeError:
         pass
 
     # Try pydantic-style (newer SDK)
     try:
-        r = ToolResult(text_result_for_llm=text)
-        return r
+        return ToolResult(text_result_for_llm=text)
     except TypeError:
         pass
 
     # Final fallback: construct empty and set via setattr
-    r = ToolResult()
+    r: Any = ToolResult()
     r.textResultForLlm = text
     return r
 
 
-def _get_tool_result_text(result: ToolResult) -> str:
+def _get_tool_result_text(result: Any) -> str:
     """Extract the LLM text from a ToolResult across SDK versions."""
     r: Any = result
     # Dict-style (v0.1.x)
