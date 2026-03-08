@@ -473,11 +473,11 @@ async def revoke_consent(
 
     # Audit log
     audit = AuditLogger(session_id="consent-revocation")
-    audit.log_event(
-        event_type="consent_revoked",
+    audit.log_tool_call(
         tool_name="revoke_consent",
-        input_summary=f"user={user.email} tenant={user.tenant_id}",
+        input_params={"user": user.email, "tenant": user.tenant_id},
         output_summary="consent_revoked",
+        user_identity=user.email,
     )
     logger.info(
         "auth.consent.revoked",
