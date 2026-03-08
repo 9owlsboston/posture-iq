@@ -305,9 +305,17 @@ When `MULTI_TENANT_ENABLED=true`, users from external tenants are prompted for
 consent on first sign-in. SecPostureIQ provides self-service consent management:
 
 - **Revoke consent** — External-tenant users see a "Revoke Consent" button in the
-  header. Clicking it calls `POST /auth/revoke-consent`, which deletes the user's
-  `oauth2PermissionGrants` via the Graph API (admin-consent grants are never
-  affected). The user is signed out and must re-consent to use the app again.
+  header. Clicking it calls `POST /auth/revoke-consent`.
+  - **User-level consent** (`consentType=Principal`): Deletes the user's
+    `oauth2PermissionGrants` directly.
+  - **Admin consent** (`consentType=AllPrincipals`): Shows a modal with three
+    options since admin consent covers all tenant users:
+    1. **Remove completely** — Deletes the service principal from the tenant
+       (`DELETE /servicePrincipals/{id}`). Fully revokes access for all users.
+    2. **Disable sign-in** — Disables the service principal
+       (`PATCH /servicePrincipals/{id}` with `accountEnabled=false`). Blocks
+       sign-in for all users. Reversible from Entra ID.
+    3. **Do it manually** — Opens `myapplications.microsoft.com` in a new tab.
 - **`GET /config`** — Public endpoint returning `{ multi_tenant_enabled, hosting_tenant_id }`
   so the SPA can determine whether to show external-tenant features.
 

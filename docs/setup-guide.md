@@ -123,12 +123,14 @@ and only accesses data the user is authorized to see.
 | `InformationProtectionPolicy.Read` | Delegated | Read Purview/DLP policies | Yes |
 | `Policy.Read.All` | Delegated | Read Conditional Access, Identity Protection | Yes |
 | `Reports.Read.All` | Delegated | Read usage and adoption reports | Yes |
-| `DelegatedPermissionGrant.ReadWrite.All` | Delegated | Self-service consent revocation (optional, requested via incremental consent) | Yes |
+| `DelegatedPermissionGrant.ReadWrite.All` | Delegated | Consent revocation — delete user-level grants (optional, incremental consent) | Yes |
+| `Application.ReadWrite.All` | Delegated | Consent revocation — delete or disable service principal (optional, incremental consent) | Yes |
 
-> **Note:** All permissions except `DelegatedPermissionGrant.ReadWrite.All` require
-> **admin consent** because they access tenant-wide security data. The revocation
-> scope is only requested when a user clicks "Revoke Consent" in the UI — it is
-> not part of the default sign-in flow.
+> **Note:** All permissions except `DelegatedPermissionGrant.ReadWrite.All` and
+> `Application.ReadWrite.All` require **admin consent** because they access
+> tenant-wide security data. The revocation scopes are only requested when a
+> user clicks "Revoke Consent" in the UI — they are not part of the default
+> sign-in flow.
 
 ---
 

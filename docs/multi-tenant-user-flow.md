@@ -355,37 +355,53 @@ Alice decides she no longer wants SecPostureIQ to access Tenant X's data.
 3. Alice confirms. The SPA calls:
 
    ```
-   POST /auth/revoke-consent
+   POST /auth/revoke-consent?action=revoke_grants
      Authorization: Bearer <alice-id-token>
      X-Graph-Token: <alice-graph-token>
    ```
 
-4. The backend:
-   - Validates Alice's identity via the Bearer token
-   - Confirms Alice is from an external tenant (not the hosting tenant)
-   - Uses `alice-graph-token` to call the Graph API:
-     ```
-     GET /servicePrincipals?$filter=appId eq '{SecPostureIQ-app-id}'
-     → resolves service principal object ID in Tenant X
+4. The backend resolves the service principal and lists consent grants.
 
-     GET /oauth2PermissionGrants?$filter=clientId eq '{sp-id}'
-     → finds Alice's grant (consentType=Principal, principalId=alice-oid)
+### Scenario A — User-level consent
 
-     DELETE /oauth2PermissionGrants/{grant-id}
-     → removes Alice's delegated permission grant
-     ```
-   - Admin-consent grants (`consentType=AllPrincipals`) are **never deleted**
+If Alice's consent was recorded as `consentType=Principal` (user-level
+consent), the backend deletes her grant directly:
 
-5. The SPA clears all stored tokens, signs Alice out, and displays:
-   > "Your consent has been revoked. SecPostureIQ no longer has access to
-   > your tenant."
+```
+DELETE /oauth2PermissionGrants/{grant-id}
+→ removes Alice's delegated permission grant
+```
+
+Alice is signed out and sees:
+> "Your consent has been revoked. SecPostureIQ no longer has access to
+> your tenant."
+
+### Scenario B — Admin consent (most common)
+
+SecPostureIQ's permissions require admin consent, so the grant is
+stored as `consentType=AllPrincipals` — it covers every user in the
+tenant. Deleting it would revoke access for everyone, not just Alice.
+
+Instead, the backend returns a `409 Conflict` with three options, and
+the SPA shows a modal:
+
+| Option | Action | Effect | Reversible? |
+|--------|--------|--------|------------|
+| **Remove completely** | `POST /auth/revoke-consent?action=delete_sp` | `DELETE /servicePrincipals/{id}` — fully removes SecPostureIQ from the tenant | Yes (re-consent) |
+| **Disable sign-in** | `POST /auth/revoke-consent?action=disable_sp` | `PATCH /servicePrincipals/{id}` with `accountEnabled=false` — blocks sign-in | Yes (re-enable in Entra ID) |
+| **Do it manually** | Opens browser | Navigate to myapplications.microsoft.com → right-click SecPostureIQ → Remove | N/A |
+
+> **Note:** "Remove completely" and "Disable sign-in" require
+> `Application.ReadWrite.All` scope. If the user's Graph token lacks
+> this scope, they are redirected to incremental consent automatically.
 
 ### What happens next
 
-- Alice's existing JWT tokens expire naturally (within ~1 hour).
-- If Alice tries to sign in again, Entra ID prompts her for consent
-  (same flow as Step 1).
-- The tenant admin's consent (if granted via admin consent) is unaffected.
+- After deletion or disabling, all users in the tenant lose access.
+- If Alice (or another admin) wants to re-enable, they can:
+  - **After delete:** Sign in again — triggers the consent prompt.
+  - **After disable:** Go to Entra ID → Enterprise Applications →
+    SecPostureIQ → Properties → set `Enabled for users to sign-in` to Yes.
 - Bob's access to Tenant Y is completely unaffected.
 
 ### Audit trail
@@ -396,25 +412,28 @@ Alice decides she no longer wants SecPostureIQ to access Tenant X's data.
   "tenant_id": "tenantX-guid",
   "user_id": "alice-object-id",
   "tool": "revoke_consent",
+  "action": "delete_sp",
   "timestamp": "2026-02-26T15:00:00Z"
 }
 ```
 
 ### Incremental consent fallback
 
-If Alice's current Graph token doesn't include the
-`DelegatedPermissionGrant.ReadWrite.All` scope, the backend returns:
+If Alice's current Graph token doesn't include the required scope
+(`DelegatedPermissionGrant.ReadWrite.All` for grant revocation, or
+`Application.ReadWrite.All` for SP deletion/disabling), the backend
+returns:
 
 ```json
 {
   "error": "insufficient_scope",
-  "required_scope": "DelegatedPermissionGrant.ReadWrite.All",
+  "required_scope": "Application.ReadWrite.All",
   "consent_url": "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize?..."
 }
 ```
 
 The SPA redirects Alice to `consent_url`, she grants the additional scope,
-and the revocation proceeds on the next attempt.
+and the action proceeds on the next attempt.
 
 ---
 

@@ -1,6 +1,6 @@
 # Consent Revocation — Implementation Plan
 
-> **Status:** Proposal — pending review
+> **Status:** Implemented
 > **Date:** 2026-03-07
 > **Author:** SecPostureIQ Engineering
 > **Related:** [Multi-Tenant User Flow](multi-tenant-user-flow.md) · [Option A Implementation Plan](option-a-implementation-plan.md) · [Multi-Tenant Strategy](multi-tenant-strategy.md)
@@ -139,7 +139,8 @@ async def revoke_consent(
 | `200` | Consent revoked successfully |
 | `400` | User is from the hosting tenant (no external consent to revoke) |
 | `404` | No consent grant found for this user |
-| `403` | Graph token lacks required scope |
+| `403` | Graph token lacks required scope (includes `consent_url` for incremental consent) |
+| `409` | Admin consent detected — returns structured actions (delete SP, disable SP, manual) |
 | `502` | Graph API call failed |
 
 #### Task 1.2 — Implement `revoke_user_consent()` helper in `auth.py`
@@ -386,6 +387,27 @@ Authorization: Bearer <graph_token>
 | Permission | Type | Purpose |
 |-----------|------|---------|
 | `DelegatedPermissionGrant.ReadWrite.All` | Delegated | Read and delete the user's own consent grants |
+| `Application.ReadWrite.All` | Delegated | Delete or disable the service principal (admin-consent tenants) |
+
+---
+
+## Admin Consent Handling
+
+SecPostureIQ's permissions (e.g., `SecurityEvents.Read.All`) require admin
+consent, so grants are stored as `consentType=AllPrincipals`. These are
+organization-wide and cannot be deleted per-user without affecting all users.
+
+When admin consent is detected, the endpoint returns `409 Conflict` with
+three structured actions:
+
+| Action | Graph API Call | Scope Required | Effect |
+|--------|---------------|----------------|--------|
+| `delete_sp` | `DELETE /servicePrincipals/{id}` | `Application.ReadWrite.All` | Fully removes the app from the tenant |
+| `disable_sp` | `PATCH /servicePrincipals/{id}` `{accountEnabled: false}` | `Application.ReadWrite.All` | Blocks sign-in without deleting (reversible) |
+| `manual` | N/A (opens browser) | None | User navigates to myapplications.microsoft.com |
+
+The SPA renders these as a modal with styled buttons. Destructive actions
+(`delete_sp`) are highlighted with a red border.
 
 ---
 
@@ -406,7 +428,7 @@ Authorization: Bearer <graph_token>
 | Scenario | Behavior |
 |----------|----------|
 | User's Graph token lacks the revocation scope | Return `403` with `consent_url` for incremental consent |
-| No consent grant found (user already revoked or admin-consent only) | Return `404` with a clear message |
+| No consent grant found (user already revoked or admin-consent only) | Return `409` with three options (delete SP, disable SP, manual) for admin-consent; `404` for no grants at all |
 | Graph API is unreachable | Return `502`; UI shows "Unable to revoke consent at this time. Try again or revoke manually from myapplications.microsoft.com." |
 | User is from the hosting tenant | Return `400`; button is hidden in UI, but backend enforces this as defense-in-depth |
 
