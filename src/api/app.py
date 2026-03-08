@@ -461,7 +461,7 @@ async def revoke_consent(
         )
 
     try:
-        deleted = await revoke_user_consent(
+        result = await revoke_user_consent(
             graph_token=graph_token,
             user_id=user.user_id,
         )
@@ -485,28 +485,39 @@ async def revoke_consent(
             ) from exc
         raise
 
-    if not deleted:
+    if result == "deleted":
+        # Audit log
+        audit = AuditLogger(session_id="consent-revocation")
+        audit.log_tool_call(
+            tool_name="revoke_consent",
+            input_params={"user": user.email, "tenant": user.tenant_id},
+            output_summary="consent_revoked",
+            user_identity=user.email,
+        )
+        logger.info(
+            "auth.consent.revoked",
+            user_id=user.user_id,
+            tenant_id=user.tenant_id,
+            email=user.email,
+        )
+        return {"status": "revoked", "message": "Your consent has been revoked successfully"}
+
+    if result == "admin_only":
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No user-level consent grant found to revoke",
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Your access was granted via admin consent by your tenant administrator, "
+                "not by individual user consent. Only your tenant admin can revoke it. "
+                "You can also remove it yourself at https://myapplications.microsoft.com "
+                "\u2192 SecPostureIQ \u2192 Revoke permissions."
+            ),
         )
 
-    # Audit log
-    audit = AuditLogger(session_id="consent-revocation")
-    audit.log_tool_call(
-        tool_name="revoke_consent",
-        input_params={"user": user.email, "tenant": user.tenant_id},
-        output_summary="consent_revoked",
-        user_identity=user.email,
+    # result == "not_found"
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="No consent grant found to revoke",
     )
-    logger.info(
-        "auth.consent.revoked",
-        user_id=user.user_id,
-        tenant_id=user.tenant_id,
-        email=user.email,
-    )
-
-    return {"status": "revoked", "message": "Your consent has been revoked successfully"}
 
 
 class AppConfigResponse(BaseModel):

@@ -1046,6 +1046,12 @@
           return;
         }
 
+        // Handle admin-consent-only case with a clear message
+        if (r.status === 409) {
+          addMessage('agent', `\u2139\ufe0f ${data.detail}`);
+          return;
+        }
+
         addMessage('agent', `\u26a0\ufe0f Could not revoke consent: ${data.detail || 'Unknown error'}. You can revoke manually at https://myapplications.microsoft.com`);
       } catch (err) {
         addMessage('agent', `\u26a0\ufe0f Connection error during consent revocation: ${err.message}. Try again or revoke manually at https://myapplications.microsoft.com`);

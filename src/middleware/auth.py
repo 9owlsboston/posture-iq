@@ -477,14 +477,15 @@ REVOCATION_SCOPE = "DelegatedPermissionGrant.ReadWrite.All"
 async def revoke_user_consent(
     graph_token: str,
     user_id: str,
-) -> bool:
+) -> str:
     """Revoke the calling user's OAuth2 delegated permission grant for SecPostureIQ.
 
     Steps:
       1. Resolve SecPostureIQ's service principal object ID in the user's tenant.
       2. List oauth2PermissionGrants filtered by that service principal.
-      3. Delete only grants where principalId matches the current user
-         and consentType is 'Principal' (skip admin-consent grants).
+      3. Delete grants where principalId matches the current user
+         and consentType is 'Principal'.
+      4. If only admin-consent grants exist, return 'admin_only'.
 
     Args:
         graph_token: A Graph API access token with
@@ -492,7 +493,9 @@ async def revoke_user_consent(
         user_id: The authenticated user's oid (object ID).
 
     Returns:
-        True if at least one grant was deleted, False if no matching grant found.
+        'deleted'    — at least one user-level grant was removed.
+        'admin_only' — grants exist but all are admin-consent (AllPrincipals).
+        'not_found'  — no grants found at all.
 
     Raises:
         HTTPException(403): If the Graph token lacks the required scope.
@@ -526,7 +529,7 @@ async def revoke_user_consent(
         sp_data = sp_resp.json()
         sp_values = sp_data.get("value", [])
         if not sp_values:
-            return False  # Service principal not found — no consent exists
+            return "not_found"
 
         sp_id = sp_values[0]["id"]
 
@@ -552,9 +555,16 @@ async def revoke_user_consent(
 
         grants = grants_resp.json().get("value", [])
 
-        # Step 3: Delete only the user's own grants (consentType=Principal)
+        if not grants:
+            return "not_found"
+
+        # Step 3: Try to delete user-level grants (consentType=Principal)
         deleted = False
+        has_admin_grants = False
         for grant in grants:
+            if grant.get("consentType") == "AllPrincipals":
+                has_admin_grants = True
+                continue
             if grant.get("consentType") == "Principal" and grant.get("principalId") == user_id:
                 del_url = f"{graph_base}/oauth2PermissionGrants/{grant['id']}"
                 del_resp = await client.delete(del_url, headers=headers)
@@ -572,7 +582,11 @@ async def revoke_user_consent(
                         status_code=del_resp.status_code,
                     )
 
-    return deleted
+        if deleted:
+            return "deleted"
+        if has_admin_grants:
+            return "admin_only"
+        return "not_found"
 
 
 def build_incremental_consent_url(

@@ -963,7 +963,7 @@ class TestRevokeUserConsent:
 
     @pytest.mark.asyncio
     async def test_revoke_success(self, _mock_settings):
-        """Should delete the user's consent grant and return True."""
+        """Should delete the user's consent grant and return 'deleted'."""
         sp_resp = MagicMock(status_code=200, json=lambda: {"value": [{"id": SP_OBJECT_ID}]})
         grants_resp = MagicMock(
             status_code=200,
@@ -992,12 +992,12 @@ class TestRevokeUserConsent:
                 user_id=USER_OID,
             )
 
-        assert result is True
+        assert result == "deleted"
         mock_client.delete.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_revoke_skips_admin_consent(self, _mock_settings):
-        """Should skip grants with consentType=AllPrincipals (admin consent)."""
+        """Should return 'admin_only' when only AllPrincipals grants exist."""
         sp_resp = MagicMock(status_code=200, json=lambda: {"value": [{"id": SP_OBJECT_ID}]})
         grants_resp = MagicMock(
             status_code=200,
@@ -1025,7 +1025,7 @@ class TestRevokeUserConsent:
                 user_id=USER_OID,
             )
 
-        assert result is False
+        assert result == "admin_only"
         mock_client.delete.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1058,12 +1058,12 @@ class TestRevokeUserConsent:
                 user_id=USER_OID,
             )
 
-        assert result is False
+        assert result == "not_found"
         mock_client.delete.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_revoke_no_service_principal(self, _mock_settings):
-        """Should return False when service principal not found."""
+        """Should return 'not_found' when service principal not found."""
         sp_resp = MagicMock(status_code=200, json=lambda: {"value": []})
 
         mock_client = AsyncMock()
@@ -1077,7 +1077,7 @@ class TestRevokeUserConsent:
                 user_id=USER_OID,
             )
 
-        assert result is False
+        assert result == "not_found"
 
     @pytest.mark.asyncio
     async def test_revoke_graph_403_raises(self, _mock_settings):
