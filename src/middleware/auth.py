@@ -658,7 +658,8 @@ async def _resolve_service_principal(
         sp_values = sp_resp.json().get("value", [])
         if not sp_values:
             return None
-        return sp_values[0]["id"]
+        sp_id: str = sp_values[0]["id"]
+        return sp_id
 
 
 async def delete_service_principal(graph_token: str) -> bool:
