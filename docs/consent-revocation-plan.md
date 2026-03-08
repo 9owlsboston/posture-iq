@@ -404,6 +404,7 @@ three structured actions:
 |--------|---------------|----------------|--------|
 | `delete_sp` | `DELETE /servicePrincipals/{id}` | `Application.ReadWrite.All` | Fully removes the app from the tenant |
 | `disable_sp` | `PATCH /servicePrincipals/{id}` `{accountEnabled: false}` | `Application.ReadWrite.All` | Blocks sign-in without deleting (reversible) |
+| `enable_sp` | `PATCH /servicePrincipals/{id}` `{accountEnabled: true}` | `Application.ReadWrite.All` | Re-enables sign-in after disable (shown inline after disable) |
 | `manual` | N/A (opens browser) | None | User navigates to myapplications.microsoft.com |
 
 The SPA renders these as a modal with styled buttons. Destructive actions

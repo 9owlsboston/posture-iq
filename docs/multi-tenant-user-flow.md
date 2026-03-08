@@ -388,7 +388,8 @@ the SPA shows a modal:
 | Option | Action | Effect | Reversible? |
 |--------|--------|--------|------------|
 | **Remove completely** | `POST /auth/revoke-consent?action=delete_sp` | `DELETE /servicePrincipals/{id}` — fully removes SecPostureIQ from the tenant | Yes (re-consent) |
-| **Disable sign-in** | `POST /auth/revoke-consent?action=disable_sp` | `PATCH /servicePrincipals/{id}` with `accountEnabled=false` — blocks sign-in | Yes (re-enable in Entra ID) |
+| **Disable sign-in** | `POST /auth/revoke-consent?action=disable_sp` | `PATCH /servicePrincipals/{id}` with `accountEnabled=false` — blocks sign-in | Yes (inline **Enable sign-in** button or Entra ID) |
+| **Enable sign-in** | `POST /auth/revoke-consent?action=enable_sp` | `PATCH /servicePrincipals/{id}` with `accountEnabled=true` — re-enables sign-in | N/A |
 | **Do it manually** | Opens browser | Navigate to myapplications.microsoft.com → right-click SecPostureIQ → Remove | N/A |
 
 > **Note:** "Remove completely" and "Disable sign-in" require
@@ -398,6 +399,8 @@ the SPA shows a modal:
 ### What happens next
 
 - After deletion or disabling, all users in the tenant lose access.
+- After disabling, an inline **Enable sign-in** button is shown in the
+  chat to re-enable immediately without leaving the app.
 - If Alice (or another admin) wants to re-enable, they can:
   - **After delete:** Sign in again — triggers the consent prompt.
   - **After disable:** Go to Entra ID → Enterprise Applications →

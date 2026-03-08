@@ -314,7 +314,8 @@ consent on first sign-in. SecPostureIQ provides self-service consent management:
        (`DELETE /servicePrincipals/{id}`). Fully revokes access for all users.
     2. **Disable sign-in** — Disables the service principal
        (`PATCH /servicePrincipals/{id}` with `accountEnabled=false`). Blocks
-       sign-in for all users. Reversible from Entra ID.
+       sign-in for all users. An inline **Enable sign-in** button appears
+       immediately after to reverse this action.
     3. **Do it manually** — Opens `myapplications.microsoft.com` in a new tab.
 - **`GET /config`** — Public endpoint returning `{ multi_tenant_enabled, hosting_tenant_id }`
   so the SPA can determine whether to show external-tenant features.
