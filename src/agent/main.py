@@ -30,6 +30,7 @@ from copilot import (
     ToolResult,
 )
 from copilot.generated.session_events import SessionEventType
+from copilot.types import CopilotClientOptions
 
 from src.agent.config import settings
 from src.agent.system_prompt import SYSTEM_PROMPT
@@ -66,7 +67,7 @@ async def _acquire_graph_token_interactive() -> str:
         return ""
 
     try:
-        import msal  # noqa: PLC0415
+        import msal  # type: ignore[import-untyped]  # noqa: PLC0415
     except ImportError:
         logger.warning("graph_auth.skipped", reason="msal not installed")
         return ""
@@ -425,7 +426,7 @@ class SecPostureIQAgent:
 
     async def start_client(self) -> CopilotClient:
         """Create and start the CopilotClient (launches the runtime process)."""
-        opts = {}
+        opts: CopilotClientOptions = {}
         if os.environ.get("GITHUB_TOKEN"):
             opts["github_token"] = os.environ["GITHUB_TOKEN"]
         self._client = CopilotClient(opts or None)
