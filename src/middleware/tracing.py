@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import functools
+import logging
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable, Generator
@@ -83,10 +84,20 @@ def setup_tracing() -> None:
         try:
             from azure.monitor.opentelemetry import configure_azure_monitor
 
-            configure_azure_monitor(
-                connection_string=conn_string,
-                enable_live_metrics=True,
-            )
+            # Suppress "Exporter is missing a valid region" warnings from
+            # the statsbeat manager — a known timing issue in the SDK where
+            # the exporter's _region isn't populated yet when statsbeat
+            # initializes.  Tracing itself works fine.
+            _statsbeat_logger = logging.getLogger("azure.monitor.opentelemetry.exporter.statsbeat")
+            _prev_level = _statsbeat_logger.level
+            _statsbeat_logger.setLevel(logging.ERROR)
+            try:
+                configure_azure_monitor(
+                    connection_string=conn_string,
+                    enable_live_metrics=True,
+                )
+            finally:
+                _statsbeat_logger.setLevel(_prev_level)
             logger.info("tracing.setup.complete", target="azure_app_insights")
         except ImportError:
             logger.warning(
