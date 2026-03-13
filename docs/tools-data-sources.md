@@ -105,6 +105,12 @@ category_percentage = (sum of achieved scores in category) / (sum of max scores 
 - Critical gaps flagged when tier is `Tier1`/`MandatoryTier` or `max_score ≥ 5`
 - Status: 🟢 ≥ 70% · 🟡 ≥ 40% · 🔴 < 40%
 
+**Web chat display** (`_format_defender` in `chat.py`):
+- Overall coverage percentage with status icon
+- Per-workload table: coverage %, controls (achieved/total), score (achieved/max), status
+- Per-workload gap lists
+- Top-level critical gaps (up to 10)
+
 ### Scoring — Agent-Computed (No Direct Portal Equivalent)
 
 The Defender portal does **not** show a single "Defender coverage percentage". The agent **computes** this metric from `SecureScoreControlProfiles`:
@@ -159,6 +165,12 @@ The Defender portal does **not** show a single "Defender coverage percentage". T
 - Classifies each matching profile to a canonical component
 - Computes per-component and overall coverage percentage
 - Falls back to `SecureScoreControlProfiles` analysis when direct Purview endpoints return 403
+
+**Web chat display** (`_format_purview` in `chat.py`):
+- Overall coverage percentage with status icon and total gap count
+- Per-component table: status, controls (achieved/total), score (achieved/max), gap count
+- Per-component gap details
+- Top-level critical gaps (up to 10)
 
 ### Scoring — Agent-Computed (No Direct Portal Equivalent)
 
@@ -303,6 +315,12 @@ DLP + labels + retention alone should reach 50-65%. Adding auto-labeling and Ins
 - **SSO & App Registrations:** General app registration hygiene
 
 **Note:** This tool evaluates the same identity controls that feed the **Identity Secure Score** in the Entra portal, but reports them in the context of SecPostureIQ's own scoring model (green ≥ 70% / yellow ≥ 40% / red < 40%).
+
+**Web chat display** (`_format_entra` in `chat.py`):
+- Overall coverage percentage with status icon and total gap count
+- Per-component sections with status heading and component-specific detail metrics (e.g., total policies, active policies, legacy auth blocked, permanent Global Admins, risky users count, reviews configured)
+- Per-component gaps with warning icons
+- Critical gaps section with 🚨 emphasis
 
 ### Scoring — Agent-Computed Heuristics (Not from Microsoft)
 

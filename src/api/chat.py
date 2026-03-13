@@ -251,12 +251,24 @@ def _format_defender(data: dict[str, Any]) -> str:
         lines.append(f"**Overall Coverage**: {icon} {overall:.0f}%\n")
     workloads = data.get("workloads", {})
     if workloads:
-        lines.append("| Workload | Coverage | Status |")
-        lines.append("| --- | --- | --- |")
+        lines.append("| Workload | Coverage | Controls | Score | Status |")
+        lines.append("| --- | --- | --- | --- | --- |")
         for wl, info in workloads.items():
             cov = info.get("coverage_pct") or info.get("coverage", 0)
             status = "🟢" if cov >= 80 else ("🟡" if cov >= 60 else "🔴")
-            lines.append(f"| {wl} | {cov}% | {status} |")
+            details = info.get("details", {})
+            achieved = details.get("achieved_controls", "?")
+            total = details.get("total_controls", "?")
+            achieved_score = details.get("achieved_score", "?")
+            max_score = details.get("max_score", "?")
+            lines.append(f"| {wl} | {cov}% | {achieved}/{total} | {achieved_score}/{max_score} | {status} |")
+        # Per-workload gaps
+        for wl, info in workloads.items():
+            wl_gaps = info.get("gaps", [])
+            if wl_gaps:
+                lines.append(f"\n**{wl}** — {len(wl_gaps)} gap(s)\n")
+                for g in wl_gaps:
+                    lines.append(f"- {g}")
     gaps = data.get("critical_gaps") or data.get("gaps", [])
     if gaps:
         lines.append("\n### Critical Gaps\n")
@@ -271,18 +283,33 @@ def _format_purview(data: dict[str, Any]) -> str:
     if overall is not None:
         icon = "🟢" if overall >= 70 else ("🟡" if overall >= 40 else "🔴")
         lines.append(f"**Overall Coverage**: {icon} {overall:.0f}%\n")
+    total_gaps = data.get("total_gaps")
+    if total_gaps is not None:
+        lines.append(f"**Total Gaps**: {total_gaps}\n")
     # Tool returns "components" dict, not "policies"
     components = data.get("components") or data.get("policies", {})
     if components:
-        lines.append("| Component | Status | Gaps |")
-        lines.append("| --- | --- | --- |")
+        lines.append("| Component | Status | Controls | Score | Gaps |")
+        lines.append("| --- | --- | --- | --- | --- |")
         for name, info in components.items():
             status = info.get("status", "unknown")
             icon = "🟢" if status == "green" else ("🟡" if status == "yellow" else "🔴")
             gap_list = info.get("gaps", [])
-            lines.append(f"| {name} | {icon} {status} | {len(gap_list)} |")
-            for g in gap_list:
-                lines.append(f"  - {g}")
+            details = info.get("details", {})
+            achieved = details.get("achieved_controls", "?")
+            total = details.get("total_controls", "?")
+            achieved_score = details.get("achieved_score", "?")
+            max_score = details.get("max_score", "?")
+            score_col = f"{achieved_score}/{max_score}" if achieved_score != "?" else ""
+            ctrl_col = f"{achieved}/{total}" if achieved != "?" else ""
+            lines.append(f"| {name} | {icon} {status} | {ctrl_col} | {score_col} | {len(gap_list)} |")
+        # Per-component gap details
+        for name, info in components.items():
+            gap_list = info.get("gaps", [])
+            if gap_list:
+                lines.append(f"\n**{name}** — {len(gap_list)} gap(s)\n")
+                for g in gap_list:
+                    lines.append(f"- {g}")
     # Tool returns "critical_gaps", not "gaps"
     gaps = data.get("critical_gaps") or data.get("gaps", [])
     if gaps:
@@ -298,6 +325,9 @@ def _format_entra(data: dict[str, Any]) -> str:
     if overall is not None:
         icon = "🟢" if overall >= 70 else ("🟡" if overall >= 40 else "🔴")
         lines.append(f"**Overall Coverage**: {icon} {overall:.0f}%\n")
+    total_gaps = data.get("total_gaps")
+    if total_gaps is not None:
+        lines.append(f"**Total Gaps**: {total_gaps}\n")
     # Tool returns "components", not "configuration"
     config = data.get("components") or data.get("configuration", {})
     if config:
@@ -309,9 +339,16 @@ def _format_entra(data: dict[str, Any]) -> str:
                     if status in (True, "enabled", "configured", "green")
                     else ("🟡" if status == "yellow" else "⚠️")
                 )
-                lines.append(f"- **{section}**: {icon} {status}")
+                lines.append(f"\n### {icon} {section} — {status}\n")
+                # Surface component-specific details
+                details = info.get("details", {})
+                for dk, dv in details.items():
+                    label = dk.replace("_", " ").title()
+                    if isinstance(dv, bool):
+                        dv = "Yes" if dv else "No"
+                    lines.append(f"- **{label}**: {dv}")
                 for g in info.get("gaps", []):
-                    lines.append(f"  - {g}")
+                    lines.append(f"- ⚠️ {g}")
     # Tool returns "critical_gaps", not "risk_flags"
     risks = data.get("critical_gaps") or data.get("risk_flags", [])
     if risks:
