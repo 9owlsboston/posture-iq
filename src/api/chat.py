@@ -187,6 +187,9 @@ def _format_secure_score(data: dict[str, Any]) -> str:
     if pct is not None:
         icon = "🟢" if pct >= 80 else ("🟡" if pct >= 60 else "🔴")
         lines.append(f"**Percentage**: {icon} {pct:.0f}%")
+    profiles_assessed = data.get("profiles_assessed", 0)
+    if profiles_assessed:
+        lines.append(f"**Control Profiles Assessed**: {profiles_assessed}")
     # trend_30d is a list of {date, score, max_score} dicts
     trend = data.get("trend_30d") or data.get("trend")
     if isinstance(trend, list) and len(trend) >= 2:
@@ -201,6 +204,33 @@ def _format_secure_score(data: dict[str, Any]) -> str:
         lines.append("| --- | --- | --- |")
         for name, info in cats.items():
             lines.append(f"| {name} | {info.get('score', '?')} | {info.get('max_score', info.get('max', '?'))} |")
+    # Control profiles detail — grouped by category
+    control_profiles = data.get("control_profiles", [])
+    if control_profiles:
+        # Group active (non-deprecated) profiles by category
+        by_cat: dict[str, list[dict[str, Any]]] = {}
+        deprecated_count = 0
+        for cp in control_profiles:
+            if cp.get("deprecated"):
+                deprecated_count += 1
+                continue
+            cat = cp.get("category", "Unknown")
+            by_cat.setdefault(cat, []).append(cp)
+
+        lines.append("\n### Control Profiles\n")
+        if deprecated_count:
+            lines.append(f"*{deprecated_count} deprecated profile(s) hidden*\n")
+        for cat_name in sorted(by_cat):
+            cat_profiles = sorted(by_cat[cat_name], key=lambda p: p.get("max_score", 0), reverse=True)
+            lines.append(f"\n**{cat_name}** ({len(cat_profiles)} controls)\n")
+            lines.append("| Control | Service | Tier | Max Score |")
+            lines.append("| --- | --- | --- | --- |")
+            for cp in cat_profiles:
+                title = cp.get("title", cp.get("id", "?"))
+                service = cp.get("service", "")
+                tier = cp.get("tier", "")
+                ms = cp.get("max_score", 0)
+                lines.append(f"| {title} | {service} | {tier} | {ms} |")
     # industry_comparison is a dict with tenant_score, industry_avg, delta, basis
     comp = data.get("industry_comparison") or data.get("comparison")
     if isinstance(comp, dict):

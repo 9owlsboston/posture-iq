@@ -248,10 +248,15 @@ def _compute_status(
 # ── Control profile max-score fetcher ──────────────────────────────────
 
 
-async def _fetch_profile_max_scores(client: Any) -> dict[str, float] | None:
-    """Fetch secureScoreControlProfiles and build a control_name → max_score map.
+async def _fetch_profile_max_scores(
+    client: Any,
+) -> tuple[dict[str, float] | None, list[dict[str, Any]]]:
+    """Fetch secureScoreControlProfiles and return lookup + detail list.
 
-    Returns None if the fetch fails (caller falls back to heuristic scoring).
+    Returns:
+        A tuple of (lookup, profiles_detail) where *lookup* maps
+        control_name → max_score (None on failure) and *profiles_detail*
+        is a list of per-control dicts with key fields for display.
     """
     try:
         from kiota_abstractions.base_request_configuration import RequestConfiguration
@@ -264,19 +269,31 @@ async def _fetch_profile_max_scores(client: Any) -> dict[str, float] | None:
         profiles = response.value if response and response.value else []
         if not profiles:
             logger.warning("tool.secure_score.profiles_empty")
-            return None
+            return None, []
 
         lookup: dict[str, float] = {}
+        details: list[dict[str, Any]] = []
         for p in profiles:
             ctrl_id = getattr(p, "id", None) or ""
             ms = getattr(p, "max_score", None) or 0.0
             if ctrl_id:
                 lookup[ctrl_id] = float(ms)
+                details.append(
+                    {
+                        "id": ctrl_id,
+                        "title": getattr(p, "title", None) or ctrl_id,
+                        "category": getattr(p, "control_category", None) or "Unknown",
+                        "max_score": float(ms),
+                        "tier": getattr(p, "tier", None) or "",
+                        "deprecated": bool(getattr(p, "deprecated", False)),
+                        "service": getattr(p, "service", None) or "",
+                    }
+                )
         logger.info("tool.secure_score.profiles_fetched", count=len(lookup))
-        return lookup
+        return lookup, details
     except Exception as e:
         logger.warning("tool.secure_score.profiles_fetch_error", error=str(e))
-        return None
+        return None, []
 
 
 # ── Mock data (development fallback) ──────────────────────────────────
@@ -392,7 +409,7 @@ async def query_secure_score(tenant_id: str = "", graph_token: str = "") -> dict
             return result
 
         # ── Fetch control profiles for accurate per-category max scores
-        profile_max_scores = await _fetch_profile_max_scores(client)
+        profile_max_scores, control_profiles = await _fetch_profile_max_scores(client)
 
         # Latest snapshot is the current score
         latest = snapshots[0]
@@ -416,6 +433,8 @@ async def query_secure_score(tenant_id: str = "", graph_token: str = "") -> dict
             "max_score": round(max_score, 1),
             "score_percentage": score_pct,
             "categories": categories,
+            "control_profiles": control_profiles,
+            "profiles_assessed": len(control_profiles),
             "trend_30d": trend,
             "industry_comparison": industry,
             "assessed_at": datetime.now(UTC).isoformat(),

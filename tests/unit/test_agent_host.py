@@ -41,16 +41,13 @@ def _make_invocation(
     arguments: dict[str, Any] | None = None,
     tool_name: str = "test_tool",
 ) -> ToolInvocation:
-    """Create a minimal ToolInvocation for testing.
-
-    ToolInvocation is a TypedDict, so we construct it as a plain dict.
-    """
-    return {
-        "session_id": "test-session",
-        "tool_call_id": "call-001",
-        "tool_name": tool_name,
-        "arguments": arguments,
-    }
+    """Create a minimal ToolInvocation for testing."""
+    return ToolInvocation(
+        session_id="test-session",
+        tool_call_id="call-001",
+        tool_name=tool_name,
+        arguments=arguments,
+    )
 
 
 def _make_session_event(
@@ -378,6 +375,7 @@ class TestSecPostureIQAgentCreateSession:
         mock_session.on.assert_called_once_with(agent._handle_session_event)
         assert agent._event_unsubscribe is unsub_fn
 
+    @patch.dict("os.environ", {"COPILOT_USE_BUILTIN_MODELS": ""}, clear=False)
     @patch("src.agent.main.settings")
     async def test_wires_azure_provider_when_configured(self, mock_settings):
         mock_settings.azure_openai_endpoint = "https://my-openai.openai.azure.com/"
@@ -418,6 +416,7 @@ class TestSecPostureIQAgentCreateSession:
         config_arg = mock_client.create_session.call_args[0][0]
         assert "provider" not in config_arg
 
+    @patch.dict("os.environ", {"COPILOT_USE_BUILTIN_MODELS": ""}, clear=False)
     @patch("src.agent.main.settings")
     async def test_azure_provider_without_api_key_uses_managed_identity(self, mock_settings):
         mock_settings.azure_openai_endpoint = "https://my-openai.openai.azure.com/"

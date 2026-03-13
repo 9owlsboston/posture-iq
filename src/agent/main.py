@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import signal
 import sys
 from typing import Any
@@ -21,6 +22,7 @@ import structlog
 from copilot import (
     CopilotClient,
     CopilotSession,
+    PermissionHandler,
     SessionConfig,
     SessionEvent,
     Tool,
@@ -46,51 +48,79 @@ from src.tools.secure_score import query_secure_score
 
 logger = structlog.get_logger(__name__)
 
+# ── Graph Token (shared across tool handlers) ─────────────────────────────
+# Acquired via device code flow at CLI startup; passed to Graph-dependent tools.
+_graph_token: str = ""
+
+
+async def _acquire_graph_token_interactive() -> str:
+    """Acquire a delegated Graph API token via MSAL device code flow.
+
+    Uses the same Entra app registration as the web app's OAuth2 flow.
+    Returns an empty string if credentials are missing or the user declines.
+    """
+    client_id = settings.oauth_client_id
+    tenant_id = settings.azure_tenant_id
+    if not client_id or not tenant_id:
+        logger.info("graph_auth.skipped", reason="No AZURE_CLIENT_ID or AZURE_TENANT_ID")
+        return ""
+
+    try:
+        import msal  # noqa: PLC0415
+    except ImportError:
+        logger.warning("graph_auth.skipped", reason="msal not installed")
+        return ""
+
+    scopes = [f"https://graph.microsoft.com/{s}" for s in settings.graph_scope_list]
+    authority = f"https://login.microsoftonline.com/{tenant_id}"
+
+    app = msal.PublicClientApplication(client_id, authority=authority)
+
+    # Try cached token first
+    accounts = app.get_accounts()
+    if accounts:
+        result = app.acquire_token_silent(scopes, account=accounts[0])
+        if result and "access_token" in result:
+            logger.info("graph_auth.cached", tenant=tenant_id)
+            return result["access_token"]
+
+    # Device code flow
+    flow = app.initiate_device_flow(scopes=scopes)
+    if "user_code" not in flow:
+        logger.error("graph_auth.device_flow_failed", error=flow.get("error_description", "unknown"))
+        return ""
+
+    print("\n🔐 To connect to your real M365 tenant, authenticate via browser:")
+    print(f"   {flow['message']}")
+    print("   (Press Ctrl+C to skip and use mock data)\n")
+
+    try:
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: app.acquire_token_by_device_flow(flow, timeout=120)
+        )
+    except KeyboardInterrupt:
+        print("\n   Skipped — using mock data.\n")
+        return ""
+
+    if "access_token" in result:
+        logger.info("graph_auth.success", tenant=tenant_id)
+        return result["access_token"]
+
+    logger.warning("graph_auth.failed", error=result.get("error_description", "unknown"))
+    return ""
+
 
 # ── SDK Compatibility ──────────────────────────────────────────────────────
-# The Copilot SDK's ToolResult constructor differs between versions.
-# Older versions accept kwargs (textResultForLlm=...); newer versions
-# only accept dict-style assignment.  This helper works with both.
 
 
-def _tool_result(text: str) -> Any:
-    """Create a ToolResult with the LLM text, compatible across SDK versions.
-
-    SDK v0.1.x uses dict-style (ToolResult is a dict subclass).
-    Newer versions use a pydantic model with ``text_result_for_llm`` attribute.
-    """
-    # Try dict-style (v0.1.x)
-    try:
-        return ToolResult(textResultForLlm=text)
-    except TypeError:
-        pass
-
-    # Try pydantic-style (newer SDK)
-    try:
-        return ToolResult(text_result_for_llm=text)
-    except TypeError:
-        pass
-
-    # Final fallback: construct empty and set via setattr
-    r: Any = ToolResult()
-    r.textResultForLlm = text
-    return r
+def _tool_result(text: str) -> ToolResult:
+    """Create a ToolResult with the LLM text."""
+    return ToolResult(text_result_for_llm=text)
 
 
 def _get_tool_result_text(result: Any) -> str:
-    """Extract the LLM text from a ToolResult across SDK versions."""
-    r: Any = result
-    # Dict-style (v0.1.x)
-    try:
-        return r["textResultForLlm"]
-    except (TypeError, KeyError):
-        pass
-    # Attribute-style (newer SDK)
-    for attr in ("textResultForLlm", "text_result_for_llm"):
-        val = getattr(r, attr, None)
-        if val is not None:
-            return val
-    return ""
+    """Extract the LLM text from a ToolResult."""
+    return getattr(result, "text_result_for_llm", "") or ""
 
 
 # ── Tool Handler Adapters ──────────────────────────────────────────────────
@@ -101,33 +131,33 @@ def _get_tool_result_text(result: Any) -> str:
 
 async def _handle_secure_score(invocation: ToolInvocation) -> ToolResult:
     """Adapter: query_secure_score → ToolResult."""
-    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
+    args = invocation.arguments or {}
     tenant_id = args.get("tenant_id", "")
-    result = await query_secure_score(tenant_id=tenant_id)
+    result = await query_secure_score(tenant_id=tenant_id, graph_token=_graph_token)
     return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_defender_coverage(invocation: ToolInvocation) -> ToolResult:
     """Adapter: assess_defender_coverage → ToolResult."""
-    result = await assess_defender_coverage()
+    result = await assess_defender_coverage(graph_token=_graph_token)
     return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_purview_policies(invocation: ToolInvocation) -> ToolResult:
     """Adapter: check_purview_policies → ToolResult."""
-    result = await check_purview_policies()
+    result = await check_purview_policies(graph_token=_graph_token)
     return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_entra_config(invocation: ToolInvocation) -> ToolResult:
     """Adapter: get_entra_config → ToolResult."""
-    result = await get_entra_config()
+    result = await get_entra_config(graph_token=_graph_token)
     return _tool_result(json.dumps(result, indent=2, default=str))
 
 
 async def _handle_remediation_plan(invocation: ToolInvocation) -> ToolResult:
     """Adapter: generate_remediation_plan → ToolResult."""
-    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
+    args = invocation.arguments or {}
     assessment_context = args.get("assessment_context", "{}")
     result = await generate_remediation_plan(assessment_context=assessment_context)
     return _tool_result(json.dumps(result, indent=2, default=str))
@@ -135,7 +165,7 @@ async def _handle_remediation_plan(invocation: ToolInvocation) -> ToolResult:
 
 async def _handle_adoption_scorecard(invocation: ToolInvocation) -> ToolResult:
     """Adapter: create_adoption_scorecard → ToolResult."""
-    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
+    args = invocation.arguments or {}
     assessment_context = args.get("assessment_context", "{}")
     result = await create_adoption_scorecard(assessment_context=assessment_context)
     return _tool_result(json.dumps(result, indent=2, default=str))
@@ -143,7 +173,7 @@ async def _handle_adoption_scorecard(invocation: ToolInvocation) -> ToolResult:
 
 async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
     """Adapter: get_green_playbook → ToolResult."""
-    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
+    args = invocation.arguments or {}
     gaps_raw = args.get("gaps", [])
     workload_areas_raw = args.get("workload_areas", [])
     # Ensure lists (the SDK may pass JSON strings)
@@ -158,7 +188,7 @@ async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
 
 async def _handle_fabric_telemetry(invocation: ToolInvocation) -> ToolResult:
     """Adapter: push_posture_snapshot → ToolResult."""
-    args = invocation.get("arguments") or {}  # type: ignore[attr-defined]
+    args = invocation.arguments or {}
     result = await push_posture_snapshot(
         tenant_id=args.get("tenant_id", ""),
         secure_score_current=float(args.get("secure_score_current", 0)),
@@ -395,7 +425,10 @@ class SecPostureIQAgent:
 
     async def start_client(self) -> CopilotClient:
         """Create and start the CopilotClient (launches the runtime process)."""
-        self._client = CopilotClient()
+        opts = {}
+        if os.environ.get("GITHUB_TOKEN"):
+            opts["github_token"] = os.environ["GITHUB_TOKEN"]
+        self._client = CopilotClient(opts or None)
         await self._client.start()
 
         state = self._client.get_state()
@@ -419,10 +452,14 @@ class SecPostureIQAgent:
                 "content": SYSTEM_PROMPT,
             },
             "streaming": True,
+            "on_permission_request": PermissionHandler.approve_all,
         }
 
-        # Wire Azure OpenAI as the model provider if configured
-        if settings.azure_openai_endpoint:
+        # Wire Azure OpenAI as the model provider if configured.
+        # Note: BYOK provider requires the Copilot runtime to support the
+        # provider type.  If COPILOT_USE_BUILTIN_MODELS is set, skip the
+        # custom provider and use Copilot's built-in model catalog instead.
+        if settings.azure_openai_endpoint and not os.environ.get("COPILOT_USE_BUILTIN_MODELS"):
             session_config["provider"] = {
                 "type": "azure",
                 "base_url": settings.azure_openai_endpoint,
@@ -432,6 +469,17 @@ class SecPostureIQAgent:
             }
             if settings.azure_openai_api_key:
                 session_config["provider"]["api_key"] = settings.azure_openai_api_key
+            else:
+                # No API key → use Azure AD token (for disableLocalAuth=true resources)
+                try:
+                    from azure.identity import DefaultAzureCredential
+
+                    credential = DefaultAzureCredential()
+                    token = credential.get_token("https://cognitiveservices.azure.com/.default")
+                    session_config["provider"]["bearer_token"] = token.token
+                    logger.info("agent.provider.auth", method="bearer_token")
+                except Exception as exc:
+                    logger.warning("agent.provider.auth_fallback", error=str(exc))
 
             session_config["model"] = settings.azure_openai_deployment
             logger.info(
@@ -637,7 +685,7 @@ async def run_cli(agent: SecPostureIQAgent) -> None:
 
         # send_and_wait blocks until the turn is complete;
         # streaming deltas are printed via the event handler.
-        response = agent.send_message(user_input)
+        response = await agent.send_message(user_input)
 
         if response is None:
             print("[No response received — check logs for errors]")
@@ -655,6 +703,14 @@ async def main() -> None:
         environment=settings.environment,
         log_level=settings.log_level,
     )
+
+    # Acquire a delegated Graph token so tools query the real tenant
+    global _graph_token  # noqa: PLW0603
+    _graph_token = await _acquire_graph_token_interactive()
+    if _graph_token:
+        print("✅ Authenticated — tools will query your real M365 tenant.\n")
+    else:
+        print("ℹ️  No Graph token — tools will return mock data.\n")
 
     agent = SecPostureIQAgent()
 

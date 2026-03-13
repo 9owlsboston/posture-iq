@@ -20,6 +20,7 @@ This document describes the 8 tools the SecPostureIQ agent provides, what data t
 - Current score and max score (e.g., 127.2 / 271.0)
 - Percentage (score ÷ max)
 - Category breakdown: **Identity, Data, Device, Apps, Infrastructure** — each with earned vs. max points and percentage
+- Control profiles: per-control detail list (id, title, category, max_score, tier, service, deprecated flag) and total count (`profiles_assessed`)
 - 30-day trend (score delta)
 - Industry comparison (vs. similar-size tenants or same-industry tenants)
 
@@ -736,7 +737,7 @@ The Purview portal's "Compliance Posture" uses **Microsoft Purview Posture Manag
 
 ### AI-1: Increase `$top` to 999 for `secureScoreControlProfiles` ✅ Fixed
 
-**Problem:** The `_fetch_profile_max_scores()` function in `secure_score.py` uses `$top=200`, but the tenant has **440 control profiles**. This truncates the profile list, causing incorrect `max_score` totals for categories with many controls (especially Apps: agent shows 60.7% vs. portal's 36.22%).
+**Problem:** The `_fetch_profile_max_scores()` function in `secure_score.py` originally used `$top=200`, but the tenant has **440 control profiles**. This truncated the profile list, causing incorrect `max_score` totals for categories with many controls (especially Apps: agent shows 60.7% vs. portal's 36.22%). Fixed to `$top=999`; the function now also returns per-control detail (title, category, tier, service) for display in the web formatter.
 
 **Root cause:** The same issue exists in `defender_coverage.py` and `purview_policies.py` — all use `$top=200`.
 
