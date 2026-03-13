@@ -380,6 +380,13 @@ The Entra tool queries direct Graph API endpoints (not `SecureScoreControlProfil
 
 **Fallback:** When Azure OpenAI is not configured, returns built-in mock remediation steps.
 
+**Web chat display** (`_format_remediation` in `chat.py`):
+- Total steps count, estimated days to green, estimated score improvement
+- Each step rendered as a headed subsection with priority icon (🔴 P0 / 🟡 P1 / 🟢 P2)
+- Per-step: description, score impact, effort, confidence level with icon, matched GTG offer (name, ID, duration, delivery)
+- PowerShell/CLI remediation scripts in code blocks
+- Tool-provided disclaimer (falls back to generic AI disclaimer if absent)
+
 ### Scoring — Agent-Computed (LLM-Generated)
 
 | Metric | Source | Definition |
@@ -422,6 +429,14 @@ This is a **pure computation tool** — it does not call any external APIs. It d
 | **Sub-workload scores** | Pass-through | Taken directly from tools 2–4 output. |
 | **Critical gaps** | Agent-aggregated | Collects all gaps from tools 2–4 with priority labels. |
 | **Overall scorecard** | Agent-formatted | Markdown table combining all workload statuses. **No external data.** |
+
+**Web chat display** (`_format_scorecard` in `chat.py`):
+- Prefers the tool's pre-built `scorecard_markdown` if available
+- Fallback rendering: overall adoption percentage with status icon, estimated days to green
+- Per-workload table: status icon, status label, adoption percentage
+- Sub-workload rows indented under each workload with their own status/percentage
+- Top 5 gaps list with priority labels and workload attribution
+- Tool-provided disclaimer
 
 > **All status thresholds (70%/40%) are agent-defined.** Microsoft does not define a "green/yellow/red" status for these workloads.
 
@@ -469,6 +484,13 @@ This is a **pure computation tool** — it does not call any external APIs. It d
 | **Impact on score** | Foundry IQ-defined | Estimated Secure Score point improvement (e.g., 8.0). Not a guarantee. |
 | **Offer recommendations** | Foundry IQ catalog | Workshop/engagement IDs mapped to gaps. |
 
+**Web chat display** (`_format_playbook` in `chat.py`):
+- Version, source, and matched/total area counts
+- Per-area headed subsection: remediation step checklist, effort and score impact summary
+- Per-area recommended offer with name, duration, and delivery mode
+- Per-area onboarding checklist rendered as task list (checkbox items)
+- Footer with total score impact and recommended offer IDs
+
 > **Playbook content is static** — it does not reflect the tenant's current state. It provides general remediation guidance per workload area.
 
 ---
@@ -497,6 +519,12 @@ This is a **pure computation tool** — it does not call any external APIs. It d
 | `estimated_days_to_green` | Computed from remediation effort estimates |
 | `top_gaps` | Top 5 anonymized gap descriptions |
 | `assessment_summary` | Free-text summary |
+
+**Web chat display** (`_format_fabric_snapshot` in `chat.py`):
+- Write status (✅ Written / ❌ Failed), destination, snapshot ID, schema version
+- Timestamp (if present)
+- Secure score percentage, gap count, estimated days to green
+- Validation errors (if any)
 
 **When to call:** After a full assessment cycle (tools 1–6) is complete, this tool persists the results for trend tracking.
 
