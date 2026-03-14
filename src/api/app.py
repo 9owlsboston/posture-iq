@@ -29,9 +29,11 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.responses import StreamingResponse
 
 from src.agent.config import settings
 from src.api.chat import ChatRequest, ChatResponse, handle_chat
+from src.api.chat_stream import stream_chat
 from src.middleware.audit_logger import (
     AUDIT_READER_ROLES,
     AuditLogger,
@@ -125,13 +127,7 @@ class VersionResponse(BaseModel):
 
 @app.get("/", include_in_schema=False)
 async def chat_ui() -> Response:
-    """Serve the chat UI at the root path.
-
-    When CHAT_MODE=llm, redirects to /chat-ui (Chainlit).
-    Otherwise serves the legacy index.html SPA.
-    """
-    if settings.use_llm_chat:
-        return RedirectResponse(url="/chat-ui", status_code=302)
+    """Serve the chat UI (SPA) at the root path."""
     return FileResponse(str(_STATIC_DIR / "index.html"), media_type="text/html")
 
 
@@ -180,6 +176,30 @@ async def chat_endpoint(
         tenant_id=tenant_id,
         user_id=user_id,
         graph_token=graph_token,
+    )
+
+
+@app.post("/chat/stream")
+async def chat_stream_endpoint(
+    request: ChatRequest,
+    raw_request: Request,
+    token: str | None = Depends(oauth2_scheme),
+) -> StreamingResponse:
+    """Stream an LLM-powered chat response via Server-Sent Events.
+
+    Returns SSE events: tool_start, tool_result, token, done, error.
+    Falls back to the keyword-based /chat endpoint if LLM is unavailable.
+    """
+    graph_token = raw_request.headers.get("X-Graph-Token", "")
+
+    return StreamingResponse(
+        stream_chat(
+            message=request.message,
+            session_id=request.session_id,
+            graph_token=graph_token,
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
@@ -689,6 +709,7 @@ async def revoke_consent(
 class AppConfigResponse(BaseModel):
     multi_tenant_enabled: bool
     hosting_tenant_id: str
+    chat_mode: str
 
 
 @app.get("/config", response_model=AppConfigResponse)
@@ -696,11 +717,13 @@ async def app_config() -> AppConfigResponse:
     """Return public application configuration.
 
     The SPA uses this to determine whether to show external-tenant
-    features like the consent revocation button.
+    features like the consent revocation button, and which chat mode
+    to use (keyword vs llm).
     """
     return AppConfigResponse(
         multi_tenant_enabled=settings.multi_tenant_enabled,
         hosting_tenant_id=settings.azure_tenant_id,
+        chat_mode=settings.chat_mode,
     )
 
 

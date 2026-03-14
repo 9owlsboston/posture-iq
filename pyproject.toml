@@ -112,5 +112,6 @@ asyncio_mode = "auto"
 
 [tool.coverage.run]
 omit = [
-    "src/chainlit_app.py",  # Requires Chainlit runtime; covered by integration tests
+    "src/chainlit_app.py",   # Requires Chainlit runtime; covered by integration tests
+    "src/api/chat_stream.py",  # Requires Azure OpenAI; covered by integration tests
 ]

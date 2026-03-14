@@ -263,6 +263,15 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    .streaming-cursor {
+      display: inline-block;
+      color: var(--primary);
+      animation: blink 1s step-end infinite;
+      font-weight: bold;
+    }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
     /* ── Welcome ────────────────────────────────────────── */
     .welcome {
       max-width: 640px;
@@ -916,7 +925,8 @@
     let isProcessing = false;
     let accessToken = null;
     let currentUser = null;  // { user_id, email, name, tenant_id, scopes }
-    let appConfig = null;    // { multi_tenant_enabled, hosting_tenant_id }
+    let appConfig = null;    // { multi_tenant_enabled, hosting_tenant_id, chat_mode }
+    let chatMode = 'keyword'; // 'keyword' or 'llm'
 
     // ── Auth: Token Management ───────────────────────────
 
@@ -929,7 +939,10 @@
     async function fetchAppConfig() {
       try {
         const r = await fetch('/config');
-        if (r.ok) appConfig = await r.json();
+        if (r.ok) {
+          appConfig = await r.json();
+          chatMode = appConfig.chat_mode || 'keyword';
+        }
       } catch (e) {
         console.warn('Failed to fetch app config:', e);
       }
@@ -1304,6 +1317,20 @@
       addMessage('user', text);
       showTyping(true);
 
+      if (chatMode === 'llm') {
+        await sendMessageLLM(text);
+      } else {
+        await sendMessageKeyword(text);
+      }
+
+      showTyping(false);
+      isProcessing = false;
+      document.getElementById('sendBtn').disabled = false;
+      input.focus();
+    }
+
+    // ── Keyword mode: POST /chat (existing behaviour) ────
+    async function sendMessageKeyword(text) {
       try {
         const body = { message: text };
         if (sessionId) body.session_id = sessionId;
@@ -1312,8 +1339,6 @@
         if (accessToken) {
           headers['Authorization'] = `Bearer ${accessToken}`;
         }
-        // Send the Graph API access token so backend tools can query the
-        // real tenant instead of returning mock data.
         const graphToken = sessionStorage.getItem('graph_token');
         if (graphToken) {
           headers['X-Graph-Token'] = graphToken;
@@ -1329,26 +1354,181 @@
 
         if (r.ok) {
           sessionId = data.session_id || sessionId;
-
-          // Update data-source BEFORE rendering the message so the
-          // per-message badge and header badge stay in sync.
           if (data.data_source) {
             lastDataSource = data.data_source;
             updateDataSourceBadge(data.data_source);
           }
-
           addMessage('agent', data.response, data.tools_called);
         } else {
           addMessage('agent', `⚠️ Error: ${data.detail || data.error || 'Something went wrong'}`);
         }
       } catch (err) {
         addMessage('agent', `⚠️ Connection error: ${err.message}\n\nMake sure the server is running.`);
-      } finally {
-        showTyping(false);
-        isProcessing = false;
-        document.getElementById('sendBtn').disabled = false;
-        input.focus();
       }
+    }
+
+    // ── LLM mode: POST /chat/stream (SSE streaming) ──────
+    async function sendMessageLLM(text) {
+      try {
+        const body = { message: text };
+        if (sessionId) body.session_id = sessionId;
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+        const graphToken = sessionStorage.getItem('graph_token');
+        if (graphToken) {
+          headers['X-Graph-Token'] = graphToken;
+        }
+
+        const r = await fetch('/chat/stream', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          addMessage('agent', `⚠️ Error: ${err.detail || 'Something went wrong'}`);
+          return;
+        }
+
+        // Parse SSE events from the response body stream
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let toolsCalled = [];
+        let tokenBuf = '';
+        let msgDiv = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete SSE messages
+          let boundary;
+          while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+            const block = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+
+            let eventType = 'message';
+            let eventData = '';
+            for (const line of block.split('\n')) {
+              if (line.startsWith('event: ')) eventType = line.slice(7);
+              else if (line.startsWith('data: ')) eventData = line.slice(6);
+            }
+            if (!eventData) continue;
+
+            const payload = JSON.parse(eventData);
+
+            if (eventType === 'tool_start') {
+              showTyping(false);
+              // Show tool badge in a running message
+              if (!msgDiv) {
+                msgDiv = createStreamingMessage();
+              }
+              toolsCalled.push(payload.tool);
+              updateStreamingTools(msgDiv, toolsCalled);
+            } else if (eventType === 'tool_result') {
+              // Update tool badge with result status
+              if (msgDiv) {
+                updateToolStatus(msgDiv, payload.tool, payload.success);
+              }
+            } else if (eventType === 'token') {
+              showTyping(false);
+              if (!msgDiv) {
+                msgDiv = createStreamingMessage();
+              }
+              tokenBuf += payload.token;
+              updateStreamingContent(msgDiv, tokenBuf);
+            } else if (eventType === 'done') {
+              sessionId = payload.session_id || sessionId;
+              if (payload.data_source) {
+                lastDataSource = payload.data_source;
+                updateDataSourceBadge(payload.data_source);
+              }
+              // Finalise the message with full content
+              if (msgDiv) {
+                finaliseStreamingMessage(msgDiv, payload.response || tokenBuf, toolsCalled);
+              } else {
+                addMessage('agent', payload.response || tokenBuf, toolsCalled);
+              }
+            } else if (eventType === 'error') {
+              addMessage('agent', `⚠️ ${payload.message || 'An error occurred'}`);
+            }
+          }
+        }
+
+        // If no done event was received but we have content, show it
+        if (!msgDiv && tokenBuf) {
+          addMessage('agent', tokenBuf, toolsCalled);
+        }
+      } catch (err) {
+        addMessage('agent', `⚠️ Connection error: ${err.message}\n\nMake sure the server is running.`);
+      }
+    }
+
+    // ── Streaming message helpers ─────────────────────────
+    function createStreamingMessage() {
+      const welcome = document.getElementById('welcome');
+      if (welcome) welcome.style.display = 'none';
+
+      const container = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = 'message msg-agent';
+      div.innerHTML = `
+        <div class="msg-avatar">🛡️</div>
+        <div class="msg-content">
+          <div class="msg-role">SecPostureIQ</div>
+          <div class="msg-tools"></div>
+          <div class="msg-text"><span class="streaming-cursor">▊</span></div>
+        </div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+      return div;
+    }
+
+    function updateStreamingTools(div, tools) {
+      const toolsEl = div.querySelector('.msg-tools');
+      toolsEl.innerHTML = tools.map(t =>
+        `<span class="tool-badge" data-tool="${t}">⏳ ${t}</span>`
+      ).join('');
+      div.closest('.messages').scrollTop = div.closest('.messages').scrollHeight;
+    }
+
+    function updateToolStatus(div, tool, success) {
+      const badge = div.querySelector(`.tool-badge[data-tool="${tool}"]`);
+      if (badge) {
+        badge.textContent = (success ? '✅ ' : '❌ ') + tool;
+      }
+    }
+
+    function updateStreamingContent(div, content) {
+      const textEl = div.querySelector('.msg-text');
+      textEl.innerHTML = renderMarkdown(content) + '<span class="streaming-cursor">▊</span>';
+      div.closest('.messages').scrollTop = div.closest('.messages').scrollHeight;
+    }
+
+    function finaliseStreamingMessage(div, content, toolsCalled) {
+      const textEl = div.querySelector('.msg-text');
+      textEl.innerHTML = renderMarkdown(content);
+
+      // Add data-source badge
+      if (toolsCalled && toolsCalled.length) {
+        const roleEl = div.querySelector('.msg-role');
+        const cls = lastDataSource === 'live' ? 'live' : 'mock';
+        const label = lastDataSource === 'live' ? '● Live Data' : '● Mock Data';
+        roleEl.innerHTML += ` <span class="data-source-badge ${cls}" style="margin-left:8px;vertical-align:middle;">${label}</span>`;
+      }
+
+      // Replace tool badges with final ⚙️ style
+      const toolsEl = div.querySelector('.msg-tools');
+      toolsEl.innerHTML = toolsCalled.map(t =>
+        `<span class="tool-badge">⚙️ ${t}</span>`
+      ).join('');
     }
 
     function sendQuick(text) {
