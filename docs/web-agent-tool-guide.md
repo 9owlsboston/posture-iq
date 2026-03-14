@@ -174,3 +174,93 @@ The Secure Score of 141.7 breaks down across services:
 | **Total** | **141.7** | **33 controls** |
 
 The `AzureAD`, `EXO`, and `FORMS` controls (71.7 points) are assessed by the `entra_config` tool through direct Graph API calls rather than SecureScoreControlProfiles. This is by design — these controls map to Entra ID and Exchange configurations, not Defender workloads.
+
+---
+
+## Responsible AI (RAI) Middleware Architecture
+
+The agent enforces responsible AI through a **4-layer middleware pipeline** that applies to every user interaction. Each layer has a distinct role and is applied at a specific point in the request lifecycle.
+
+### RAI Pipeline Flow
+
+```
+User Input
+    │
+    ▼
+┌──────────────────────────────┐
+│ 1. Input Validation          │  src/middleware/input_validation.py
+│    - Length limits (3–5000)   │  Applied in: app.py (POST /chat, POST /chat/stream)
+│    - Character restrictions   │
+│    - Block control chars,     │
+│      zero-width, RTL override │
+│    → HTTP 400 if invalid      │
+└──────────────────────────────┘
+    │
+    ▼
+┌──────────────────────────────┐
+│ 2. Content Safety (Input)    │  src/middleware/content_safety.py
+│    - Azure AI Content Safety  │  Applied in: chat_stream.py (LLM path)
+│    - Hate, SelfHarm, Sexual,  │
+│      Violence detection       │
+│    - Block threshold: MEDIUM  │
+│    → SSE error event if       │
+│      blocked                  │
+└──────────────────────────────┘
+    │
+    ▼
+  LLM (Azure OpenAI GPT-4o)
+    │
+    ├── Tool Calls ──┐
+    │                 ▼
+    │   ┌──────────────────────────────┐
+    │   │ 3. PII Redaction             │  src/middleware/pii_redaction.py
+    │   │    - Tenant GUIDs → [TENANT] │  Applied in: chat_stream.py
+    │   │    - Emails/UPNs → [EMAIL]   │  + remediation_plan.py
+    │   │    - IP addresses → [IP]     │
+    │   │    Redacted BEFORE sending   │
+    │   │    tool results to the LLM   │
+    │   └──────────────────────────────┘
+    │                 │
+    │   ◄── Tool Results (redacted) ──┘
+    │
+    ▼  LLM composes final response
+    │
+    ▼
+┌──────────────────────────────┐
+│ 4. Content Safety (Output)   │  src/middleware/content_safety.py
+│    - Same Azure AI service    │  Applied in: chat_stream.py
+│    - Checks LLM response      │  + remediation_plan.py
+│    - Blocks harmful content   │
+│    → Safe fallback message    │
+└──────────────────────────────┘
+    │
+    ▼
+  User receives response
+```
+
+### RAI Components Detail
+
+| Component | File | Purpose | Applied Where |
+|---|---|---|---|
+| **Input Validation** | `src/middleware/input_validation.py` | Length limits, character-set restrictions, blocks control characters, zero-width chars, RTL overrides | `app.py` — both `POST /chat` and `POST /chat/stream` |
+| **Content Safety** | `src/middleware/content_safety.py` | Azure AI Content Safety service (Hate, SelfHarm, Sexual, Violence). Local heuristic fallback when service unavailable | `chat_stream.py` — user input + LLM output. Also `remediation_plan.py` — plan output |
+| **PII Redaction** | `src/middleware/pii_redaction.py` | Regex-based redaction of GUIDs, emails, UPNs, IPv4/IPv6 addresses, display names | `chat_stream.py` — tool results before LLM. Also `remediation_plan.py` and `secure_score.py` (logging) |
+| **RAI Disclaimers** | `src/middleware/rai.py` | Disclaimer watermarks, confidence scoring (high/medium/low), applied to AI-generated plans and scorecards | `remediation_plan.py`, `adoption_scorecard.py` — output dicts. Also enforced by system prompt |
+
+### Keyword vs LLM Mode RAI Coverage
+
+| RAI Layer | Keyword Mode (`POST /chat`) | LLM Mode (`POST /chat/stream`) |
+|---|---|---|
+| Input Validation | ✅ `validate_user_input()` in `app.py` | ✅ `validate_user_input()` in `app.py` |
+| Content Safety (input) | ⚠️ Not applied (no LLM, keyword match only) | ✅ `check_content_safety()` in `chat_stream.py` |
+| PII Redaction | ⚠️ Per-tool only (`remediation_plan.py`) | ✅ All tool results redacted in `chat_stream.py` |
+| Content Safety (output) | ⚠️ Per-tool only (`remediation_plan.py`) | ✅ Final LLM response checked in `chat_stream.py` |
+| Disclaimers | ✅ Inline in `remediation_plan.py`, `adoption_scorecard.py` | ✅ Same + system prompt enforces on all responses |
+
+> **Note**: Keyword mode has lighter RAI coverage because it doesn't use an LLM — user messages are keyword-matched to tools, and tool outputs are passed through formatters without LLM processing. Content safety and PII redaction are applied within individual tools that use Azure OpenAI (e.g., `remediation_plan.py`).
+
+### Content Safety Fallback Behavior
+
+When Azure AI Content Safety is not configured (`AZURE_CONTENT_SAFETY_ENDPOINT` not set), the system falls back to **local heuristic checks** — basic regex-based pattern matching for obviously harmful content. This is NOT equivalent to the full Azure AI Content Safety service, but ensures the pipeline doesn't fail open in development/demo environments.
+
+In production, set `AZURE_CONTENT_SAFETY_ENDPOINT` and optionally `AZURE_CONTENT_SAFETY_KEY` (or use Managed Identity) for full RAI compliance.
