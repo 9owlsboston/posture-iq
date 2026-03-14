@@ -42,18 +42,34 @@ def _status_from_pct(pct: float) -> str:
 def _parse_assessment(raw: str) -> dict[str, Any]:
     """Safely parse the assessment_context JSON string.
 
+    Normalises keys so that both tool function names
+    (e.g. ``assess_defender_coverage``) and short keys
+    (e.g. ``defender_coverage``) map to the canonical short form.
+
     Returns an empty dict when parsing fails.
     """
     if not raw or not raw.strip():
         return {}
     try:
         parsed = json.loads(raw)
-        if isinstance(parsed, dict):
-            return parsed
-        return {}
+        if not isinstance(parsed, dict):
+            return {}
     except (json.JSONDecodeError, TypeError):
         logger.warning("tool.adoption_scorecard.parse_error", raw=raw[:200])
         return {}
+
+    # Normalise tool-function-name keys → short canonical keys
+    aliases: dict[str, str] = {
+        "assess_defender_coverage": "defender_coverage",
+        "check_purview_policies": "purview_policies",
+        "get_entra_config": "entra_config",
+        "query_secure_score": "secure_score",
+    }
+    for long_key, short_key in aliases.items():
+        if long_key in parsed and short_key not in parsed:
+            parsed[short_key] = parsed[long_key]
+
+    return parsed
 
 
 def _extract_defender(data: dict[str, Any]) -> dict[str, Any]:
