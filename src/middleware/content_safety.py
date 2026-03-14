@@ -145,9 +145,9 @@ async def _check_with_service(
             "violence": 0,
         }
 
-        for item in response.get("categories_analysis", []):
-            cat_name = str(item.get("category", ""))
-            severity = int(item.get("severity", 0))
+        for item in response.categories_analysis or []:
+            cat_name = str(getattr(item, "category", ""))
+            severity = int(getattr(item, "severity", 0))
             mapped = category_map.get(cat_name, cat_name.lower())
             if mapped in categories:
                 categories[mapped] = severity
