@@ -40,6 +40,9 @@ dependencies = [
     # Authentication (JWT validation for Entra ID tokens)
     "PyJWT[crypto]>=2.8.0",
 
+    # Conversational Chat UI
+    "chainlit>=2.10.0",
+
     # Utilities
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
@@ -93,6 +96,15 @@ python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = "chainlit.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "src.chainlit_app"
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

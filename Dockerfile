@@ -63,6 +63,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY src/ ./src/
 
+# Copy Chainlit configuration files
+COPY .chainlit/ ./.chainlit/
+COPY chainlit.md ./
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash secpostureiq
 USER secpostureiq

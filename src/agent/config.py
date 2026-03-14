@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     # ── Multi-Tenant ──────────────────────────────────
     multi_tenant_enabled: bool = False
     allowed_tenants: str = ""  # comma-separated tenant IDs (empty = all consented)
+    # ── Chat Mode ─────────────────────────────────────────
+    # "keyword" = legacy keyword-based intent classification
+    # "llm"     = Azure OpenAI function-calling via Chainlit
+    chat_mode: str = "keyword"
+
     # ── App Settings ──────────────────────────────────────
     log_level: str = "INFO"
     environment: str = "development"
@@ -95,6 +100,11 @@ class Settings(BaseSettings):
     def use_managed_identity(self) -> bool:
         """Use Managed Identity when no explicit API keys are set."""
         return not self.azure_openai_api_key
+
+    @property
+    def use_llm_chat(self) -> bool:
+        """True when chat mode is LLM-based (Chainlit + Azure OpenAI)."""
+        return self.chat_mode.lower() == "llm"
 
 
 # Singleton — import this from anywhere

@@ -85,6 +85,20 @@ if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 
+# ── Chainlit mount (LLM chat mode) ────────────────────────────────────────
+# When CHAT_MODE=llm, mount the Chainlit ASGI app at /chat-ui so users can
+# access the conversational LLM-powered chat alongside the existing API.
+
+if settings.use_llm_chat:
+    try:
+        from chainlit.utils import mount_chainlit  # noqa: PLC0415
+
+        mount_chainlit(app=app, target="src/chainlit_app.py", path="/chat-ui")
+        logger.info("chainlit.mounted", path="/chat-ui")
+    except Exception as e:
+        logger.warning("chainlit.mount_failed", error=str(e), reason="Chainlit will not be available")
+
+
 # ── Response Models ────────────────────────────────────────────────────────
 
 
