@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 import structlog
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -124,8 +124,14 @@ class VersionResponse(BaseModel):
 
 
 @app.get("/", include_in_schema=False)
-async def chat_ui() -> FileResponse:
-    """Serve the chat UI at the root path."""
+async def chat_ui() -> Response:
+    """Serve the chat UI at the root path.
+
+    When CHAT_MODE=llm, redirects to /chat-ui (Chainlit).
+    Otherwise serves the legacy index.html SPA.
+    """
+    if settings.use_llm_chat:
+        return RedirectResponse(url="/chat-ui", status_code=302)
     return FileResponse(str(_STATIC_DIR / "index.html"), media_type="text/html")
 
 

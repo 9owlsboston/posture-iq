@@ -48,6 +48,9 @@ param entraAppClientSecretUri string = ''
 @description('Enable multi-tenant authentication')
 param multiTenantEnabled bool = false
 
+@description('Chat mode: keyword (default) or llm (Chainlit + Azure OpenAI)')
+param chatMode string = 'llm'
+
 // ── Container Apps Environment ────────────────────────────
 resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: '${name}-env'
@@ -109,6 +112,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ENTRA_APP_CLIENT_ID', value: entraAppClientId }
             !empty(entraAppClientSecretUri) ? { name: 'ENTRA_APP_CLIENT_SECRET', secretRef: 'entra-app-client-secret' } : { name: 'ENTRA_APP_CLIENT_SECRET', value: '' }
             { name: 'MULTI_TENANT_ENABLED', value: string(multiTenantEnabled) }
+            { name: 'CHAT_MODE', value: chatMode }
             { name: 'PORT', value: '8000' }
           ]
           probes: [
