@@ -69,6 +69,12 @@ COPY chainlit.md ./
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash secpostureiq
+
+# Pre-create directories that Chainlit writes to at startup
+# (must be done before switching to non-root user)
+RUN mkdir -p /app/.files /app/.chainlit/translations \
+    && chown -R secpostureiq:secpostureiq /app/.files /app/.chainlit
+
 USER secpostureiq
 
 # Health check — used by Container Apps for liveness probe
