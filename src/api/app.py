@@ -53,6 +53,7 @@ from src.middleware.auth import (
     revoke_user_consent,
     validate_token,
 )
+from src.middleware.input_validation import validate_user_input
 from src.middleware.tracing import setup_tracing
 
 logger = structlog.get_logger(__name__)
@@ -157,6 +158,11 @@ async def chat_endpoint(
         X-Graph-Token: <access_token>     — delegated Graph API token
             used by tools to query the real tenant.
     """
+    # ── RAI: Input validation (first line of defense) ────────────────
+    validation = validate_user_input(request.message)
+    if not validation.is_valid:
+        raise HTTPException(status_code=400, detail=validation.reason)
+
     tenant_id = ""
     user_id = ""
     if token:
@@ -190,6 +196,11 @@ async def chat_stream_endpoint(
     Returns SSE events: tool_start, tool_result, token, done, error.
     Falls back to the keyword-based /chat endpoint if LLM is unavailable.
     """
+    # ── RAI: Input validation (first line of defense) ────────────────
+    validation = validate_user_input(request.message)
+    if not validation.is_valid:
+        raise HTTPException(status_code=400, detail=validation.reason)
+
     graph_token = raw_request.headers.get("X-Graph-Token", "")
 
     return StreamingResponse(
