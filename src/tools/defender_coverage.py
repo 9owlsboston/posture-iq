@@ -112,23 +112,31 @@ def _compute_status(pct: float) -> str:
     return "red"
 
 
-def _is_gap(profile: Any) -> bool:
+def _is_gap(profile: Any, control_scores: dict[str, float] | None = None) -> bool:
     """Determine whether a control profile represents a gap.
 
-    A control is considered a gap when the latest ``control_state_updates``
-    entry does **not** have state "Resolved" or "ThirdParty", or when
-    no state updates exist at all.  We also consider deprecated controls
-    as non-gaps (they are excluded from the analysis).
+    A control is considered a gap when its actual achieved score is zero
+    (from the latest SecureScore snapshot's ``control_scores``).  When
+    control_scores data is available, it takes precedence over
+    ``control_state_updates`` because the latter is a manually-managed
+    field that most tenants never populate.
+
+    Falls back to ``control_state_updates`` only when no score data
+    is available (e.g., the SecureScore API call failed).
     """
     if getattr(profile, "deprecated", False):
         return False
 
+    # Preferred: use actual score from the latest SecureScore snapshot
+    if control_scores is not None:
+        control_name = getattr(profile, "id", None) or ""
+        achieved = control_scores.get(control_name, 0.0)
+        return achieved <= 0.0
+
+    # Fallback: use controlStateUpdates (legacy behaviour)
     state_updates = getattr(profile, "control_state_updates", None) or []
     if not state_updates:
-        # No state has been set → the control is unresolved
         return True
-
-    # Take the last (most recent) update
     latest_state = getattr(state_updates[-1], "state", None) or ""
     return latest_state.lower() not in ("resolved", "thirdparty", "third_party")
 
@@ -149,8 +157,10 @@ def _gap_description(profile: Any) -> str:
     return " ".join(parts)
 
 
-def _is_critical_gap(profile: Any) -> bool:
+def _is_critical_gap(profile: Any, control_scores: dict[str, float] | None = None) -> bool:
     """A gap is critical if tier is 'Tier1' / 'MandatoryTier' or max_score ≥ 5."""
+    if not _is_gap(profile, control_scores):
+        return False
     tier = (getattr(profile, "tier", None) or "").lower()
     if tier in ("tier1", "mandatorytier", "mandatory"):
         return True
@@ -160,8 +170,14 @@ def _is_critical_gap(profile: Any) -> bool:
 
 def _build_workload_result(
     profiles: list[Any],
+    control_scores: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    """Compute coverage metrics for a list of profiles belonging to one workload."""
+    """Compute coverage metrics for a list of profiles belonging to one workload.
+
+    When *control_scores* is provided (from the latest SecureScore snapshot),
+    the achieved score for each control is looked up from that dict.  This
+    gives accurate coverage even when ``controlStateUpdates`` is unpopulated.
+    """
     if not profiles:
         return {
             "coverage_pct": 0.0,
@@ -184,10 +200,15 @@ def _build_workload_result(
         ms = getattr(p, "max_score", None) or 0.0
         total_max += ms
 
-        if _is_gap(p):
+        if _is_gap(p, control_scores):
             gaps.append(_gap_description(p))
         else:
-            achieved_score += ms
+            # Use actual score from SecureScore if available
+            if control_scores is not None:
+                control_name = getattr(p, "id", None) or ""
+                achieved_score += control_scores.get(control_name, 0.0)
+            else:
+                achieved_score += ms
             achieved_count += 1
 
     coverage_pct = round((achieved_score / total_max) * 100, 1) if total_max > 0 else 0.0
@@ -207,6 +228,7 @@ def _build_workload_result(
 
 def _aggregate_workloads(
     profiles: list[Any],
+    control_scores: dict[str, float] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Group profiles by workload and compute per-workload results."""
     buckets: dict[str, list[Any]] = {wl: [] for wl in ALL_WORKLOADS}
@@ -217,7 +239,7 @@ def _aggregate_workloads(
         if workload and workload in buckets:
             buckets[workload].append(profile)
 
-    return {wl: _build_workload_result(profs) for wl, profs in buckets.items()}
+    return {wl: _build_workload_result(profs, control_scores) for wl, profs in buckets.items()}
 
 
 def _compute_overall_coverage(workloads: dict[str, dict[str, Any]]) -> float:
@@ -229,15 +251,62 @@ def _compute_overall_coverage(workloads: dict[str, dict[str, Any]]) -> float:
     return round(float(total_achieved / total_max) * 100, 1)
 
 
-def _collect_critical_gaps(profiles: list[Any]) -> list[str]:
+def _collect_critical_gaps(profiles: list[Any], control_scores: dict[str, float] | None = None) -> list[str]:
     """Return descriptions for critical gaps across all workloads."""
     critical: list[str] = []
     for p in profiles:
-        if _is_gap(p) and _is_critical_gap(p):
+        if _is_critical_gap(p, control_scores):
             workload = _classify_workload(getattr(p, "service", None)) or "Unknown"
             title = getattr(p, "title", None) or getattr(p, "id", "Unknown")
             critical.append(f"{title} [{workload}]")
     return critical
+
+
+# ── Fetch actual control scores from SecureScore ──────────────────────
+
+
+async def _fetch_control_scores(client: Any) -> dict[str, float] | None:
+    """Fetch the latest SecureScore snapshot and extract per-control scores.
+
+    Returns a dict mapping ``control_name`` → ``score`` (float), or
+    None if the fetch fails (caller falls back to controlStateUpdates).
+    """
+    try:
+        from kiota_abstractions.base_request_configuration import RequestConfiguration  # noqa: PLC0415
+
+        from src.tools.secure_score import _SecureScoresQueryParameters  # noqa: PLC0415
+
+        query = _SecureScoresQueryParameters(top=1, orderby=["createdDateTime desc"])
+        config = RequestConfiguration(query_parameters=query)
+        response = await client.security.secure_scores.get(request_configuration=config)
+
+        snapshots = response.value if response and response.value else []
+        if not snapshots:
+            logger.warning("defender_coverage.control_scores.empty")
+            return None
+
+        latest = snapshots[0]
+        control_score_list = getattr(latest, "control_scores", None) or []
+
+        scores: dict[str, float] = {}
+        for cs in control_score_list:
+            name = getattr(cs, "control_name", None) or ""
+            score = getattr(cs, "score", None)
+            if name and score is not None:
+                scores[name] = float(score)
+
+        logger.info(
+            "defender_coverage.control_scores.loaded",
+            count=len(scores),
+        )
+        return scores
+
+    except Exception as exc:
+        logger.warning(
+            "defender_coverage.control_scores.fetch_failed",
+            error=str(exc),
+        )
+        return None
 
 
 # ── Mock fallback ──────────────────────────────────────────────────────
@@ -358,6 +427,7 @@ async def assess_defender_coverage(graph_token: str = "") -> dict[str, Any]:
     try:
         from kiota_abstractions.base_request_configuration import RequestConfiguration
 
+        # 1) Fetch control profiles (what controls exist per workload)
         query = _SecureScoreControlProfilesQueryParameters(
             top=999,  # Fetch all profiles in one page (typical E5 tenants have ~440)
         )
@@ -374,13 +444,19 @@ async def assess_defender_coverage(graph_token: str = "") -> dict[str, Any]:
             mock["data_source"] = "graph_api_empty"
             return mock
 
+        # 2) Fetch latest SecureScore snapshot to get actual per-control scores.
+        #    The control_scores list tells us which controls the tenant has
+        #    actually achieved, which is far more reliable than the manually-
+        #    managed controlStateUpdates field on profiles.
+        control_scores = await _fetch_control_scores(client)
+
         # Filter out deprecated controls
         active_profiles = [p for p in all_profiles if not getattr(p, "deprecated", False)]
 
-        workloads = _aggregate_workloads(active_profiles)
+        workloads = _aggregate_workloads(active_profiles, control_scores)
         overall = _compute_overall_coverage(workloads)
         total_gaps = sum(len(w["gaps"]) for w in workloads.values())
-        critical_gaps = _collect_critical_gaps(active_profiles)
+        critical_gaps = _collect_critical_gaps(active_profiles, control_scores)
 
         result: dict[str, Any] = {
             "overall_coverage_pct": overall,
