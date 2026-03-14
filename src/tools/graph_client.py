@@ -111,3 +111,52 @@ def create_graph_client(
         reason="No user Graph token — using mock data",
     )
     return None
+
+
+async def fetch_control_scores(client: Any) -> dict[str, float] | None:
+    """Fetch the latest SecureScore snapshot and return per-control scores.
+
+    Calls ``GET /security/secureScores?$top=1&$orderby=createdDateTime desc``
+    and extracts the ``control_scores`` list into a dict mapping
+    ``control_name → score``.
+
+    This is the authoritative source for which controls a tenant has
+    actually achieved — it matches the Microsoft Secure Score dashboard.
+    The ``controlStateUpdates`` field on profiles is manually-managed
+    and unreliable.
+
+    Returns:
+        Dict mapping control_name to achieved score, or None on failure.
+    """
+    try:
+        from kiota_abstractions.base_request_configuration import (  # noqa: PLC0415
+            RequestConfiguration,
+        )
+
+        from src.tools.secure_score import _SecureScoresQueryParameters  # noqa: PLC0415
+
+        query = _SecureScoresQueryParameters(top=1, orderby=["createdDateTime desc"])
+        config = RequestConfiguration(query_parameters=query)
+        response = await client.security.secure_scores.get(request_configuration=config)
+
+        snapshots = response.value if response and response.value else []
+        if not snapshots:
+            logger.warning("graph_client.control_scores.empty")
+            return None
+
+        latest = snapshots[0]
+        control_score_list = getattr(latest, "control_scores", None) or []
+
+        scores: dict[str, float] = {}
+        for cs in control_score_list:
+            name = getattr(cs, "control_name", None) or ""
+            score = getattr(cs, "score", None)
+            if name and score is not None:
+                scores[name] = float(score)
+
+        logger.info("graph_client.control_scores.loaded", count=len(scores))
+        return scores
+
+    except Exception as exc:
+        logger.warning("graph_client.control_scores.fetch_failed", error=str(exc))
+        return None

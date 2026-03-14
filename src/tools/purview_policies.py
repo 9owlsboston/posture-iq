@@ -23,7 +23,7 @@ from typing import Any
 import structlog
 
 from src.middleware.tracing import trace_tool_call
-from src.tools.graph_client import create_graph_client
+from src.tools.graph_client import create_graph_client, fetch_control_scores
 
 logger = structlog.get_logger(__name__)
 
@@ -164,10 +164,22 @@ def _compute_status(pct: float) -> str:
     return "red"
 
 
-def _is_gap(profile: Any) -> bool:
-    """A control is a gap unless its latest state is Resolved/ThirdParty."""
+def _is_gap(profile: Any, control_scores: dict[str, float] | None = None) -> bool:
+    """A control is a gap when its actual achieved score is zero.
+
+    Uses the per-control scores from the latest SecureScore snapshot
+    when available; falls back to controlStateUpdates otherwise.
+    """
     if getattr(profile, "deprecated", False):
         return False
+
+    # Preferred: use actual score from the latest SecureScore snapshot
+    if control_scores is not None:
+        control_name = getattr(profile, "id", None) or ""
+        achieved = control_scores.get(control_name, 0.0)
+        return achieved <= 0.0
+
+    # Fallback: use controlStateUpdates (legacy behaviour)
     state_updates = getattr(profile, "control_state_updates", None) or []
     if not state_updates:
         return True
@@ -184,14 +196,16 @@ def _gap_description(profile: Any) -> str:
     return " ".join(parts)
 
 
-def _is_critical(profile: Any) -> bool:
+def _is_critical(profile: Any, control_scores: dict[str, float] | None = None) -> bool:
+    if not _is_gap(profile, control_scores):
+        return False
     tier = (getattr(profile, "tier", None) or "").lower()
     if tier in ("tier1", "mandatorytier", "mandatory"):
         return True
     return (getattr(profile, "max_score", None) or 0.0) >= 5.0
 
 
-def _build_component_result(profiles: list[Any]) -> dict[str, Any]:
+def _build_component_result(profiles: list[Any], control_scores: dict[str, float] | None = None) -> dict[str, Any]:
     if not profiles:
         return {
             "status": "not_assessed",
@@ -212,10 +226,14 @@ def _build_component_result(profiles: list[Any]) -> dict[str, Any]:
     for p in profiles:
         ms = getattr(p, "max_score", None) or 0.0
         total_max += ms
-        if _is_gap(p):
+        if _is_gap(p, control_scores):
             gaps.append(_gap_description(p))
         else:
-            achieved += ms
+            if control_scores is not None:
+                control_name = getattr(p, "id", None) or ""
+                achieved += control_scores.get(control_name, 0.0)
+            else:
+                achieved += ms
             achieved_count += 1
 
     pct = round((achieved / total_max) * 100, 1) if total_max > 0 else 0.0
@@ -232,7 +250,9 @@ def _build_component_result(profiles: list[Any]) -> dict[str, Any]:
     }
 
 
-def _aggregate_components(profiles: list[Any]) -> dict[str, dict[str, Any]]:
+def _aggregate_components(
+    profiles: list[Any], control_scores: dict[str, float] | None = None
+) -> dict[str, dict[str, Any]]:
     buckets: dict[str, list[Any]] = {c: [] for c in ALL_COMPONENTS}
     for p in profiles:
         comp = _classify_component(p)
@@ -240,7 +260,7 @@ def _aggregate_components(profiles: list[Any]) -> dict[str, dict[str, Any]]:
             buckets[comp].append(p)
     result = {}
     for comp, profs in buckets.items():
-        comp_result = _build_component_result(profs)
+        comp_result = _build_component_result(profs, control_scores)
         comp_result["portal_category"] = PORTAL_CATEGORY_MAP.get(comp, "Unknown")
         result[comp] = comp_result
     return result
@@ -254,8 +274,8 @@ def _compute_overall(components: dict[str, dict[str, Any]]) -> float:
     return round(float(total_achieved / total_max) * 100, 1)
 
 
-def _collect_critical_gaps(profiles: list[Any]) -> list[str]:
-    return [_gap_description(p) for p in profiles if _is_gap(p) and _is_critical(p)]
+def _collect_critical_gaps(profiles: list[Any], control_scores: dict[str, float] | None = None) -> list[str]:
+    return [_gap_description(p) for p in profiles if _is_critical(p, control_scores)]
 
 
 # ── Mock fallback ──────────────────────────────────────────────────────
@@ -400,10 +420,13 @@ async def check_purview_policies(graph_token: str = "") -> dict[str, Any]:
             mock["data_source"] = "graph_api_empty"
             return mock
 
-        components = _aggregate_components(purview_profiles)
+        # Fetch actual per-control scores from the latest SecureScore snapshot
+        control_scores = await fetch_control_scores(client)
+
+        components = _aggregate_components(purview_profiles, control_scores)
         overall = _compute_overall(components)
         total_gaps = sum(len(c["gaps"]) for c in components.values())
-        critical_gaps = _collect_critical_gaps(purview_profiles)
+        critical_gaps = _collect_critical_gaps(purview_profiles, control_scores)
 
         result: dict[str, Any] = {
             "overall_coverage_pct": overall,

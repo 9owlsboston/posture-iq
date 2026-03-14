@@ -22,7 +22,7 @@ from typing import Any
 import structlog
 
 from src.middleware.tracing import trace_tool_call
-from src.tools.graph_client import create_graph_client
+from src.tools.graph_client import create_graph_client, fetch_control_scores
 
 logger = structlog.get_logger(__name__)
 
@@ -262,53 +262,6 @@ def _collect_critical_gaps(profiles: list[Any], control_scores: dict[str, float]
     return critical
 
 
-# ── Fetch actual control scores from SecureScore ──────────────────────
-
-
-async def _fetch_control_scores(client: Any) -> dict[str, float] | None:
-    """Fetch the latest SecureScore snapshot and extract per-control scores.
-
-    Returns a dict mapping ``control_name`` → ``score`` (float), or
-    None if the fetch fails (caller falls back to controlStateUpdates).
-    """
-    try:
-        from kiota_abstractions.base_request_configuration import RequestConfiguration  # noqa: PLC0415
-
-        from src.tools.secure_score import _SecureScoresQueryParameters  # noqa: PLC0415
-
-        query = _SecureScoresQueryParameters(top=1, orderby=["createdDateTime desc"])
-        config = RequestConfiguration(query_parameters=query)
-        response = await client.security.secure_scores.get(request_configuration=config)
-
-        snapshots = response.value if response and response.value else []
-        if not snapshots:
-            logger.warning("defender_coverage.control_scores.empty")
-            return None
-
-        latest = snapshots[0]
-        control_score_list = getattr(latest, "control_scores", None) or []
-
-        scores: dict[str, float] = {}
-        for cs in control_score_list:
-            name = getattr(cs, "control_name", None) or ""
-            score = getattr(cs, "score", None)
-            if name and score is not None:
-                scores[name] = float(score)
-
-        logger.info(
-            "defender_coverage.control_scores.loaded",
-            count=len(scores),
-        )
-        return scores
-
-    except Exception as exc:
-        logger.warning(
-            "defender_coverage.control_scores.fetch_failed",
-            error=str(exc),
-        )
-        return None
-
-
 # ── Mock fallback ──────────────────────────────────────────────────────
 
 
@@ -448,7 +401,7 @@ async def assess_defender_coverage(graph_token: str = "") -> dict[str, Any]:
         #    The control_scores list tells us which controls the tenant has
         #    actually achieved, which is far more reliable than the manually-
         #    managed controlStateUpdates field on profiles.
-        control_scores = await _fetch_control_scores(client)
+        control_scores = await fetch_control_scores(client)
 
         # Filter out deprecated controls
         active_profiles = [p for p in all_profiles if not getattr(p, "deprecated", False)]
