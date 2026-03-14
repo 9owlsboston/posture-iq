@@ -86,6 +86,33 @@ Add the tool to the "Capabilities" list in `src/agent/system_prompt.py`:
 
 No frontend changes are needed — the LLM automatically discovers new tools from `TOOL_SCHEMAS`.
 
+### RAI Middleware — What Happens Automatically
+
+When you add a new tool following the steps above, the RAI middleware pipeline is **already wired** and applies automatically at every entry point:
+
+| RAI Layer | How Your Tool Gets Coverage | Action Required? |
+|---|---|---|
+| **Input Validation** | Applied in `app.py` before your tool is called (web) and in `main.py` `send_message()` (CLI) | None — automatic |
+| **Content Safety (input)** | User message checked in `chat_stream.py` (web) and `main.py` `send_message()` (CLI) before the LLM selects tools | None — automatic |
+| **PII Redaction** | Tool results redacted in `chat_stream.py` (web) and `main.py` `_tool_result()` (CLI) before being sent to the LLM | None — automatic |
+| **Content Safety (output)** | Final LLM response checked in `chat_stream.py` (web) and `main.py` `send_message()` (CLI) | None — automatic |
+| **Disclaimers** | Enforced by system prompt for all LLM responses | None — automatic |
+
+**If your tool calls Azure OpenAI internally** (like `remediation_plan.py`), you should also add tool-level RAI checks:
+
+```python
+from src.middleware.pii_redaction import redact_pii
+from src.middleware.content_safety import check_content_safety
+
+# Before sending to OpenAI:
+redacted_input = redact_pii(raw_input)
+
+# After receiving from OpenAI:
+safety = await check_content_safety(llm_output, context="your_tool_output")
+if not safety["is_safe"]:
+    return {"error": "Content blocked by safety system", "disclaimer": "..."}
+```
+
 ---
 
 ## Shared Tool Architecture
@@ -247,15 +274,15 @@ User Input
 | **PII Redaction** | `src/middleware/pii_redaction.py` | Regex-based redaction of GUIDs, emails, UPNs, IPv4/IPv6 addresses, display names | `chat_stream.py` — tool results before LLM. Also `remediation_plan.py` and `secure_score.py` (logging) |
 | **RAI Disclaimers** | `src/middleware/rai.py` | Disclaimer watermarks, confidence scoring (high/medium/low), applied to AI-generated plans and scorecards | `remediation_plan.py`, `adoption_scorecard.py` — output dicts. Also enforced by system prompt |
 
-### Keyword vs LLM Mode RAI Coverage
+### Coverage by Entry Point
 
-| RAI Layer | Keyword Mode (`POST /chat`) | LLM Mode (`POST /chat/stream`) |
-|---|---|---|
-| Input Validation | ✅ `validate_user_input()` in `app.py` | ✅ `validate_user_input()` in `app.py` |
-| Content Safety (input) | ⚠️ Not applied (no LLM, keyword match only) | ✅ `check_content_safety()` in `chat_stream.py` |
-| PII Redaction | ⚠️ Per-tool only (`remediation_plan.py`) | ✅ All tool results redacted in `chat_stream.py` |
-| Content Safety (output) | ⚠️ Per-tool only (`remediation_plan.py`) | ✅ Final LLM response checked in `chat_stream.py` |
-| Disclaimers | ✅ Inline in `remediation_plan.py`, `adoption_scorecard.py` | ✅ Same + system prompt enforces on all responses |
+| RAI Layer | Web LLM (`POST /chat/stream`) | Web Keyword (`POST /chat`) | CLI Agent (`main.py`) |
+|---|---|---|---|
+| Input Validation | ✅ `app.py` | ✅ `app.py` | ✅ `send_message()` |
+| Content Safety (input) | ✅ `chat_stream.py` | ⚠️ Per-tool only | ✅ `send_message()` |
+| PII Redaction | ✅ `chat_stream.py` | ⚠️ Per-tool only | ✅ `_tool_result()` |
+| Content Safety (output) | ✅ `chat_stream.py` | ⚠️ Per-tool only | ✅ `send_message()` |
+| Disclaimers | ✅ System prompt + tools | ✅ Tools | ✅ System prompt + tools |
 
 > **Note**: Keyword mode has lighter RAI coverage because it doesn't use an LLM — user messages are keyword-matched to tools, and tool outputs are passed through formatters without LLM processing. Content safety and PII redaction are applied within individual tools that use Azure OpenAI (e.g., `remediation_plan.py`).
 
