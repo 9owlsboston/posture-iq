@@ -9,6 +9,16 @@ param location string
 @description('Principal ID to grant Cognitive Services OpenAI User role (optional)')
 param managedIdentityPrincipalId string = ''
 
+@description('Model deployments to create under this Azure OpenAI resource')
+param modelDeployments array = [
+  {
+    name: 'gpt-4o'
+    model: 'gpt-4o'
+    version: '2024-05-13'
+    capacity: 30
+  }
+]
+
 resource openai 'Microsoft.CognitiveServices/accounts@2024-04-01-preview' = {
   name: name
   location: location
@@ -22,21 +32,24 @@ resource openai 'Microsoft.CognitiveServices/accounts@2024-04-01-preview' = {
   }
 }
 
-resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01-preview' = {
-  parent: openai
-  name: 'gpt-4o'
-  sku: {
-    name: 'GlobalStandard'
-    capacity: 30
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: 'gpt-4o'
-      version: '2024-05-13'
+@batchSize(1)
+resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01-preview' = [
+  for deployment in modelDeployments: {
+    parent: openai
+    name: deployment.name
+    sku: {
+      name: 'GlobalStandard'
+      capacity: deployment.capacity
+    }
+    properties: {
+      model: {
+        format: 'OpenAI'
+        name: deployment.model
+        version: deployment.version
+      }
     }
   }
-}
+]
 
 // Cognitive Services OpenAI User role — allows the managed identity to use OpenAI
 // Role definition ID: 5e0bd9bd-7b93-4f28-af87-19fc36ad61bd
@@ -52,3 +65,4 @@ resource openaiUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = i
 
 output endpoint string = openai.properties.endpoint
 output name string = openai.name
+output deployedModels array = [for (deployment, i) in modelDeployments: deployment.name]

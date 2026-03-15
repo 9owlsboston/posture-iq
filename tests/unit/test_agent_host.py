@@ -382,6 +382,7 @@ class TestSecPostureIQAgentCreateSession:
         mock_settings.azure_openai_api_key = "test-key-123"
         mock_settings.azure_openai_api_version = "2024-02-01"
         mock_settings.azure_openai_deployment = "gpt-4o"
+        mock_settings.resolved_default_model = "gpt-4o"
 
         agent = SecPostureIQAgent()
         mock_client = MagicMock()

@@ -490,11 +490,11 @@ class SecPostureIQAgent:
                 except Exception as exc:
                     logger.warning("agent.provider.auth_fallback", error=str(exc))
 
-            session_config["model"] = settings.azure_openai_deployment
+            session_config["model"] = settings.resolved_default_model
             logger.info(
                 "agent.provider.azure",
                 endpoint=settings.azure_openai_endpoint,
-                deployment=settings.azure_openai_deployment,
+                deployment=settings.resolved_default_model,
             )
 
         self._session = await self._client.create_session(session_config)

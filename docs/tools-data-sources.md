@@ -357,7 +357,7 @@ The Entra tool queries direct Graph API endpoints (not `SecureScoreControlProfil
 | Attribute | Detail |
 |---|---|
 | **Data Source** | Assessment output from tools 1–4 (passed as `assessment_context` JSON) |
-| **AI Model** | Azure OpenAI (GPT-4o) |
+| **AI Model** | Azure OpenAI (configurable via `AVAILABLE_MODELS`, default GPT-4o) |
 | **Safety Layer** | Azure AI Content Safety (validates LLM output before return) |
 | **PII Handling** | Assessment context is redacted via `pii_redaction` middleware before being sent to the model |
 | **Authentication** | Azure OpenAI API key or Managed Identity (`DefaultAzureCredential`) |

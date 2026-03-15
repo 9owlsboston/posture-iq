@@ -27,7 +27,7 @@ SecPostureIQ is a conversational AI agent that assesses an organization's Micros
 
 ```
 User ↔ Copilot SDK ↔ Agent Runtime ↔ SecPostureIQ Tools ↔ Microsoft Graph API
-                                                      ↔ Azure OpenAI (GPT-4o)
+                                                      ↔ Azure OpenAI (multi-model)
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the full architecture diagram.
@@ -86,9 +86,30 @@ python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000
 | Dependency | Without credentials | With credentials |
 |------------|-------------------|-----------------|
 | **Graph API** | Mock data (realistic scores, policies, configs) | Real tenant data via Microsoft Graph |
-| **Azure OpenAI** | Keyword intent classification (no LLM) | GPT-4o reasoning (requires endpoint in `.env`) |
+| **Azure OpenAI** | Keyword intent classification (no LLM) | Multi-model selection (GPT-4o default, configurable via `AVAILABLE_MODELS`) |
 | **Content Safety** | Local heuristic filtering | Azure AI Content Safety service |
 | **App Insights** | Logs to stdout via structlog | Full observability in Azure portal |
+
+#### Multi-Model Selection
+
+The Web Chat UI supports per-request model selection when multiple Azure OpenAI
+deployments are configured. Users pick a model from a dropdown in the header; the
+selection is validated server-side against an allowlist.
+
+```bash
+# In .env — configure available models (must match Azure OpenAI deployments)
+AVAILABLE_MODELS=gpt-4o,gpt-4o-mini
+DEFAULT_MODEL=gpt-4o
+```
+
+| Setting | Env Var | Default | Description |
+|---------|---------|---------|-------------|
+| Available models | `AVAILABLE_MODELS` | `AZURE_OPENAI_DEPLOYMENT` | Comma-separated deployment names |
+| Default model | `DEFAULT_MODEL` | `AZURE_OPENAI_DEPLOYMENT` | Used when no model specified in request |
+
+When only one model is configured, the dropdown is hidden. The Copilot SDK CLI
+agent and Chainlit UI use the default model (per-request selection is not
+supported in those interfaces).
 
 #### Copilot SDK Agent Session (Alternative)
 
@@ -239,7 +260,7 @@ posture-iq/
 │   ├── middleware/      # Tracing, content safety, PII redaction, audit, auth
 │   └── api/            # FastAPI app (health probes, auth, chat, consent revocation)
 ├── infra/              # Bicep IaC templates (ACR, Container Apps, OpenAI, etc.)
-├── tests/              # Unit (1151) and integration (41) tests — 1192 total
+├── tests/              # Unit (1191) and integration (45) tests — 1236 total
 ├── docs/               # Architecture, setup guide, SDK feedback
 ├── scripts/            # Setup (permissions, OIDC, provisioning), cleanup, pre-flight
 ├── Dockerfile          # Multi-stage container build

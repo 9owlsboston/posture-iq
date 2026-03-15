@@ -43,6 +43,16 @@ param entraAppClientSecretName string = ''
 @description('Enable multi-tenant authentication (allows users from other Entra ID tenants)')
 param multiTenantEnabled bool = false
 
+@description('Model deployments for Azure OpenAI (array of {name, model, version, capacity})')
+param modelDeployments array = [
+  {
+    name: 'gpt-4o'
+    model: 'gpt-4o'
+    version: '2024-05-13'
+    capacity: 30
+  }
+]
+
 // ── Variables ─────────────────────────────────────────────
 var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
 var resourcePrefix = '${projectName}-${environment}'
@@ -100,6 +110,7 @@ module openai 'modules/openai.bicep' = {
     name: '${resourcePrefix}-oai-${uniqueSuffix}'
     location: location
     managedIdentityPrincipalId: managedIdentity.properties.principalId
+    modelDeployments: modelDeployments
   }
 }
 
@@ -121,6 +132,8 @@ module containerApp 'modules/container-app.bicep' = {
     entraAppClientId: entraAppClientId
     entraAppClientSecretUri: !empty(entraAppClientSecretName) ? '${keyVault.outputs.vaultUri}secrets/${entraAppClientSecretName}' : ''
     multiTenantEnabled: multiTenantEnabled
+    availableModels: join(openai.outputs.deployedModels, ',')
+    defaultModel: modelDeployments[0].name
   }
 }
 
@@ -147,3 +160,4 @@ output managedIdentityPrincipalId string = managedIdentity.properties.principalI
 output acrLoginServer string = containerRegistry.outputs.loginServer
 output acrName string = containerRegistry.outputs.name
 output availabilityTestName string = availabilityTest.outputs.name
+output deployedModels array = openai.outputs.deployedModels

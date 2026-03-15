@@ -38,7 +38,7 @@ flowchart TB
         CSAPI["🛡️ Content Safety"]
         APPINS["📊 App Insights"]
         GRAPH["🔐 Graph Security API"]
-        OPENAI["💬 Azure OpenAI\nGPT-4o"]
+        OPENAI["💬 Azure OpenAI\nmulti-model"]
     end
 
     User --> API

@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     azure_openai_api_version: str = "2024-02-01"
     azure_openai_api_key: str = ""  # blank → use Managed Identity
 
+    # ── Model Selection ───────────────────────────────────
+    # Comma-separated list of Azure OpenAI deployment names available for use.
+    # Must match deployments provisioned in the Azure OpenAI resource.
+    available_models: str = ""  # blank → [azure_openai_deployment]
+    default_model: str = ""  # blank → azure_openai_deployment
+
     # ── Azure AI Content Safety ───────────────────────────
     azure_content_safety_endpoint: str = ""
     azure_content_safety_key: str = ""  # blank → use Managed Identity
@@ -95,6 +101,18 @@ class Settings(BaseSettings):
     def allowed_tenant_list(self) -> list[str]:
         """Parse comma-separated allowed tenant IDs into a list."""
         return [t.strip() for t in self.allowed_tenants.split(",") if t.strip()]
+
+    @property
+    def available_model_list(self) -> list[str]:
+        """Parse available models into a list, defaulting to the deployment name."""
+        if self.available_models.strip():
+            return [m.strip() for m in self.available_models.split(",") if m.strip()]
+        return [self.azure_openai_deployment]
+
+    @property
+    def resolved_default_model(self) -> str:
+        """Return the default model, falling back to azure_openai_deployment."""
+        return self.default_model.strip() or self.azure_openai_deployment
 
     @property
     def use_managed_identity(self) -> bool:

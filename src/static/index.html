@@ -98,6 +98,21 @@
 
     .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
 
+    /* ── Model Selector ─────────────────────────────────── */
+    .model-selector {
+      padding: 5px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.15s;
+      max-width: 160px;
+    }
+    .model-selector:hover, .model-selector:focus { border-color: var(--primary); }
+
     /* ── Main layout ────────────────────────────────────── */
     .main-layout {
       display: flex;
@@ -755,6 +770,7 @@
       </div>
 
       <button class="btn-outline" onclick="clearChat()">New Chat</button>
+      <select id="modelSelector" class="model-selector" style="display:none" title="Select LLM model"></select>
       <button class="btn-outline" onclick="showEndpoints()">API Docs</button>
     </div>
   </header>
@@ -927,6 +943,7 @@
     let currentUser = null;  // { user_id, email, name, tenant_id, scopes }
     let appConfig = null;    // { multi_tenant_enabled, hosting_tenant_id, chat_mode }
     let chatMode = 'keyword'; // 'keyword' or 'llm'
+    let selectedModel = null; // currently selected LLM model
 
     // ── Auth: Token Management ───────────────────────────
 
@@ -942,6 +959,27 @@
         if (r.ok) {
           appConfig = await r.json();
           chatMode = appConfig.chat_mode || 'keyword';
+
+          // Populate model selector
+          const models = appConfig.available_models || [];
+          const defaultModel = appConfig.default_model || '';
+          const selector = document.getElementById('modelSelector');
+          if (models.length > 0) {
+            selector.innerHTML = '';
+            models.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m;
+              opt.textContent = m;
+              if (m === (sessionStorage.getItem('selectedModel') || defaultModel)) opt.selected = true;
+              selector.appendChild(opt);
+            });
+            selectedModel = selector.value;
+            selector.style.display = models.length > 1 ? '' : 'none';
+            selector.onchange = function() {
+              selectedModel = this.value;
+              sessionStorage.setItem('selectedModel', selectedModel);
+            };
+          }
         }
       } catch (e) {
         console.warn('Failed to fetch app config:', e);
@@ -1334,6 +1372,7 @@
       try {
         const body = { message: text };
         if (sessionId) body.session_id = sessionId;
+        if (selectedModel) body.model = selectedModel;
 
         const headers = { 'Content-Type': 'application/json' };
         if (accessToken) {
@@ -1372,6 +1411,7 @@
       try {
         const body = { message: text };
         if (sessionId) body.session_id = sessionId;
+        if (selectedModel) body.model = selectedModel;
 
         const headers = { 'Content-Type': 'application/json' };
         if (accessToken) {

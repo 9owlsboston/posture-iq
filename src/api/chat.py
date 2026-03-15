@@ -18,6 +18,7 @@ from typing import Any
 import structlog
 from pydantic import BaseModel
 
+from src.agent.config import settings
 from src.middleware.audit_logger import AuditLogger
 from src.middleware.tracing import trace_agent_invocation
 
@@ -30,6 +31,7 @@ logger = structlog.get_logger(__name__)
 class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
+    model: str | None = None  # Azure OpenAI deployment name (validated against allowlist)
 
 
 class ChatResponse(BaseModel):
@@ -558,7 +560,7 @@ async def handle_chat(
     intended_tools = _classify_intent(request.message)
 
     # Wrap the entire turn in a GenAI "invoke_agent" span
-    async with trace_agent_invocation(session_id=sid) as agent_span:
+    async with trace_agent_invocation(session_id=sid, model=settings.resolved_default_model) as agent_span:
         if not intended_tools:
             # No tools matched — provide a helpful response
             response_text = (

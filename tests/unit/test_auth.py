@@ -1209,12 +1209,17 @@ class TestRevokeConsentEndpoint:
 
     @pytest.mark.asyncio
     async def test_config_endpoint(self, client):
-        """GET /config should return multi-tenant configuration."""
+        """GET /config should return multi-tenant configuration and model info."""
         resp = await client.get("/config")
         assert resp.status_code == 200
         data = resp.json()
         assert "multi_tenant_enabled" in data
         assert "hosting_tenant_id" in data
+        assert "available_models" in data
+        assert "default_model" in data
+        assert isinstance(data["available_models"], list)
+        assert len(data["available_models"]) >= 1
+        assert isinstance(data["default_model"], str)
 
 
 class TestRevocationScope:

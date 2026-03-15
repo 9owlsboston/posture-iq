@@ -198,13 +198,13 @@ async def on_message(message: cl.Message) -> None:
 
     tools_called: list[str] = []
 
-    async with trace_agent_invocation(session_id="chainlit") as agent_span:
+    async with trace_agent_invocation(session_id="chainlit", model=settings.resolved_default_model) as agent_span:
         # Function-calling loop — iterate until LLM produces a final response
         max_iterations = 10  # safety limit
         for _ in range(max_iterations):
             try:
                 response = await client.chat.completions.create(
-                    model=settings.azure_openai_deployment,
+                    model=settings.resolved_default_model,
                     messages=cast(list[ChatCompletionMessageParam], messages),
                     tools=cast(list[ChatCompletionToolParam], TOOL_SCHEMAS),
                     stream=True,

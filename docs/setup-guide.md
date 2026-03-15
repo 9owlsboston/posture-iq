@@ -26,7 +26,7 @@ This script handles:
 |------|----------|-------------|
 | 1 | Resource Group (`rg-secpostureiq-dev`) | Container for all Azure resources |
 | 2 | Azure Container Registry | Container image store (OIDC push, managed identity pull) |
-| 3 | Azure OpenAI (GPT-4o) | LLM reasoning & summarization |
+| 3 | Azure OpenAI | LLM reasoning & summarization (multi-model, default GPT-4o) |
 | 4 | Azure AI Content Safety | RAI content filtering |
 | 5 | Azure Application Insights | Distributed tracing & observability |
 | 6 | Azure Key Vault | Secrets management (Graph API credentials) |

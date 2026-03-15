@@ -208,6 +208,7 @@ async def chat_stream_endpoint(
             message=request.message,
             session_id=request.session_id,
             graph_token=graph_token,
+            model=request.model,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -721,6 +722,8 @@ class AppConfigResponse(BaseModel):
     multi_tenant_enabled: bool
     hosting_tenant_id: str
     chat_mode: str
+    available_models: list[str]
+    default_model: str
 
 
 @app.get("/config", response_model=AppConfigResponse)
@@ -735,6 +738,8 @@ async def app_config() -> AppConfigResponse:
         multi_tenant_enabled=settings.multi_tenant_enabled,
         hosting_tenant_id=settings.azure_tenant_id,
         chat_mode=settings.chat_mode,
+        available_models=settings.available_model_list,
+        default_model=settings.resolved_default_model,
     )
 
 

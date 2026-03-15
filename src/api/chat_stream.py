@@ -74,12 +74,23 @@ async def stream_chat(
     message: str,
     session_id: str | None = None,
     graph_token: str = "",
+    model: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream an LLM-powered chat response as SSE events.
 
     Yields SSE-formatted strings. The caller should wrap this in a
     ``StreamingResponse(media_type="text/event-stream")``.
     """
+    # Resolve and validate model against allowlist
+    deployment = model or settings.resolved_default_model
+    if deployment not in settings.available_model_list:
+        models = ", ".join(settings.available_model_list)
+        yield _sse_event(
+            "error",
+            {"message": f"Model '{deployment}' is not available. Choose from: {models}"},
+        )
+        return
+
     sid = session_id or str(uuid.uuid4())
 
     # Initialise or retrieve session
@@ -131,7 +142,7 @@ async def stream_chat(
     for _ in range(max_iterations):
         try:
             response = await client.chat.completions.create(
-                model=settings.azure_openai_deployment,
+                model=deployment,
                 messages=cast(list[ChatCompletionMessageParam], messages),
                 tools=cast(list[ChatCompletionToolParam], TOOL_SCHEMAS),
                 stream=True,

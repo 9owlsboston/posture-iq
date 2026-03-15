@@ -6,7 +6,35 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.agent.config import Settings
 from src.api.chat import ChatRequest, ChatResponse, _classify_intent, handle_chat
+
+# ── Model Selection Config ────────────────────────────────────────────────
+
+
+class TestModelSelectionConfig:
+    """Test available_model_list and resolved_default_model properties."""
+
+    def test_available_models_from_env(self):
+        s = Settings(available_models="gpt-4o,gpt-4o-mini", azure_openai_deployment="gpt-4o")
+        assert s.available_model_list == ["gpt-4o", "gpt-4o-mini"]
+
+    def test_available_models_defaults_to_deployment(self):
+        s = Settings(available_models="", azure_openai_deployment="gpt-4o")
+        assert s.available_model_list == ["gpt-4o"]
+
+    def test_default_model_uses_explicit_value(self):
+        s = Settings(default_model="gpt-4o-mini", azure_openai_deployment="gpt-4o")
+        assert s.resolved_default_model == "gpt-4o-mini"
+
+    def test_default_model_falls_back_to_deployment(self):
+        s = Settings(default_model="", azure_openai_deployment="gpt-4o")
+        assert s.resolved_default_model == "gpt-4o"
+
+    def test_available_models_strips_whitespace(self):
+        s = Settings(available_models=" gpt-4o , gpt-4o-mini ")
+        assert s.available_model_list == ["gpt-4o", "gpt-4o-mini"]
+
 
 # ── Intent Classification ─────────────────────────────────────────────────
 
@@ -174,6 +202,7 @@ class TestChatRequest:
         req = ChatRequest(message="Hello")
         assert req.message == "Hello"
         assert req.session_id is None
+        assert req.model is None
 
     def test_with_session_id(self):
         req = ChatRequest(message="Hello", session_id="abc-123")
@@ -182,6 +211,14 @@ class TestChatRequest:
     def test_message_required(self):
         with pytest.raises((TypeError, ValueError)):
             ChatRequest()
+
+    def test_with_model(self):
+        req = ChatRequest(message="Hello", model="gpt-4o-mini")
+        assert req.model == "gpt-4o-mini"
+
+    def test_without_model_defaults_none(self):
+        req = ChatRequest(message="Hello")
+        assert req.model is None
 
 
 # ── Graph Token Passthrough ───────────────────────────────────────────────
