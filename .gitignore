@@ -8,6 +8,9 @@ dist/
 build/
 *.egg
 
+# Chainlit auto-generated
+.chainlit/
+
 # Virtual environments
 .venv/
 venv/
