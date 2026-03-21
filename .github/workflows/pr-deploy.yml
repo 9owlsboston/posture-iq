@@ -44,6 +44,7 @@ jobs:
 
       - name: Install and test
         run: |
+          pip install -r requirements.lock
           pip install -e ".[dev]"
           pytest --cov=src --cov-fail-under=80 -q
 
