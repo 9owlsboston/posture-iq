@@ -111,16 +111,67 @@ When only one model is configured, the dropdown is hidden. The Copilot SDK CLI
 agent and Chainlit UI use the default model (per-request selection is not
 supported in those interfaces).
 
-#### Copilot SDK Agent Session (Alternative)
+#### Run in CLI Mode (Copilot SDK Agent)
 
-For the LLM-powered CLI experience with the Copilot Runtime:
+The CLI mode launches an interactive REPL powered by the GitHub Copilot SDK runtime.
+Unlike the Web Chat UI (keyword-based intent classification), this mode uses LLM-driven
+planning — the runtime decides which tools to call and in what order based on your query.
+
+**Prerequisites:**
+
+| Requirement | How to get it |
+|-------------|---------------|
+| Python 3.11+ | `python3.11 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"` |
+| `GITHUB_TOKEN` | `export GITHUB_TOKEN=$(gh auth token)` — requires [gh CLI](https://cli.github.com/) with Copilot extension |
+
+**Quick start (mock data, no Azure):**
 
 ```bash
 source .venv/bin/activate
-set -a && source .env && set +a
+export GITHUB_TOKEN=$(gh auth token)
 python -m src.agent.main
-# Requires: gh CLI installed + Copilot CLI extension
 ```
+
+**With real M365 tenant data:**
+
+```bash
+source .venv/bin/activate
+set -a && source .env && set +a          # loads AZURE_TENANT_ID, AZURE_CLIENT_ID, etc.
+export GITHUB_TOKEN=$(gh auth token)
+python -m src.agent.main
+```
+
+**What happens at startup:**
+
+1. OpenTelemetry tracing initialises
+2. **Graph auth prompt** — if `AZURE_TENANT_ID` and `AZURE_CLIENT_ID` are set, a
+   device-code flow URL is printed. Open it in a browser to authenticate against your
+   M365 tenant. Press `Ctrl+C` to skip and use mock data instead.
+3. Copilot SDK client starts (spawns the runtime subprocess)
+4. A session is created with all 8 tools + system prompt registered
+5. Interactive REPL — type queries at the `You:` prompt; type `quit` / `exit` / `q` to end
+
+```
+🛡️  SecPostureIQ — ME5 Security Posture Assessment Agent
+    Type 'quit' to exit.
+
+You: What is our Secure Score?
+
+SecPostureIQ:
+  ⚙️  Calling query_secure_score...
+  Your tenant's current Microsoft Secure Score is 47.3 out of 100 ...
+```
+
+**Optional environment variables for CLI mode:**
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `GITHUB_TOKEN` | Copilot SDK runtime authentication (required) | — |
+| `AZURE_TENANT_ID` | Target M365 tenant for Graph API calls | — (mock mode) |
+| `AZURE_CLIENT_ID` | Entra app registration for device-code auth | — (mock mode) |
+| `AZURE_OPENAI_ENDPOINT` | BYOM: use your own Azure OpenAI deployment | — (Copilot built-in models) |
+| `AZURE_OPENAI_API_KEY` | API key for the Azure OpenAI resource | — (Managed Identity) |
+| `COPILOT_USE_BUILTIN_MODELS` | Set to `1` to skip BYOM and use Copilot's models | — |
 
 ### Run Tests
 
