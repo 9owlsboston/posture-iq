@@ -10,3 +10,11 @@
 # Copilot SDK runtime communication, not for Docker operations.
 # Will be resolved when GitHub CLI releases a version with docker/cli >= 29.2.0.
 CVE-2025-15558
+
+# CVE-2026-33186: gRPC-Go authorization bypass via missing leading slash in :path
+# Severity: CRITICAL | Affects: google.golang.org/grpc v1.79.2 (bundled in gh CLI binary)
+# Justification: This vulnerability targets gRPC *servers* that rely on path-based
+# authorization. Our gh binary is used only as a CLI client for Copilot SDK runtime
+# communication — we do not expose any gRPC server through it.
+# Will be resolved when GitHub CLI releases a version with grpc-go >= 1.79.3.
+CVE-2026-33186
