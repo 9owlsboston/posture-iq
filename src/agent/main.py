@@ -19,8 +19,7 @@ import sys
 from typing import Any
 
 import structlog
-from copilot import (CopilotClient, CopilotSession, PermissionHandler,
-                     SessionEvent, Tool, ToolInvocation, ToolResult)
+from copilot import CopilotClient, CopilotSession, PermissionHandler, SessionEvent, Tool, ToolInvocation, ToolResult
 from copilot.generated.session_events import SessionEventType
 from copilot.types import SubprocessConfig
 
@@ -31,6 +30,7 @@ from src.middleware.content_safety import check_content_safety
 from src.middleware.input_validation import validate_user_input
 from src.middleware.pii_redaction import redact_pii
 from src.middleware.tracing import setup_tracing
+
 # Tool implementations
 from src.tools.adoption_scorecard import create_adoption_scorecard
 from src.tools.defender_coverage import assess_defender_coverage
@@ -57,8 +57,7 @@ async def _acquire_graph_token_interactive() -> str:
     client_id = settings.oauth_client_id
     tenant_id = settings.azure_tenant_id
     if not client_id or not tenant_id:
-        logger.info("graph_auth.skipped",
-                    reason="No AZURE_CLIENT_ID or AZURE_TENANT_ID")
+        logger.info("graph_auth.skipped", reason="No AZURE_CLIENT_ID or AZURE_TENANT_ID")
         return ""
 
     try:
@@ -67,8 +66,7 @@ async def _acquire_graph_token_interactive() -> str:
         logger.warning("graph_auth.skipped", reason="msal not installed")
         return ""
 
-    scopes = [
-        f"https://graph.microsoft.com/{s}" for s in settings.graph_scope_list]
+    scopes = [f"https://graph.microsoft.com/{s}" for s in settings.graph_scope_list]
     authority = f"https://login.microsoftonline.com/{tenant_id}"
 
     app = msal.PublicClientApplication(client_id, authority=authority)
@@ -84,8 +82,7 @@ async def _acquire_graph_token_interactive() -> str:
     # Device code flow
     flow = app.initiate_device_flow(scopes=scopes)
     if "user_code" not in flow:
-        logger.error("graph_auth.device_flow_failed",
-                     error=flow.get("error_description", "unknown"))
+        logger.error("graph_auth.device_flow_failed", error=flow.get("error_description", "unknown"))
         return ""
 
     print("\n🔐 To connect to your real M365 tenant, authenticate via browser:")
@@ -104,8 +101,7 @@ async def _acquire_graph_token_interactive() -> str:
         logger.info("graph_auth.success", tenant=tenant_id)
         return result["access_token"]
 
-    logger.warning("graph_auth.failed", error=result.get(
-        "error_description", "unknown"))
+    logger.warning("graph_auth.failed", error=result.get("error_description", "unknown"))
     return ""
 
 
@@ -182,8 +178,7 @@ async def _handle_foundry_playbook(invocation: ToolInvocation) -> ToolResult:
     workload_areas_raw = args.get("workload_areas", [])
     # Ensure lists (the SDK may pass JSON strings)
     gaps = json.loads(gaps_raw) if isinstance(gaps_raw, str) else gaps_raw
-    workload_areas = json.loads(workload_areas_raw) if isinstance(
-        workload_areas_raw, str) else workload_areas_raw
+    workload_areas = json.loads(workload_areas_raw) if isinstance(workload_areas_raw, str) else workload_areas_raw
     result = await get_green_playbook(
         gaps=gaps or None,
         workload_areas=workload_areas or None,
@@ -449,8 +444,7 @@ class SecPostureIQAgent:
         runtime knows what capabilities the agent has.
         """
         if self._client is None:
-            raise RuntimeError(
-                "CopilotClient not started — call start_client() first")
+            raise RuntimeError("CopilotClient not started — call start_client() first")
 
         session_config: dict[str, Any] = {
             "tools": TOOLS,
@@ -482,13 +476,11 @@ class SecPostureIQAgent:
                     from azure.identity import DefaultAzureCredential
 
                     credential = DefaultAzureCredential()
-                    token = credential.get_token(
-                        "https://cognitiveservices.azure.com/.default")
+                    token = credential.get_token("https://cognitiveservices.azure.com/.default")
                     session_config["provider"]["bearer_token"] = token.token
                     logger.info("agent.provider.auth", method="bearer_token")
                 except Exception as exc:
-                    logger.warning(
-                        "agent.provider.auth_fallback", error=str(exc))
+                    logger.warning("agent.provider.auth_fallback", error=str(exc))
 
             session_config["model"] = settings.resolved_default_model
             logger.info(
@@ -514,11 +506,9 @@ class SecPostureIQAgent:
     async def resume_session(self, session_id: str) -> CopilotSession:
         """Resume a previously created session by ID."""
         if self._client is None:
-            raise RuntimeError(
-                "CopilotClient not started — call start_client() first")
+            raise RuntimeError("CopilotClient not started — call start_client() first")
 
-        # type: ignore[call-arg]
-        self._session = await self._client.resume_session(session_id)
+        self._session = await self._client.resume_session(session_id)  # type: ignore[call-arg]
         self._event_unsubscribe = self._session.on(self._handle_session_event)
 
         logger.info("agent.session.resumed", session_id=session_id)
@@ -539,11 +529,9 @@ class SecPostureIQAgent:
         """Gracefully shut down: close session, then stop the client."""
         await self.close_session()
         if self._client:
-            # type: ignore[func-returns-value]
-            errors = await self._client.stop()
+            errors = await self._client.stop()  # type: ignore[func-returns-value]
             if errors:
-                logger.warning("agent.client.stop_errors",
-                               errors=[str(e) for e in errors])
+                logger.warning("agent.client.stop_errors", errors=[str(e) for e in errors])
             else:
                 logger.info("agent.client.stopped")
             self._client = None
@@ -566,8 +554,7 @@ class SecPostureIQAgent:
             The final assistant message text, or None on timeout/error.
         """
         if self._session is None:
-            raise RuntimeError(
-                "No active session — call create_session() first")
+            raise RuntimeError("No active session — call create_session() first")
 
         # ── RAI: Input validation ───────────────────────────────────
         validation = validate_user_input(prompt)
@@ -631,11 +618,9 @@ class SecPostureIQAgent:
         Use this for CLI mode where you want character-by-character output.
         """
         if self._session is None:
-            raise RuntimeError(
-                "No active session — call create_session() first")
+            raise RuntimeError("No active session — call create_session() first")
 
-        logger.info("agent.message.sending_streaming",
-                    prompt_length=len(prompt))
+        logger.info("agent.message.sending_streaming", prompt_length=len(prompt))
         await self._session.send(prompt)
 
     # ── Event Handling ─────────────────────────────────────
@@ -690,8 +675,7 @@ class SecPostureIQAgent:
 
         elif event_type == SessionEventType.SESSION_ERROR:
             error_msg = data.message or "Unknown error"
-            logger.error("agent.session.error",
-                         error=error_msg, stack=data.stack)
+            logger.error("agent.session.error", error=error_msg, stack=data.stack)
             print(f"\n❌ Error: {error_msg}", flush=True)
 
         elif event_type == SessionEventType.ASSISTANT_REASONING:
@@ -770,8 +754,7 @@ async def main() -> None:
     # Register signal handlers for graceful shutdown
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(
-            sig, lambda: asyncio.create_task(_shutdown(agent)))
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(_shutdown(agent)))
 
     try:
         await agent.start_client()
