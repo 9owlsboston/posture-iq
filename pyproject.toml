@@ -10,8 +10,8 @@ authors = [
 ]
 
 dependencies = [
-    # GitHub Copilot SDK
-    "github-copilot-sdk>=0.1.0",
+    # GitHub Copilot SDK — pin minor range to avoid breaking API renames across envs
+    "github-copilot-sdk~=0.2.0",
 
     # Azure Identity & Auth
     "azure-identity>=1.15.0",
