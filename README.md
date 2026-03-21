@@ -55,7 +55,8 @@ git clone https://github.com/9owlsboston/posture-iq.git
 cd posture-iq
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -r requirements.lock          # exact pinned versions
+pip install -e ".[dev]"                   # editable install + dev tools
 
 # Run — no .env needed for mock mode
 python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000
@@ -121,7 +122,7 @@ planning — the runtime decides which tools to call and in what order based on 
 
 | Requirement | How to get it |
 |-------------|---------------|
-| Python 3.11+ | `python3.11 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"` |
+| Python 3.11+ | `python3.11 -m venv .venv && source .venv/bin/activate && pip install -r requirements.lock && pip install -e ".[dev]"` |
 | `GITHUB_TOKEN` | `export GITHUB_TOKEN=$(gh auth token)` — requires [gh CLI](https://cli.github.com/) with Copilot extension |
 
 **Quick start (mock data, no Azure):**

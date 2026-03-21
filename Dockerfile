@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy dependency files first (layer caching)
 COPY pyproject.toml ./
+COPY requirements.lock ./
 COPY requirements.txt* ./
 
 # Copy source for package resolution by setuptools
@@ -25,7 +26,8 @@ COPY src/ ./src/
 # Remove setuptools+pip after install — not needed at runtime and setuptools
 # vendors vulnerable copies of jaraco.context/wheel that Trivy flags.
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir . \
+    && pip install --no-cache-dir -r requirements.lock \
+    && pip install --no-cache-dir --no-deps . \
     && pip install --no-cache-dir --force-reinstall --no-deps \
        "jaraco.context>=6.1.0" "wheel>=0.46.2" \
     && pip uninstall -y setuptools pip
