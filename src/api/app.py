@@ -34,25 +34,16 @@ from starlette.responses import StreamingResponse
 from src.agent.config import settings
 from src.api.chat import ChatRequest, ChatResponse, handle_chat
 from src.api.chat_stream import stream_chat
-from src.middleware.audit_logger import (
-    AUDIT_READER_ROLES,
-    AuditLogger,
-    check_audit_access,
-)
-from src.middleware.auth import (
-    REVOCATION_SCOPE,
-    UserContext,
-    build_auth_url,
-    build_incremental_consent_url,
-    delete_service_principal,
-    disable_service_principal,
-    enable_service_principal,
-    exchange_code_for_tokens,
-    get_current_user,
-    oauth2_scheme,
-    revoke_user_consent,
-    validate_token,
-)
+from src.middleware.audit_logger import (AUDIT_READER_ROLES, AuditLogger,
+                                         check_audit_access)
+from src.middleware.auth import (REVOCATION_SCOPE, UserContext, build_auth_url,
+                                 build_incremental_consent_url,
+                                 delete_service_principal,
+                                 disable_service_principal,
+                                 enable_service_principal,
+                                 exchange_code_for_tokens, get_current_user,
+                                 oauth2_scheme, revoke_user_consent,
+                                 validate_token)
 from src.middleware.input_validation import validate_user_input
 from src.middleware.tracing import setup_tracing
 
@@ -79,7 +70,8 @@ try:
 
     FastAPIInstrumentor.instrument_app(app)
 except Exception:
-    logger.debug("fastapi_instrumentor.skipped", reason="instrument_app failed or not available")
+    logger.debug("fastapi_instrumentor.skipped",
+                 reason="instrument_app failed or not available")
 
 # ── Static files ───────────────────────────────────────────────────────────
 
@@ -99,7 +91,8 @@ if settings.use_llm_chat:
         mount_chainlit(app=app, target="src/chainlit_app.py", path="/chat-ui")
         logger.info("chainlit.mounted", path="/chat-ui")
     except Exception as e:
-        logger.warning("chainlit.mount_failed", error=str(e), reason="Chainlit will not be available")
+        logger.warning("chainlit.mount_failed", error=str(
+            e), reason="Chainlit will not be available")
 
 
 # ── Response Models ────────────────────────────────────────────────────────
@@ -201,7 +194,17 @@ async def chat_stream_endpoint(
     if not validation.is_valid:
         raise HTTPException(status_code=400, detail=validation.reason)
 
-    graph_token = raw_request.headers.get("X-Graph-Token", "")
+    # ── Auth: Validate Bearer token (mirrors /chat endpoint) ─────────
+    # Only allow graph_token when the user has a valid id_token.
+    # This prevents unauthenticated callers from sending a stolen
+    # Graph token via X-Graph-Token header.
+    graph_token = ""
+    if token:
+        try:
+            await validate_token(token)
+            graph_token = raw_request.headers.get("X-Graph-Token", "")
+        except Exception:  # noqa: S110
+            pass  # Fall through to unauthenticated / mock mode
 
     return StreamingResponse(
         stream_chat(
@@ -297,7 +300,8 @@ async def _check_azure_openai() -> str:
         return "skipped"
 
     try:
-        url = endpoint.rstrip("/") + "/openai/deployments?api-version=2024-02-01"
+        url = endpoint.rstrip(
+            "/") + "/openai/deployments?api-version=2024-02-01"
         async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.get(url)
         # Any HTTP response means the endpoint is reachable.
@@ -319,7 +323,8 @@ async def _check_graph_api() -> str:
         return "skipped"
 
     try:
-        from azure.identity import ClientSecretCredential, DefaultAzureCredential
+        from azure.identity import (ClientSecretCredential,
+                                    DefaultAzureCredential)
 
         if settings.azure_client_secret:
             credential: ClientSecretCredential | DefaultAzureCredential = ClientSecretCredential(
@@ -507,7 +512,8 @@ async def revoke_consent(
     if action not in ("revoke_grants", "delete_sp", "disable_sp", "enable_sp"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(f"Invalid action: {action}. Must be revoke_grants, delete_sp, disable_sp, or enable_sp"),
+            detail=(
+                f"Invalid action: {action}. Must be revoke_grants, delete_sp, disable_sp, or enable_sp"),
         )
 
     graph_token = request.headers.get("X-Graph-Token", "")
@@ -531,7 +537,8 @@ async def revoke_consent(
         audit = AuditLogger(session_id="consent-revocation")
         audit.log_tool_call(
             tool_name="revoke_consent",
-            input_params={"user": user.email, "tenant": user.tenant_id, "action": action_name},
+            input_params={"user": user.email,
+                          "tenant": user.tenant_id, "action": action_name},
             output_summary=f"consent_{action_name}",
             user_identity=user.email,
         )
