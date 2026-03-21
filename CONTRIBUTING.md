@@ -20,6 +20,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 2. **Install** dependencies:
    ```bash
    python -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.lock
    pip install -e ".[dev]"
    ```
 3. **Make changes** following the conventions below.
@@ -63,7 +64,8 @@ cd posture-iq
 python -m venv .venv
 source .venv/bin/activate
 
-# Install with dev extras
+# Install pinned deps + dev extras
+pip install -r requirements.lock
 pip install -e ".[dev]"
 
 # Run locally
