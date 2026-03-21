@@ -1,4 +1,4 @@
-# mypy: disable-error-code="call-arg, no-any-return"
+# mypy: disable-error-code="no-any-return"
 """SecPostureIQ — Agent host entry point.
 
 This is the main application that initializes the Copilot SDK, registers tools,
@@ -19,18 +19,9 @@ import sys
 from typing import Any
 
 import structlog
-from copilot import (
-    CopilotClient,
-    CopilotSession,
-    PermissionHandler,
-    SessionConfig,
-    SessionEvent,
-    Tool,
-    ToolInvocation,
-    ToolResult,
-)
+from copilot import CopilotClient, CopilotSession, PermissionHandler, SessionEvent, Tool, ToolInvocation, ToolResult
 from copilot.generated.session_events import SessionEventType
-from copilot.types import CopilotClientOptions
+from copilot.types import SubprocessConfig
 
 from src.agent.config import settings
 from src.agent.system_prompt import SYSTEM_PROMPT
@@ -434,10 +425,11 @@ class SecPostureIQAgent:
 
     async def start_client(self) -> CopilotClient:
         """Create and start the CopilotClient (launches the runtime process)."""
-        opts: CopilotClientOptions = {}
-        if os.environ.get("GITHUB_TOKEN"):
-            opts["github_token"] = os.environ["GITHUB_TOKEN"]
-        self._client = CopilotClient(opts or None)
+        config: SubprocessConfig | None = None
+        github_token = os.environ.get("GITHUB_TOKEN")
+        if github_token:
+            config = SubprocessConfig(github_token=github_token)
+        self._client = CopilotClient(config)
         await self._client.start()
 
         state = self._client.get_state()
@@ -454,7 +446,7 @@ class SecPostureIQAgent:
         if self._client is None:
             raise RuntimeError("CopilotClient not started — call start_client() first")
 
-        session_config: SessionConfig = {
+        session_config: dict[str, Any] = {
             "tools": TOOLS,
             "system_message": {
                 "mode": "replace",
@@ -497,7 +489,7 @@ class SecPostureIQAgent:
                 deployment=settings.resolved_default_model,
             )
 
-        self._session = await self._client.create_session(session_config)
+        self._session = await self._client.create_session(**session_config)
 
         # Subscribe to session events for streaming output + audit logging
         self._event_unsubscribe = self._session.on(self._handle_session_event)
@@ -516,7 +508,7 @@ class SecPostureIQAgent:
         if self._client is None:
             raise RuntimeError("CopilotClient not started — call start_client() first")
 
-        self._session = await self._client.resume_session(session_id)  # type: ignore[call-arg,unused-ignore]
+        self._session = await self._client.resume_session(session_id)  # type: ignore[call-arg]
         self._event_unsubscribe = self._session.on(self._handle_session_event)
 
         logger.info("agent.session.resumed", session_id=session_id)
@@ -537,7 +529,7 @@ class SecPostureIQAgent:
         """Gracefully shut down: close session, then stop the client."""
         await self.close_session()
         if self._client:
-            errors = await self._client.stop()  # type: ignore[func-returns-value,unused-ignore]
+            errors = await self._client.stop()  # type: ignore[func-returns-value]
             if errors:
                 logger.warning("agent.client.stop_errors", errors=[str(e) for e in errors])
             else:
@@ -586,7 +578,7 @@ class SecPostureIQAgent:
         logger.info("agent.message.sending", prompt_length=len(prompt))
 
         response_event = await self._session.send_and_wait(  # type: ignore[func-returns-value,unused-ignore]
-            {"prompt": prompt},
+            prompt,
             timeout=120.0,
         )
 
@@ -629,7 +621,7 @@ class SecPostureIQAgent:
             raise RuntimeError("No active session — call create_session() first")
 
         logger.info("agent.message.sending_streaming", prompt_length=len(prompt))
-        await self._session.send({"prompt": prompt})
+        await self._session.send(prompt)
 
     # ── Event Handling ─────────────────────────────────────
 

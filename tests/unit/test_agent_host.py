@@ -349,14 +349,14 @@ class TestSecPostureIQAgentCreateSession:
 
         result = await agent.create_session()
 
-        # Verify create_session was called with a config dict
+        # Verify create_session was called with kwargs
         mock_client.create_session.assert_called_once()
-        config_arg = mock_client.create_session.call_args[0][0]
+        config_kwargs = mock_client.create_session.call_args.kwargs
 
-        assert config_arg["tools"] is TOOLS
-        assert config_arg["streaming"] is True
-        assert config_arg["system_message"]["mode"] == "replace"
-        assert config_arg["system_message"]["content"] == SYSTEM_PROMPT
+        assert config_kwargs["tools"] is TOOLS
+        assert config_kwargs["streaming"] is True
+        assert config_kwargs["system_message"]["mode"] == "replace"
+        assert config_kwargs["system_message"]["content"] == SYSTEM_PROMPT
 
         assert result is mock_session
         assert agent._session is mock_session
@@ -393,13 +393,13 @@ class TestSecPostureIQAgentCreateSession:
 
         await agent.create_session()
 
-        config_arg = mock_client.create_session.call_args[0][0]
-        assert "provider" in config_arg
-        assert config_arg["provider"]["type"] == "azure"
-        assert config_arg["provider"]["base_url"] == "https://my-openai.openai.azure.com/"
-        assert config_arg["provider"]["api_key"] == "test-key-123"
-        assert config_arg["provider"]["azure"]["api_version"] == "2024-02-01"
-        assert config_arg["model"] == "gpt-4o"
+        config_kwargs = mock_client.create_session.call_args.kwargs
+        assert "provider" in config_kwargs
+        assert config_kwargs["provider"]["type"] == "azure"
+        assert config_kwargs["provider"]["base_url"] == "https://my-openai.openai.azure.com/"
+        assert config_kwargs["provider"]["api_key"] == "test-key-123"
+        assert config_kwargs["provider"]["azure"]["api_version"] == "2024-02-01"
+        assert config_kwargs["model"] == "gpt-4o"
 
     @patch("src.agent.main.settings")
     async def test_no_provider_when_endpoint_not_configured(self, mock_settings):
@@ -414,8 +414,8 @@ class TestSecPostureIQAgentCreateSession:
 
         await agent.create_session()
 
-        config_arg = mock_client.create_session.call_args[0][0]
-        assert "provider" not in config_arg
+        config_kwargs = mock_client.create_session.call_args.kwargs
+        assert "provider" not in config_kwargs
 
     @patch.dict("os.environ", {"COPILOT_USE_BUILTIN_MODELS": ""}, clear=False)
     @patch("src.agent.main.settings")
@@ -434,9 +434,9 @@ class TestSecPostureIQAgentCreateSession:
 
         await agent.create_session()
 
-        config_arg = mock_client.create_session.call_args[0][0]
-        assert "provider" in config_arg
-        assert "api_key" not in config_arg["provider"]
+        config_kwargs = mock_client.create_session.call_args.kwargs
+        assert "provider" in config_kwargs
+        assert "api_key" not in config_kwargs["provider"]
 
 
 class TestSecPostureIQAgentResumeSession:
@@ -579,7 +579,7 @@ class TestSendMessage:
         result = await agent.send_message("What is my secure score?")
 
         mock_session.send_and_wait.assert_called_once_with(
-            {"prompt": "What is my secure score?"},
+            "What is my secure score?",
             timeout=120.0,
         )
         assert result == "Here is your secure score."
@@ -679,7 +679,7 @@ class TestSendMessageStreaming:
 
         await agent.send_message_streaming("stream this")
 
-        mock_session.send.assert_called_once_with({"prompt": "stream this"})
+        mock_session.send.assert_called_once_with("stream this")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -947,6 +947,6 @@ class TestSystemPromptIntegration:
 
         await agent.create_session()
 
-        config = mock_client.create_session.call_args[0][0]
-        assert config["system_message"]["mode"] == "replace"
-        assert config["system_message"]["content"] == SYSTEM_PROMPT
+        config_kwargs = mock_client.create_session.call_args.kwargs
+        assert config_kwargs["system_message"]["mode"] == "replace"
+        assert config_kwargs["system_message"]["content"] == SYSTEM_PROMPT
