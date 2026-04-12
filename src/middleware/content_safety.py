@@ -55,6 +55,26 @@ SAFE_FALLBACK_OUTPUT = (
 
 # ── Content Safety Client ──────────────────────────────────────────────
 
+# Cached client: None = not yet created, False = creation failed (use heuristics)
+_cached_client: Any = None
+_client_initialized: bool = False
+
+
+def _get_content_safety_client() -> Any:
+    """Get or create an Azure AI Content Safety client (cached).
+
+    Returns None when the endpoint is not configured or client creation
+    failed (triggers local heuristic fallback).
+    """
+    global _cached_client, _client_initialized  # noqa: PLW0603
+    if _client_initialized:
+        return _cached_client if _cached_client is not False else None
+    _client_initialized = True
+    _cached_client = _create_content_safety_client()
+    if _cached_client is None:
+        _cached_client = False
+    return _cached_client if _cached_client is not False else None
+
 
 def _create_content_safety_client() -> Any:
     """Create an Azure AI Content Safety client.
@@ -108,7 +128,7 @@ async def check_content_safety(
     if not text or not text.strip():
         return _safe_result(context="empty_text")
 
-    client = _create_content_safety_client()
+    client = _get_content_safety_client()
 
     if client is not None:
         return await _check_with_service(client, text, context)
@@ -177,10 +197,15 @@ async def _check_with_service(
         }
 
     except Exception as exc:
-        logger.error(
+        # Disable the cached client so subsequent calls fall back to
+        # local heuristics instead of repeating the same failing request.
+        global _cached_client  # noqa: PLW0603
+        _cached_client = False
+        logger.warning(
             "content_safety.service.error",
             error=str(exc),
             context=context,
+            fallback="local_heuristics",
         )
         # Fail open with a warning — don't block legitimate requests
         # due to service issues, but log for monitoring

@@ -455,12 +455,16 @@ class SecPostureIQAgent:
         logger.info("agent.client.started", state=state)
         return self._client
 
-    async def create_session(self) -> CopilotSession:
+    async def create_session(self, *, mock_mode: bool = False) -> CopilotSession:
         """Create a new agent session with tools and system prompt.
 
         The session is the primary unit of multi-turn interaction.
         Tools and the system prompt are passed via SessionConfig so the
         runtime knows what capabilities the agent has.
+
+        Args:
+            mock_mode: When True, skip Azure OpenAI provider and use
+                Copilot's built-in models (for local dev with mock data).
         """
         if self._client is None:
             raise RuntimeError("CopilotClient not started — call start_client() first")
@@ -477,9 +481,11 @@ class SecPostureIQAgent:
 
         # Wire Azure OpenAI as the model provider if configured.
         # Note: BYOK provider requires the Copilot runtime to support the
-        # provider type.  If COPILOT_USE_BUILTIN_MODELS is set, skip the
-        # custom provider and use Copilot's built-in model catalog instead.
-        if settings.azure_openai_endpoint and not os.environ.get("COPILOT_USE_BUILTIN_MODELS"):
+        # provider type.  If COPILOT_USE_BUILTIN_MODELS is set or mock_mode
+        # is active, skip the custom provider and use Copilot's built-in
+        # model catalog instead.
+        use_builtin = mock_mode or os.environ.get("COPILOT_USE_BUILTIN_MODELS")
+        if settings.azure_openai_endpoint and not use_builtin:
             session_config["provider"] = {
                 "type": "azure",
                 "base_url": settings.azure_openai_endpoint,
@@ -763,6 +769,7 @@ async def main() -> None:
     # Acquire a delegated Graph token so tools query the real tenant
     global _graph_token  # noqa: PLW0603
     _graph_token = await _acquire_graph_token_interactive()
+    mock_mode = not _graph_token
     if _graph_token:
         print("✅ Authenticated — tools will query your real M365 tenant.\n")
     else:
@@ -777,7 +784,7 @@ async def main() -> None:
 
     try:
         await agent.start_client()
-        await agent.create_session()
+        await agent.create_session(mock_mode=mock_mode)
 
         # Run conversation (CLI mode for dev; API mode uses FastAPI)
         await run_cli(agent)
