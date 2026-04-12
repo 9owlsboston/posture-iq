@@ -312,7 +312,7 @@ posture-iq/
 │   ├── middleware/      # Tracing, content safety, PII redaction, audit, auth
 │   └── api/            # FastAPI app (health probes, auth, chat, consent revocation)
 ├── infra/              # Bicep IaC templates (ACR, Container Apps, OpenAI, etc.)
-├── tests/              # Unit (1195) and integration (41) tests — 1236 total
+├── tests/              # Unit (1202) and integration (41) tests — 1243 total
 ├── docs/               # Architecture, setup guide, SDK feedback
 ├── scripts/            # Setup (permissions, OIDC, provisioning), cleanup, pre-flight
 ├── Dockerfile          # Multi-stage container build
