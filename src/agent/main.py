@@ -89,13 +89,32 @@ async def _acquire_graph_token_interactive() -> str:
     print(f"   {flow['message']}")
     print("   (Press Ctrl+C to skip and use mock data)\n")
 
+    # Use an asyncio Event + signal handler so Ctrl+C cleanly skips auth.
+    # plain ``except KeyboardInterrupt`` doesn't work because asyncio
+    # converts SIGINT into CancelledError, bypassing the handler.
+    loop = asyncio.get_running_loop()
+    cancelled = asyncio.Event()
+    loop.add_signal_handler(signal.SIGINT, cancelled.set)
+
     try:
-        result = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: app.acquire_token_by_device_flow(flow, timeout=120)
+        auth_future = loop.run_in_executor(None, lambda: app.acquire_token_by_device_flow(flow, timeout=120))
+        cancel_future = asyncio.ensure_future(cancelled.wait())
+
+        done, pending = await asyncio.wait(
+            [auth_future, cancel_future],
+            return_when=asyncio.FIRST_COMPLETED,
         )
-    except KeyboardInterrupt:
-        print("\n   Skipped — using mock data.\n")
-        return ""
+
+        for p in pending:
+            p.cancel()
+
+        if cancel_future in done:
+            print("\n   Skipped — using mock data.\n")
+            return ""
+
+        result = auth_future.result()
+    finally:
+        loop.remove_signal_handler(signal.SIGINT)
 
     if "access_token" in result:
         logger.info("graph_auth.success", tenant=tenant_id)

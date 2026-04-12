@@ -91,6 +91,12 @@ def setup_tracing() -> None:
             _statsbeat_logger = logging.getLogger("azure.monitor.opentelemetry.exporter.statsbeat")
             _prev_level = _statsbeat_logger.level
             _statsbeat_logger.setLevel(logging.ERROR)
+
+            # Suppress Azure VM metadata detector — prints noisy tracebacks
+            # when running locally (not on an Azure VM).
+            _vm_logger = logging.getLogger("opentelemetry.resource.detector.azure.vm")
+            _vm_prev_level = _vm_logger.level
+            _vm_logger.setLevel(logging.CRITICAL)
             try:
                 configure_azure_monitor(
                     connection_string=conn_string,
@@ -98,6 +104,7 @@ def setup_tracing() -> None:
                 )
             finally:
                 _statsbeat_logger.setLevel(_prev_level)
+                _vm_logger.setLevel(_vm_prev_level)
             logger.info("tracing.setup.complete", target="azure_app_insights")
         except ImportError:
             logger.warning(
