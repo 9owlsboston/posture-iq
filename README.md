@@ -20,7 +20,7 @@ SecPostureIQ is a conversational AI agent that assesses an organization's Micros
 | `get_entra_config` | Assess Conditional Access, PIM, Identity Protection, access reviews |
 | `generate_remediation_plan` | AI-generated prioritized remediation with PowerShell scripts |
 | `create_adoption_scorecard` | Executive summary scorecard with RAG status per workload |
-| `push_fabric_telemetry` | Push posture snapshots to Fabric lakehouse for trend analysis & Power BI |
+| `push_posture_snapshot` | Push posture snapshots to Fabric lakehouse for trend analysis & Power BI |
 | `get_green_playbook` | Foundry IQ playbook retrieval for gap-to-remediation mapping |
 
 ## Architecture
@@ -312,7 +312,7 @@ posture-iq/
 │   ├── middleware/      # Tracing, content safety, PII redaction, audit, auth
 │   └── api/            # FastAPI app (health probes, auth, chat, consent revocation)
 ├── infra/              # Bicep IaC templates (ACR, Container Apps, OpenAI, etc.)
-├── tests/              # Unit (1191) and integration (45) tests — 1236 total
+├── tests/              # Unit (1195) and integration (41) tests — 1236 total
 ├── docs/               # Architecture, setup guide, SDK feedback
 ├── scripts/            # Setup (permissions, OIDC, provisioning), cleanup, pre-flight
 ├── Dockerfile          # Multi-stage container build
