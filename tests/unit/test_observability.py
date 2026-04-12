@@ -82,6 +82,40 @@ class TestTracingSetup:
             # Should not raise, just log a warning
             setup_tracing()
 
+    def test_setup_tracing_suppresses_vm_logger(self):
+        """Setup should suppress the Azure VM metadata detector logger."""
+        import logging
+
+        mock_configure = MagicMock()
+        with (
+            patch("src.middleware.tracing.settings") as mock_settings,
+            patch.dict(
+                "sys.modules", {"azure.monitor.opentelemetry": MagicMock(configure_azure_monitor=mock_configure)}
+            ),
+            patch("src.middleware.tracing.configure_azure_monitor", mock_configure, create=True),
+        ):
+            mock_settings.applicationinsights_connection_string = "InstrumentationKey=test"
+
+            # Patch the import inside setup_tracing
+            import builtins
+
+            original_import = builtins.__import__
+
+            def _patch_import(name, *args, **kwargs):
+                if name == "azure.monitor.opentelemetry":
+                    mod = MagicMock()
+                    mod.configure_azure_monitor = mock_configure
+                    return mod
+                return original_import(name, *args, **kwargs)
+
+            with patch("builtins.__import__", side_effect=_patch_import):
+                setup_tracing()
+
+            # Verify vm logger was suppressed during the call
+            vm_logger = logging.getLogger("opentelemetry.resource.detector.azure.vm")
+            # After setup, logger level should be restored (not CRITICAL)
+            assert vm_logger.level != logging.CRITICAL
+
 
 # ── Tool Call Tracing ────────────────────────────────────
 
