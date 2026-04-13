@@ -47,7 +47,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 
 # Install runtime dependencies: GitHub CLI (for Copilot SDK runtime) + curl (health checks)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt-get upgrade patches OS-level CVEs (e.g. OpenSSL) in the base image.
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
     curl \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
        | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
